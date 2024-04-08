@@ -1,0 +1,90 @@
+---
+sidebar_position: 1
+---
+
+import ReactPlayer from 'react-player'
+
+# 快速上手
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+**開始安裝 OxGFrame with [YooAsset](https://github.com/tuyoogame/YooAsset) + [HybridCLR](https://github.com/focus-creative-games/hybridclr)**
+
+### 步驟 1. (安裝依賴庫)
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+
+- [UniTask](https://github.com/Cysharp/UniTask) 透過 Package Manager 安裝 (Install via git) <Highlight color="#ff2f00">建議先安裝</Highlight>
+```
+https://github.com/Cysharp/UniTask.git?path=src/UniTask/Assets/Plugins/UniTask
+```
+
+- [LWMyBox](https://github.com/michael811125/LWMyBox) 透過 Package Manager 安裝 (Install via git)
+```
+https://github.com/michael811125/LWMyBox.git
+```
+
+- [OxGKit.LoggingSystem](https://github.com/michael811125/OxGKit#loggingsystem-dependence-lwmybox) 透過 Package Manager 安裝 (Install via git)
+```
+https://github.com/michael811125/OxGKit.git?path=Assets/OxGKit/LoggingSystem/Scripts
+```
+
+- [OxGKit.Utilities](https://github.com/michael811125/OxGKit#utilities-dependence-unitask) 透過 Package Manager 安裝 (Install via git)
+```
+https://github.com/michael811125/OxGKit.git?path=Assets/OxGKit/Utilities/Scripts
+```
+
+- [HybirdCLR](https://github.com/focus-creative-games/hybridclr) 透過 Package Manager 安裝 (Install via git)
+```
+https://github.com/focus-creative-games/hybridclr_unity.git
+```
+
+**Unity 如果新專案有遇到 Newtonsoft 引用問題**
+
+- 請自行安裝 Add package by name [com.unity.nuget.newtonsoft-json](https://github.com/jilleJr/Newtonsoft.Json-for-Unity/wiki/Install-official-via-UPM)
+
+---
+
+### 步驟 2. (安裝框架)
+
+#### 方法一. 透過 Package Manager 安裝 (Install via git)
+
+```
+https://github.com/michael811125/OxGFrame.git?path=Assets/OxGFrame
+```
+
+![](/img/getting_started/img_1.png)
+
+#### 管理組件匯入 (Samples)
+
+![](/img/getting_started/img_2.png)
+	
+#### 方法二. 直接下載原碼 (Code Download ZIP)
+
+複製 Assets/OxGFrame 到 Unity 新專案的 Assets 底下。
+
+※備註 : 如果沒有要自行更改框架的需求，建議直接使用 Package Manager 方式安裝。
+
+---
+
+## 使用 OxGFrame 實現的 Demo 小遊戲
+
+[Github - FlappyBird_OxGFrame](https://github.com/michael811125/FlappyBird_OxGFrame)
+  - [Resources](https://github.com/michael811125/FlappyBird_OxGFrame/tree/resources)
+  - [AssetBundle](https://github.com/michael811125/FlappyBird_OxGFrame/tree/assetbundle)
+  - [AssetBundle + HybridCLR](https://github.com/michael811125/FlappyBird_OxGFrame/tree/assetbundle_clr)
+
+<ReactPlayer controls url='https://github.com/michael811125/OxGFrame/assets/30960759/5e41e84a-029d-4392-8142-7199ce45018c' />
