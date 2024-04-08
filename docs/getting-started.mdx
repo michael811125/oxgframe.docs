@@ -114,3 +114,29 @@ https://github.com/michael811125/OxGFrame.git?path=Assets/OxGFrame
 <br/>
 <br/>
 ![](/img/getting_started/img_3.png)
+
+---
+
+## 框架 API
+
+- Hotfixers (using OxGFrame.Hotfixer)
+- AssetLoaders (using OxGFrame.AssetLoader)
+- AssetPatcher (using OxGFrame.AssetLoader)
+- CoreFrames (using OxGFrame.CoreFrame)
+- MediaFrames (using OxGFrame.MediaFrame)
+- NetFrames (using OxGFrame.NetFrame)
+
+※備註 : 建議詳看各模塊的 Example (注意 "res#" 跟 "build#" 的使用規則)。
+
+**額外有需要編寫 BuildTool 的可以調用**
+
+- Editor
+  - HotfixHelper (using OxGFrame.Hotfix.Editor)
+  - BundleHelper (using OxGFrame.AssetLoader.Editor)
+  - MediaHelper (using OxGFrame.MediaFrame.Editor)
+
+- Runtime
+  - BundleConfig (using OxGFrame.AssetLoader.Bundle)
+  - PatchSetting (using OxGFrame.AssetLoader)
+    - PatchSetting.setting (**Singleton instance**)
+    - PatchSetting.yooSetting (**Singleton instance**)
