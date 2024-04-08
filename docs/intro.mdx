@@ -4,7 +4,21 @@ sidebar_position: 0
 
 import ReactPlayer from 'react-player'
 
-# 介紹
+# 框架介紹
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
 
 ### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
 
@@ -26,6 +40,8 @@ OxGFrame 是基於 Unity 用於加快遊戲開發的框架，並且使用 UniTas
 - 事件中心 (CenterFrame)
 
 ![](/img/intro/img_1.png)
+
+---
 
 ## 框架特點
 
@@ -58,12 +74,13 @@ OxGFrame 是基於 Unity 用於加快遊戲開發的框架，並且使用 UniTas
 
 - **組件綁定機制**
 
-  通過特定模塊組件 (UIBase, SRBase, CPBase) 支援快速綁定 Unity 遊戲物件，能夠提高開發效率。
+  通過特定模塊組件 (UIFrame, SRFrame, CPFrame) 支援物件命名快速綁定，能夠提高開發效率。
 
 - **模板建立選單**
 
   ![](/img/intro/img_2.png)
 
+---
 
 ## 平台測試
 - Windows (Passed)

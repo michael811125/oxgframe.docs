@@ -135,6 +135,10 @@ const config = {
               {
                 label: 'OxGKit',
                 href: 'https://github.com/michael811125/OxGKit',
+              },
+              {
+                label: 'LWMyBox',
+                href: 'https://github.com/michael811125/LWMyBox',
               }
             ],
           },
@@ -166,6 +170,7 @@ const config = {
       prism: {
         theme: prismThemes.github,
         darkTheme: prismThemes.dracula,
+        additionalLanguages: ['csharp', 'cpp'],
       },
       algolia: {
         // The application ID provided by Algolia

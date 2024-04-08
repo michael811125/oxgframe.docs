@@ -1,0 +1,32 @@
+---
+sidebar_position: 1
+---
+
+# 模塊介紹
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## 基本說明
+
+核心模塊 (連動 AssetLoader 實現自動卸載)，涵蓋遊戲主要物件製作，並且實現物件命名綁定功能。
+
+- 遊戲窗體 (UIFrame, **UI = User Interface**)，支援物件命名綁定。 <Highlight color="#ff2f00">底線開頭 _Node@XXX</Highlight>
+- 場景資源 (SRFrame, **SR = Scene Prefab**)，支援物件命名綁定。 <Highlight color="#ff2f00">底線開頭 _Node@XXX</Highlight>
+- Unity 場景 (USFrame, **US = Unity Scene**)
+- 模板物件 (CPFrame, **CP = Clone Prefab**)，支援物件命名綁定。 <Highlight color="#ff2f00">波浪開頭 ~Node@XXX</Highlight>

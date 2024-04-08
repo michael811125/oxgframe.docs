@@ -33,7 +33,7 @@ const translateTexts = [
 const FeatureList = [
   {
     title: <Translate>{translateTexts[0].text}</Translate>,
-    Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
+    Svg: require('@site/static/img/index/flexibility.svg').default,
     description: (
       <>
         <Translate>{translateTexts[1].text}</Translate>
@@ -42,7 +42,7 @@ const FeatureList = [
   },
   {
     title: <Translate>{translateTexts[2].text}</Translate>,
-    Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
+    Svg: require('@site/static/img/index/performance.svg').default,
     description: (
       <>
         <Translate>{translateTexts[3].text}</Translate>
@@ -51,7 +51,7 @@ const FeatureList = [
   },
   {
     title: <Translate>{translateTexts[4].text}</Translate>,
-    Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
+    Svg: require('@site/static/img/index/easy.svg').default,
     description: (
       <>
         <Translate>{translateTexts[5].text}</Translate>

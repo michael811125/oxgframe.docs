@@ -11,7 +11,7 @@ import Translate from '@docusaurus/Translate';
 const translateTexts = [
   {
     desc: "tagline",
-    text: "自由、快速、輕鬆，基於 Unity 用於加快遊戲開發的框架，並且支援多平台"
+    text: "自由、快速、容易，基於 Unity 用於加快遊戲開發的框架，並且支援多平台"
   },
   {
     desc: "button text",

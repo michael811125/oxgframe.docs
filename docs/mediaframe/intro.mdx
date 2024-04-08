@@ -1,0 +1,32 @@
+---
+sidebar_position: 1
+---
+
+# 模塊介紹
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## 基本說明
+
+影音模塊 (連動 AssetLoader 實現自動卸載)，涵蓋遊戲 Audio (2D/3D) 跟 Video 的製作，支援多平台加載方式 (Local, StreamingAssets, URL)。
+
+- 音效管理 (AudioFrame)
+- 視頻管理 (VideoFrame)
+
+<Highlight color="#ff2f00">重要</Highlight> 另外針對 Audio 在 WebGL 平台有進行細節校正，因為 WebGL 對於 Audio 請求 Clip 無法取得正確長度 (官方放棄修正)，導致音訊控制會有部分缺陷，所以支援預置體製作時，可進行 Preload 請求 Clip 長度進行預設置。

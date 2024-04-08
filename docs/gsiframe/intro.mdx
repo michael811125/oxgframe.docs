@@ -1,0 +1,39 @@
+---
+sidebar_position: 1
+---
+
+# 模塊介紹
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## 基本說明
+
+遊戲階段整合模塊 (FSM 概念)，而 GSI 為 **Game Stage Integration** 的縮寫，對於遊戲製作的時候缺乏整合系統，導致遊戲系統運作之間過於零散。
+
+基本上遊戲階段區分為 
+- StartupStage (啟動階段)
+- LogoStage (商標階段)
+- HotfixStage (熱修復階段)
+- PrepareStage (準備階段)
+- PatchStage (資源熱更階段)
+- LoginStage (登入階段)
+- LobbyStage (大廳階段)
+- FightStage (戰鬥階段) 
+
+等等，以上舉例為大致上遊戲階段之間的劃分，**基本上還是依照自己規劃創建為主**，當遊戲階段規劃好後，使用 GSIFrame 直接進行整合與切換 (階段劃分後就可以自行實現每階段的運作)。
