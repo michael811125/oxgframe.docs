@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://your-docusaurus-site.example.com/build/blog</id>
+    <title>OxGFrame Blog</title>
+    <updated>2024-04-09T19:36:17.000Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://your-docusaurus-site.example.com/build/blog"/>
+    <subtitle>OxGFrame Blog</subtitle>
+    <icon>https://your-docusaurus-site.example.com/build/img/oxgframe_logo_v2.png</icon>
+    <entry>
+        <title type="html"><![CDATA[Welcome]]></title>
+        <id>https://your-docusaurus-site.example.com/build/blog/welcome</id>
+        <link href="https://your-docusaurus-site.example.com/build/blog/welcome"/>
+        <updated>2024-04-09T19:36:17.000Z</updated>
+        <summary type="html"><![CDATA[歡迎使用 OxGFrame Unity 開發框架。]]></summary>
+        <content type="html"><![CDATA[<p>歡迎使用 OxGFrame Unity 開發框架。</p>
+<p><strong>若您的專案使用了 OxGFrame，歡迎聯絡作者，作者很樂意將您的作品展示出來。</strong></p>
+<p>隨時歡迎加入討論 (日積月累)。</p>
+<p>Discord 群：<a href="https://discord.gg/jyJmWhRAv7" target="_blank" rel="noopener noreferrer">Link</a></p>]]></content>
+        <author>
+            <name>歐冠呈 (MichaelO)</name>
+            <uri>https://github.com/michael811125</uri>
+        </author>
+        <category label="作者" term="作者"/>
+        <category label="hello" term="hello"/>
+        <category label="michaelo" term="michaelo"/>
+    </entry>
+</feed>

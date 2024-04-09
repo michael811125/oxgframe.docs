@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+    <channel>
+        <title>OxGFrame Blog</title>
+        <link>https://your-docusaurus-site.example.com/build/en/blog</link>
+        <description>OxGFrame Blog</description>
+        <lastBuildDate>Tue, 09 Apr 2024 19:36:17 GMT</lastBuildDate>
+        <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
+        <generator>https://github.com/jpmonette/feed</generator>
+        <language>en</language>
+        <item>
+            <title><![CDATA[Welcome]]></title>
+            <link>https://your-docusaurus-site.example.com/build/en/blog/welcome</link>
+            <guid>https://your-docusaurus-site.example.com/build/en/blog/welcome</guid>
+            <pubDate>Tue, 09 Apr 2024 19:36:17 GMT</pubDate>
+            <description><![CDATA[歡迎使用 OxGFrame Unity 開發框架。]]></description>
+            <content:encoded><![CDATA[<p>歡迎使用 OxGFrame Unity 開發框架。</p>
+<p><strong>若您的專案使用了 OxGFrame，歡迎聯絡作者，作者很樂意將您的作品展示出來。</strong></p>
+<p>隨時歡迎加入討論 (日積月累)。</p>
+<p>Discord 群：<a href="https://discord.gg/jyJmWhRAv7" target="_blank" rel="noopener noreferrer">Link</a></p>]]></content:encoded>
+            <category>作者</category>
+            <category>hello</category>
+            <category>michaelo</category>
+        </item>
+    </channel>
+</rss>
