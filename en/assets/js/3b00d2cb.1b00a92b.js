@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkoxgframe_doc=self.webpackChunkoxgframe_doc||[]).push([[9601],{7429:e=>{e.exports=JSON.parse('{"title":"API","slug":"/category/api-4","permalink":"/en/docs/category/api-4","navigation":{"previous":{"title":"\u6a21\u584a\u4ecb\u7d39","permalink":"/en/docs/gsiframe/intro"},"next":{"title":"Editor","permalink":"/en/docs/category/editor-4"}}}')}}]);

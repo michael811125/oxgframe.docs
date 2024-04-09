@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkoxgframe_doc=self.webpackChunkoxgframe_doc||[]).push([[6214],{2862:e=>{e.exports=JSON.parse('{"title":"Editor","slug":"/category/editor-6","permalink":"/en/docs/category/editor-6","navigation":{"previous":{"title":"API","permalink":"/en/docs/category/api-6"},"next":{"title":"Coming Soon","permalink":"/en/docs/netframe/API/Editor/empty"}}}')}}]);

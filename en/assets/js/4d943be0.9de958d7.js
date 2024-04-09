@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkoxgframe_doc=self.webpackChunkoxgframe_doc||[]).push([[6028],{1134:e=>{e.exports=JSON.parse('{"label":"michaelo","permalink":"/build/en/blog/tags/michaelo","allTagsPath":"/build/en/blog/tags","count":1,"unlisted":false}')}}]);

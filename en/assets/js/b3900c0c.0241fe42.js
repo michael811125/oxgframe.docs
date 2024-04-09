@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkoxgframe_doc=self.webpackChunkoxgframe_doc||[]).push([[46],{4270:e=>{e.exports=JSON.parse('{"title":"API","slug":"/category/api","permalink":"/en/docs/category/api","navigation":{"previous":{"title":"\u8cc7\u6e90\u90e8\u7f72","permalink":"/en/docs/assetloader/bundle-deploy"},"next":{"title":"Editor","permalink":"/en/docs/category/editor"}}}')}}]);
