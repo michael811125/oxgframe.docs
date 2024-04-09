@@ -26,31 +26,40 @@ export const Highlight = ({children, color}) => (
 
 事件委派中心，可以自行實現 TClass 註冊類型，再由自定義管理類統一繼承 CenterBase&lt;TCenter, TClass&gt;，實現簡易事件派送，預設提供以下。
 
+---
+
+## 應用說明
 
 ### Default API
 
 ```csharp
-    public static void Add<UClass>() where UClass : TClass, new()
-    
-    public static void Add<UClass>(int id) where UClass : TClass, new()
-    
-    public static void Add(int id, TClass @class)
-    
-    public static void Delete<UClass>() where UClass : TClass
-    		
-    public static void Delete(int id)
-    	
-    public static void DeleteAll()
-    	
-    public static UClass Find<UClass>() where UClass : TClass
-    
-    public static UClass Find<UClass>(int id) where UClass : TClass
+public static void Add<UClass>() where UClass : TClass, new()
+
+public static void Add<UClass>(int id) where UClass : TClass, new()
+
+public static void Add(int id, TClass @class)
+
+public static void Delete<UClass>() where UClass : TClass
+		
+public static void Delete(int id)
+	
+public static void DeleteAll()
+	
+public static UClass Find<UClass>() where UClass : TClass
+
+public static UClass Find<UClass>(int id) where UClass : TClass
 ```
 
 ### EventCenter
 
 集中式 Event 整合模塊，可以自定義每個 Event 的格式進行派送 (也可列出事件 ID 交由企劃填表填入已註冊的 ID，就能讀表取出事件 ID 進行派送)。
+- TClass: EventBase，單個 Event 基類，通過右鍵創建 **(Project 窗體內右鍵 -> Create -> OxGFrame -> Center Frame -> Event Center -> Template Event.cs)**。
+- TCenter: EventCenter，用於繼承管理層，主要用於註冊階段，通過右鍵創建 **(Project 窗體內右鍵 -> Create -> OxGFrame -> Center Frame -> Event Center -> Template EventCenter.cs)**。
+  - 使用 Default API 進行 Find 調用。
 
 ### APICenter
 
-集中式 API 整合模塊，可以自定義每個 API 的格式進行 Http API 短連接請求，能夠有效的集中管理各型式的 API 格式，使用 Acax (類似 Ajax 方式，請求 API)。
+集中式 API 整合模塊，可以自定義每個 API 的格式，進行 Http API 短連接請求，能夠有效的集中管理各型式的 API 格式，使用 Acax (類似 Ajax 方式，請求 API)。
+- TClass: APIBase，單個 API 基類，通過右鍵創建 **(Project 窗體內右鍵 -> Create -> OxGFrame -> Center Frame -> API Center -> Template API.cs)**。
+- TCenter: APICenter，用於繼承管理層，主要用於註冊階段，通過右鍵創建 **(Project 窗體內右鍵 -> Create -> OxGFrame -> Center Frame -> API Center -> Template APICenter.cs)**。
+  - 使用 Default API 進行 Find 調用。

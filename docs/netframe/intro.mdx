@@ -26,6 +26,21 @@ export const Highlight = ({children, color}) => (
 
 網路模塊，網路事件分為 OnOpen, OnBinary, OnMessage, OnError, OnClose，也實現多節點 (NetNode)，另外可以設置**心跳檢測回調**、**超時處理回調**、**斷線重連回調**，並且也能實現 INetTips 網路訊息接口的實作。
 
-<Highlight color="#0373fc">注意</Highlight> 已提供以下 NetProvider (可自行擴展 KCP, UDP...)
+---
+
+## 應用說明
+
+- NetManager (網路節點管理器)
+- NetNode (網路節點)
+- INetProvider (網路供應者接口)
+  - TcpNetProvider (TCP/IP)
+  - WebsocketNetProvider (WebSocket)
+- NetOption (連線配置)
+  - TcpNetOption
+  - WebsocketNetOption 
+- INetTips (網路狀態提示接口)
+
+<Highlight color="#0373fc">注意</Highlight> 已提供以下 NetProvider (可自行擴展 KCP, UDP...)。
 - TCP/IP
 - WebSocket
+

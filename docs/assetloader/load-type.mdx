@@ -1,0 +1,102 @@
+---
+sidebar_position: 2
+---
+
+# 加載方式
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## 通過 Resources 加載
+
+<Highlight color="#00d679">提醒</Highlight> 使用 Resources 加載時，不需要進行額外配置，僅將資源放在 Resources 下，並且直接使用 **res#** 作為前墜 + 資源路徑進行加載。
+
+![](/img/assetloader/img_7.png)
+
+<Highlight color="#ff2f00">重要</Highlight> 使用 **res#** 作為前墜時，將會切換成 Resources 加載方式。
+
+```csharp
+// res# prefix
+AssetLoaders.LoadAssetAsync<GameObject>("res#MyPrefabs/Cube");
+```
+
+---
+
+## 通過 AssetBundle 加載
+
+### 步驟 1.
+
+必須先通過 YooAsset Collector 配置。
+
+<Highlight color="#0373fc">注意</Highlight> 尋址名稱需要注意，圖中的 DefaultPackage 包含尋址名稱的有 Cube。
+
+![](/img/assetloader/img_5.png)
+
+### 步驟 2.
+
+另外使用 AssestBundle 進行開發時，也需要 **PatchLauncher** 進行 Runtime 配置，主要是使用 AssetBundle 加載時，需要初始相關配置。
+
+![](/img/assetloader/img_6.png)
+
+<Highlight color="#0373fc">注意</Highlight> 匯入後拖曳到 Hierarchy 窗體。
+
+![](/img/assetloader/gif_1.gif)
+
+### 步驟 3.
+
+配置預設 Packages，將會在 Runtime 時進行初始。
+- 預設 App Packages。
+- 預設 DLC Packages。
+
+![](/img/assetloader/img_8.png)
+
+<Highlight color="#ff2f00">重要</Highlight> 預設 Packages 將由**主下載器**進行管理與檢查，所以不包含在預設中的 Packages，必須自行通過 API 初始，說明如下。
+
+```csharp
+AssetPatcher.InitPackage(new AppPackageInfoWithBuild()
+{
+    buildMode = BundleConfig.BuildMode.ScriptableBuildPipeline,
+    packageName = "OtherPackage",
+}, true);
+```
+
+<Highlight color="#0373fc">注意</Highlight> 區分 App Packages 跟 DLC Packages，注意路徑不同。
+- App Packages
+  - 路徑隨著主程式版號 (.../CDN/\<ProductName\>/\<Platform\>/\<AppVersion\>/\<PackageName\>)。
+  - 手動進行 AssetPatcher.InitAppPackage 的初始 (如果 autoUpdate = false，則需要自行另外調用 AssetPatcher.UpdatePackage 進行 Manifest 的更新)。
+- DLC Packages
+  - 路徑包含平台 (.../CDN/\<ProductName\>/\<Platform\>/DLC/\<PackageName\>/\<DlcVersion\>)。
+  - 路徑不含平台 (.../CDN/\<ProductName\>/DLC/\<PackageName\>/\<DlcVersion\>)，**屬於所有平台的共用資源**。
+  - 支援特定版本 DLC package 的下載與 DLC package 卸載功能，需手動進行 AssetPatcher.InitDlcPackage，並且指定特定 dlcVersion，對於 dlcVersion 也可以單一固定 dlcVersion (ex: "latest")，變成只要 DLC 有更新就可以使用固定路徑進行更新。
+
+<Highlight color="#0373fc">注意</Highlight> 另外，Play Mode 的說明如下。
+- Editor Simulate Mode (模擬模式)，加快開發。
+- Offline Mode (單機模式)，需將 AB 打包至 Built-in，並且產出相關配置，需注意 PatchLauncher 的解密設定。
+- Host Mode (聯機模式)，需將 AB 打包區分 Built-in 跟 Patch，並且產出相關配置，需注意 PatchLauncher 的解密設定。
+  - 允許選擇 Semantic Version 版號檢查規則 (比對完整版號 X.Y.Z 或比對大小版號 X.Y)。
+  - 允許跳過 Preset App Packages 主下載階段 (強制邊玩邊下載)。
+- WebGL Mode (僅支援 WebGL 平台)，需將 AB 全部打包至 Built-in (StreamingAssets)。
+  - 不支援事先下載，主要是因為 WebGL 是邊玩邊下載。
+
+### 步驟 4.
+
+前置作業完成後開始加載，從 DefaultPackage 中加載尋址名稱為 Cube 的物件。
+
+```csharp
+AssetLoaders.LoadAssetAsync<GameObject>("DefaultPackage", "Cube");
+```

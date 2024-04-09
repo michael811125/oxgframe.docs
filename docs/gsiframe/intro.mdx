@@ -37,3 +37,35 @@ export const Highlight = ({children, color}) => (
 - FightStage (戰鬥階段) 
 
 等等，以上舉例為大致上遊戲階段之間的劃分，**基本上還是依照自己規劃創建為主**，當遊戲階段規劃好後，使用 GSIFrame 直接進行整合與切換 (階段劃分後就可以自行實現每階段的運作)。
+
+---
+
+## 應用說明
+
+### Default API
+
+```csharp
+public static int GetCurrentId()
+
+public static U GetStage<U>() where U : GSIBase
+
+public static U GetStage<U>(int id) where U : GSIBase
+
+public static void AddStage<U>() where U : GSIBase, new()
+
+public static void AddStage<U>(int id) where U : GSIBase, new()
+
+public static void AddStage(int id, GSIBase gameStage)
+
+public static void DeleteStage<U>() where U : GSIBase
+
+public static void DeleteStage(int id)
+
+public static void ChangeStage<U>(bool force = false) where U : GSIBase
+
+public static void ChangeStage(int id, bool force = false)
+
+public static void Start()
+
+public static void Update(float dt = 0.0f)
+```

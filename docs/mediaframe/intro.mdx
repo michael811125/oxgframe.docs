@@ -30,3 +30,57 @@ export const Highlight = ({children, color}) => (
 - 視頻管理 (VideoFrame)
 
 <Highlight color="#ff2f00">重要</Highlight> 另外針對 Audio 在 WebGL 平台有進行細節校正，因為 WebGL 對於 Audio 請求 Clip 無法取得正確長度 (官方放棄修正)，導致音訊控制會有部分缺陷，所以支援預置體製作時，可進行 Preload 請求 Clip 長度進行預設置。
+
+## 應用說明
+
+### AudioFrame
+
+用於播放 **Audio**，使用 AudioManager 管理掛載 AudioBase 的 Prefab，且採用 Unity Mixer 進行各音軌控制。 
+
+<Highlight color="#ff2f00">重要</Highlight> 需先將 AudioManager 預置體拖曳到 Hierarchy 窗體 (從 Package Manager 匯入)。
+
+![](/img/mediaframe/img_1.png)
+
+- Audio Sound Type 說明：
+  - Sole : 唯一性 (無法重複播放)，建議種類為 BGM (背景音樂), Voice (配音) 等。
+  - SoundEffect : 多實例 (可以重複播放)，建議種類為 Fight Sound (戰鬥音效), General Sound (一般音效) 等。
+
+<Highlight color="#00d679">提醒</Highlight> 已提供預設 Master Mixer，也可以自行定義。
+
+![](/img/mediaframe/img_2.png)
+
+![](/img/mediaframe/img_3.png)
+
+### VideoFrame
+
+用於播放 **Video**，使用 VideoManager 管理掛載 VideoBase 的 Prefab，且支援 RenderTexture, Camera。
+- Video Render Mode 說明：
+  - RenderTexture : 將 Video 映射至 RenderTexture 再透過 UGUI 的 RawImage 進行渲染 (VideoBase 使用 RenderTexture.GetTemporary 跟 RenderTexture.ReleaseTemporary 創建與釋放，確保內存正確釋放 RenderTexture)。
+  - Camera : 直接透過 Camera 進行渲染。
+
+![](/img/mediaframe/gif_1.gif)
+
+---
+
+## 其他說明
+
+#### Media [murlconfig] (Media URL Config) 格式
+
+如果音訊跟影片來源存放於**雲服務**上，可以使用 URL 的方式進行檔案請求，格式如下 **(如果不透過 murlconfig.txt 指定 URL 的話，也可以輸入完整資源 URL 至 Prefab 中，不過缺點就是對於未來更動 URL，要進行更改維護就會非常麻煩)**
+
+```
+# audio_urlset = Audio Source Url Path
+# video_urlset = Video Source Url Path
+
+audio_urlset 127.0.0.1/audio/
+video_urlset 127.0.0.1/video/
+```
+
+**\>\> 建立 murlconfig.txt 方式 \<\<**
+- 通過 MenuItem 點選 OxGFrame -> MediaFrame -> Media Url Config Generator，開始創建 murlconfig.txt (StreamingAssets/murlconfig.txt)。
+
+**\>\> 加載 murlconfig.txt 方式 \<\<**
+1. 如果選擇 Url Cfg Request Type = Assign，則指定 murlconfig.txt 至 prefab 中。
+2. 如果選擇 Url Cfg Request Type = Streaming Assets，將會從 StreamingAssets 進行請求 murlconfig.txt 文件。
+
+<Highlight color="#00d679">提醒</Highlight> **額外說明**：如果透過 URL 方式請求音訊或影片資源，建議於 WebGL 平台上使用，因為 WebGL 不支援 AssetBundle 事先指定 AudioClip 或 VideoClip (Assign 方式) 至 Prefab 中，所以提供 URL 的方式進行影音檔請求。

@@ -27,21 +27,68 @@ export const Highlight = ({children, color}) => (
 資源加載器模塊，支援動態 Async 或 Sync 加載 (Dynamic Loading)，採用計數管理方式進行資源管控 (支援 Resources 與 AssetBundle)，如果直接使用 AssetLoaders API 進行 Load 跟 Instantiate，則在 Destroy 物件時，需要連帶調用 Unload (成對呼叫 Load & Unload)。
 
 集成 YooAsset 實現資源熱更新方案，額外實現 YooAsset 提供的加密接口，其中實現文件加解密的方式有。
-
 - Offset (偏移量方式)
 - XOR
 - HT2XOR (Head-Tail 2 XOR)
 - AES 
 
 僅供參考
-
 - 運算效率 OFFSET > HT2XOR > XOR > AES
 - 內存占用 OFFSET > AES > HT2XOR = XOR 
 - AB 包體積增加 OFFSET > AES > HT2XOR = XOR
 - 破解難度 AES > HT2XOR > XOR > OFFSET
 
+群組分包舉例
+  - 最小運行包
+  - 標準運行包
+  - 全部運行包 (預設索引標籤為 **#all**)
+
+![](/img/assetloader/img_16.png)
+
 <Highlight color="#ff2f00">重要</Highlight> 如果要使用同步加載，資源一定要是事先下載完成的 (主要是資源不在本地時，請求下載部分是異步處理)，也提醒同步加載只適合小資源 (當然強烈建議全部都使用異步處理)。
 
-<Highlight color="#0373fc">注意</Highlight> 使用 "res#" 前墜，將切換成 Resources 加載方式。反之，則使用 AssetBundle。
+<Highlight color="#0373fc">注意</Highlight> 使用 **res#** 前墜，將切換成 Resources 加載方式。反之，則使用 AssetBundle。
 
 <Highlight color="#00d679">提醒</Highlight> 使用 [YooAsset](https://github.com/tuyoogame/YooAsset) 如有疑問時，請前往[官方文檔](https://www.yooasset.com/)進行熟悉。
+
+---
+
+## 流程說明
+
+### 檢查 PlayMode 是否初始完成
+
+輪詢 AssetPatcher.IsInitialized() 是否完成 Preset Packages 的初始，因為初始完成後，才能開始進行 Built-in Bundle 的加載與 AssetPatcher.Check() 更新檢查，又或者邊玩邊下載。
+
+<Highlight color="#00d679">提醒</Highlight> 區分 Built-in 跟 Patch (視情況自行訂定運作流程)。
+
+<Highlight color="#00d679">提醒</Highlight> 後續執行 AssetPatcher.Check() 檢查 Patch 更新完成後，就可以讀取更新資源了。
+- 執行 AssetPatcher.Check() 檢查流程時，**會將 Preset App Packages 與 Preset DLC Packages 進行合併下載**。  
+
+| **Preset App Packages & Preset DLC Packages** |
+|:-|
+| Preset_App_Pkg_01 (TotalCount = 3, TotalSize = 600 KB) |
+| Preset_App_Pkg_02 (TotalCount = 6, TotalSize = 1200 KB) |
+| Preset_DLC_Pkg_01 (TotalCount = 2, TotalSize = 200 KB) |
+| Preset_DLC_Pkg_02 (TotalCount = 4, TotalSize = 400 KB) |
+| **Combination** |
+| Preset_App_Pkg_01 + Preset_App_Pkg_02 + Preset_DLC_Pkg_01 + Preset_DLC_Pkg_02 (TotalCount = 15, TotalSize = 2400 KB) |
+
+![](/img/assetloader/img_17.png)
+
+<Highlight color="#ff2f00">重要</Highlight> 通過 Preset 設置的 DLC Packages 必須是**固定版號** (ex: "latest")。
+
+### 是否啟用 Disk Space 檢查流程
+
+![](/img/assetloader/img_18.png)
+
+![](/img/assetloader/img_19.png)
+
+![](/img/assetloader/img_20.png)
+
+![](/img/assetloader/img_21.png)
+
+### 檢查是否更新完成
+- 判斷檢查 AssetPatcher.IsDone() 是否更新完成。
+
+### 總結執行順序流程
+- 輪詢初始狀態 AssetPatcher.IsInitialized() -> 執行檢查更新 AssetPatcher.Check() -> 輪詢完成狀態 AssetPatcher.IsDone() -> 完成更新。

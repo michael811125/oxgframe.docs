@@ -1,0 +1,50 @@
+---
+sidebar_position: 4
+---
+
+# 資源構建
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## 構建說明
+
+<Highlight color="#0373fc">注意</Highlight> 請先詳見 [YooAsset 資源配置](https://www.yooasset.com/docs/guide-editor/AssetBundleCollector) (蒐集)。
+
+通過 MenuItem 點選 YooAsset -> AssetBundle Collector，開始配置資源 (蒐集)。
+
+![](/img/assetloader/img_5.png)
+
+圖示說明：
+
+1. <Highlight color="#00d679">提醒</Highlight> 顯示 Packages 視窗。
+2. <Highlight color="#00d679">提醒</Highlight> 資源尋址名稱。
+
+## 開始構建
+
+<Highlight color="#0373fc">注意</Highlight> 另外可先詳見 [YooAsset 資源構建](https://www.yooasset.com/docs/guide-editor/AssetBundleBuilder) (打包)。
+
+通過 MenuItem 點選 YooAsset -> AssetBundle Builder，開始選擇要構建的 Package 與 BuildPipeline，再選擇加密方式，最後點選 Click Build。
+
+<Highlight color="#ff2f00">重要</Highlight> 切記不要更改 Build Version，以預設日期為主 **(因為需要依照日期篩選出包)**。
+
+![](/img/assetloader/img_3.png)
+
+<Highlight color="#00d679">提醒</Highlight> **內置資源**取決於 Copy Buildin File Option 選項，當 YooAsset 構建完畢後，將會依照設定放在 StreamingAssets 下。
+
+![](/img/assetloader/img_4.png)
