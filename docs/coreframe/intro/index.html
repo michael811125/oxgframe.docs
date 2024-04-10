@@ -9,7 +9,7 @@
 
 
 <link rel="search" type="application/opensearchdescription+xml" title="OxGFrame" href="/opensearch.xml"><link rel="stylesheet" href="/assets/css/styles.f979bfe2.css">
-<script src="/assets/js/runtime~main.aeb7a34e.js" defer="defer"></script>
+<script src="/assets/js/runtime~main.2e528285.js" defer="defer"></script>
 <script src="/assets/js/main.14e4d29a.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -24,20 +24,20 @@
 <p>核心模塊 (連動 AssetLoader 實現自動卸載)，涵蓋遊戲主要物件製作，並且實現物件命名綁定功能。</p>
 <ul>
 <li>遊戲窗體 (UIFrame, <strong>UI = User Interface</strong>)，支援物件命名綁定。 <span style="background-color:#ff2f00;border-radius:5px;color:#fff;padding:2.5px">底線開頭 _Node@XXX</span></li>
-<li>場景資源 (SRFrame, <strong>SR = Scene Prefab</strong>)，支援物件命名綁定。 <span style="background-color:#ff2f00;border-radius:5px;color:#fff;padding:2.5px">底線開頭 _Node@XXX</span></li>
+<li>場景資源 (SRFrame, <strong>SR = Scene Resource</strong>)，支援物件命名綁定。 <span style="background-color:#ff2f00;border-radius:5px;color:#fff;padding:2.5px">底線開頭 _Node@XXX</span></li>
 <li>Unity 場景 (USFrame, <strong>US = Unity Scene</strong>)</li>
 <li>模板物件 (CPFrame, <strong>CP = Clone Prefab</strong>)，支援物件命名綁定。 <span style="background-color:#ff2f00;border-radius:5px;color:#fff;padding:2.5px">波浪開頭 ~Node@XXX</span></li>
 </ul>
 <hr>
 <h2 class="anchor anchorWithStickyNavbar_LWe7" id="應用說明">應用說明<a href="#應用說明" class="hash-link" aria-label="應用說明的直接链接" title="應用說明的直接链接">​</a></h2>
 <h3 class="anchor anchorWithStickyNavbar_LWe7" id="uiframe-user-interface">UIFrame (User Interface)<a href="#uiframe-user-interface" class="hash-link" aria-label="UIFrame (User Interface)的直接链接" title="UIFrame (User Interface)的直接链接">​</a></h3>
-<p>用於管理 <strong>窗體 Prefab</strong>，僅支援 UGUI，使用 UIManager 管理掛載 UIBase 的物件。</p>
+<p>用於管理<strong>窗體 Prefab</strong>，僅支援 UGUI，使用 UIManager 管理掛載 UIBase 的物件。</p>
 <ul>
 <li>支援 UI 反切 (Reverse Changes)。</li>
 <li>支援 UI 堆疊關閉 (Close Stack By Stack)。</li>
 <li>支援 UI 凍結功能，避免 UI 動畫尚未完成期間，能夠被點擊觸發事件。</li>
 </ul>
-<p><span style="background-color:#00d679;border-radius:5px;color:#fff;padding:2.5px">  提醒</span> 如需要製作 UI 動畫，可以在 ShowAnimation 跟 HideAnimation 覆寫執行相關過渡動畫 (DoTween, Animation...)，並且一定要在完成 UI 動畫後，正確呼叫 animationEnd() 回調，才能正確解除 UI 凍結狀態。</p>
+<p><span style="background-color:#00d679;border-radius:5px;color:#fff;padding:2.5px"> 提醒</span> 如需要製作 UI 動畫，可以在 ShowAnimation 跟 HideAnimation 覆寫執行相關過渡動畫 (DoTween, Animation...)，並且一定要在完成 UI 動畫後，正確呼叫 animationEnd() 回調，才能正確解除 UI 凍結狀態。</p>
 <p><span style="background-color:#00d679;border-radius:5px;color:#fff;padding:2.5px">提醒</span> 額外還有 UI 的 MaskEvent，也可以通過 override 自定義事件。</p>
 <table><thead><tr><th style="text-align:left">UI 反切運用 (Reverse Changes)</th><th style="text-align:left">UI 反切運用 (Reverse Changes)</th></tr></thead><tbody><tr><td style="text-align:left"><img decoding="async" loading="lazy" src="/assets/images/gif_1-f73e9439a3a86b08ef4e118254e784ed.gif" width="488" height="888" class="img_ev3q"></td><td style="text-align:left"><img decoding="async" loading="lazy" src="/assets/images/gif_2-a2ee649b91ad7f6e8db476c097d691b2.gif" width="800" height="362" class="img_ev3q"></td></tr></tbody></table>
 <table><thead><tr><th style="text-align:left">UI 堆疊關閉運用 (Close Stack By Stack)</th><th style="text-align:left">UI 堆疊關閉運用 (Close Stack By Stack)</th></tr></thead><tbody><tr><td style="text-align:left"><img decoding="async" loading="lazy" src="/assets/images/gif_3-e9da00bf5a7b52b72cdeac8a08b8d400.gif" width="488" height="888" class="img_ev3q"></td><td style="text-align:left"><img decoding="async" loading="lazy" src="/assets/images/gif_4-628d1714f900e2ab2b3bc21f2e5364f6.gif" width="800" height="419" class="img_ev3q"></td></tr></tbody></table>

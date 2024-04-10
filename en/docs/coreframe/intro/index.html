@@ -9,7 +9,7 @@
 
 
 <link rel="search" type="application/opensearchdescription+xml" title="OxGFrame" href="/en/opensearch.xml"><link rel="stylesheet" href="/en/assets/css/styles.f979bfe2.css">
-<script src="/en/assets/js/runtime~main.f9204f66.js" defer="defer"></script>
+<script src="/en/assets/js/runtime~main.01ef0d72.js" defer="defer"></script>
 <script src="/en/assets/js/main.c9a76584.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -24,14 +24,14 @@
 <p>核心模塊 (連動 AssetLoader 實現自動卸載)，涵蓋遊戲主要物件製作，並且實現物件命名綁定功能。</p>
 <ul>
 <li>遊戲窗體 (UIFrame, <strong>UI = User Interface</strong>)，支援物件命名綁定。 <span style="background-color:#ff2f00;border-radius:5px;color:#fff;padding:2.5px">底線開頭 _Node@XXX</span></li>
-<li>場景資源 (SRFrame, <strong>SR = Scene Prefab</strong>)，支援物件命名綁定。 <span style="background-color:#ff2f00;border-radius:5px;color:#fff;padding:2.5px">底線開頭 _Node@XXX</span></li>
+<li>場景資源 (SRFrame, <strong>SR = Scene Resource</strong>)，支援物件命名綁定。 <span style="background-color:#ff2f00;border-radius:5px;color:#fff;padding:2.5px">底線開頭 _Node@XXX</span></li>
 <li>Unity 場景 (USFrame, <strong>US = Unity Scene</strong>)</li>
 <li>模板物件 (CPFrame, <strong>CP = Clone Prefab</strong>)，支援物件命名綁定。 <span style="background-color:#ff2f00;border-radius:5px;color:#fff;padding:2.5px">波浪開頭 ~Node@XXX</span></li>
 </ul>
 <hr>
 <h2 class="anchor anchorWithStickyNavbar_LWe7" id="應用說明">應用說明<a href="#應用說明" class="hash-link" aria-label="Direct link to 應用說明" title="Direct link to 應用說明">​</a></h2>
 <h3 class="anchor anchorWithStickyNavbar_LWe7" id="uiframe-user-interface">UIFrame (User Interface)<a href="#uiframe-user-interface" class="hash-link" aria-label="Direct link to UIFrame (User Interface)" title="Direct link to UIFrame (User Interface)">​</a></h3>
-<p>用於管理 <strong>窗體 Prefab</strong>，僅支援 UGUI，使用 UIManager 管理掛載 UIBase 的物件。</p>
+<p>用於管理<strong>窗體 Prefab</strong>，僅支援 UGUI，使用 UIManager 管理掛載 UIBase 的物件。</p>
 <ul>
 <li>支援 UI 反切 (Reverse Changes)。</li>
 <li>支援 UI 堆疊關閉 (Close Stack By Stack)。</li>
@@ -55,7 +55,7 @@
 <li>OnBind : 初始事件用。</li>
 <li>OnPreShow : 當有異步處理或者附屬物件控制時，可以在此處理。例如 : TopUI 附屬連動開啟 LeftUI &amp; RightUI，那麼就可以在 TopUI 中的 OnPreShow 方法實現 Show LeftUI &amp; RightUI。<!-- -->
 <ul>
-<li><span style="background-color:#00d679;border-radius:5px;color:#fff;padding:2.5px">提醒</span> <strong>不建議在 OnPreClose 時進行相關 Show 的處理，如果  有進行的話也沒關係，因為針對 CloseAll 的 API 有提供 disabledPreClose 參數開關。</strong></li>
+<li><span style="background-color:#00d679;border-radius:5px;color:#fff;padding:2.5px">提醒</span> <strong>不建議在 OnPreClose 時進行相關 Show 的處理，如果 有進行的話也沒關係，因為針對 CloseAll 的 API 有提供 disabledPreClose 參數開關。</strong></li>
 </ul>
 </li>
 <li>OnShow : 調用 Show 時，此方法會被激活，並且可以透過帶入的 object 進行數據傳送。</li>
