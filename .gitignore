@@ -1,3 +1,7 @@
+# Algolia
+.env
+docsearch.json
+
 # Dependencies
 /node_modules
 
