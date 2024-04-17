@@ -174,12 +174,12 @@ const config = {
       },
       algolia: {
         // The application ID provided by Algolia
-        appId: 'appId',
+        appId: 'GBB2CENIEL',
 
         // Public API key: it is safe to commit it
-        apiKey: 'apiKey',
+        apiKey: '14a679ebe0a2b400c1b24c05b05a187c',
 
-        indexName: 'indexName',
+        indexName: 'oxgframe-ouhiyo',
 
         // Optional: see doc section below
         contextualSearch: true,
