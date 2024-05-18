@@ -24,12 +24,12 @@ export const Highlight = ({children, color}) => (
 
 ## 基本說明
 
-影音模塊 (連動 AssetLoader 實現自動卸載)，涵蓋遊戲 Audio (2D/3D) 跟 Video 的製作，支援多平台加載方式 (Local, StreamingAssets, URL)。
+影音模塊 (連動 AssetLoader 實現自動卸載)，涵蓋遊戲 Audio (2D/3D) 跟 Video 的製作，支持多平台加載方式 (Local, StreamingAssets, URL)。
 
 - 音效管理 (AudioFrame)
 - 視頻管理 (VideoFrame)
 
-<Highlight color="#ff2f00">重要</Highlight> 另外針對 Audio 在 WebGL 平台有進行細節校正，因為 WebGL 對於 Audio 請求 Clip 無法取得正確長度 (官方放棄修正)，導致音訊控制會有部分缺陷，所以支援預置體製作時，可進行 Preload 請求 Clip 長度進行預設置。
+<Highlight color="#ff2f00">重要</Highlight> 另外針對 Audio 在 WebGL 平台有進行細節校正，因為 WebGL 對於 Audio 請求 Clip 無法取得正確長度 (官方放棄修正)，導致音訊控制會有部分缺陷，所以支持預置體製作時，可進行 Preload 請求 Clip 長度進行預設置。
 
 ## 應用說明
 
@@ -53,7 +53,7 @@ export const Highlight = ({children, color}) => (
 
 ### VideoFrame
 
-用於播放 **Video**，使用 VideoManager 管理掛載 VideoBase 的 Prefab，且支援 RenderTexture, Camera。
+用於播放 **Video**，使用 VideoManager 管理掛載 VideoBase 的 Prefab，且支持 RenderTexture, Camera。
 - Video Render Mode 說明：
   - RenderTexture : 將 Video 映射至 RenderTexture 再透過 UGUI 的 RawImage 進行渲染 (VideoBase 使用 RenderTexture.GetTemporary 跟 RenderTexture.ReleaseTemporary 創建與釋放，確保內存正確釋放 RenderTexture)。
   - Camera : 直接透過 Camera 進行渲染。
@@ -83,4 +83,4 @@ video_urlset 127.0.0.1/video/
 1. 如果選擇 Url Cfg Request Type = Assign，則指定 murlconfig.txt 至 prefab 中。
 2. 如果選擇 Url Cfg Request Type = Streaming Assets，將會從 StreamingAssets 進行請求 murlconfig.txt 文件。
 
-<Highlight color="#00d679">提醒</Highlight> **額外說明**：如果透過 URL 方式請求音訊或影片資源，建議於 WebGL 平台上使用，因為 WebGL 不支援 AssetBundle 事先指定 AudioClip 或 VideoClip (Assign 方式) 至 Prefab 中，所以提供 URL 的方式進行影音檔請求。
+<Highlight color="#00d679">提醒</Highlight> **額外說明**：如果透過 URL 方式請求音訊或影片資源，建議於 WebGL 平台上使用，因為 WebGL 不支持 AssetBundle 事先指定 AudioClip 或 VideoClip (Assign 方式) 至 Prefab 中，所以提供 URL 的方式進行影音檔請求。

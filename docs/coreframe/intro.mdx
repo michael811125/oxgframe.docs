@@ -28,10 +28,10 @@ export const Highlight = ({children, color}) => (
 
 核心模塊 (連動 AssetLoader 實現自動卸載)，涵蓋遊戲主要物件製作，並且實現物件命名綁定功能。
 
-- 遊戲窗體 (UIFrame, **UI = User Interface**)，支援物件命名綁定。 <Highlight color="#ff2f00">底線開頭 _Node@XXX</Highlight>
-- 場景資源 (SRFrame, **SR = Scene Resource**)，支援物件命名綁定。 <Highlight color="#ff2f00">底線開頭 _Node@XXX</Highlight>
+- 遊戲窗體 (UIFrame, **UI = User Interface**)，支持物件命名綁定。 <Highlight color="#ff2f00">底線開頭 _Node@XXX</Highlight>
+- 場景資源 (SRFrame, **SR = Scene Resource**)，支持物件命名綁定。 <Highlight color="#ff2f00">底線開頭 _Node@XXX</Highlight>
 - Unity 場景 (USFrame, **US = Unity Scene**)
-- 模板物件 (CPFrame, **CP = Clone Prefab**)，支援物件命名綁定。 <Highlight color="#ff2f00">波浪開頭 ~Node@XXX</Highlight>
+- 模板物件 (CPFrame, **CP = Clone Prefab**)，支持物件命名綁定。 <Highlight color="#ff2f00">波浪開頭 ~Node@XXX</Highlight>
 
 ---
 
@@ -39,10 +39,10 @@ export const Highlight = ({children, color}) => (
 
 ### UIFrame (User Interface)
 
-用於管理**窗體 Prefab**，僅支援 UGUI，使用 UIManager 管理掛載 UIBase 的物件。
-- 支援 UI 反切 (Reverse Changes)。
-- 支援 UI 堆疊關閉 (Close Stack By Stack)。
-- 支援 UI 凍結功能，避免 UI 動畫尚未完成期間，能夠被點擊觸發事件。
+用於管理**窗體 Prefab**，僅支持 UGUI，使用 UIManager 管理掛載 UIBase 的物件。
+- 支持 UI 反切 (Reverse Changes)。
+- 支持 UI 堆疊關閉 (Close Stack By Stack)。
+- 支持 UI 凍結功能，避免 UI 動畫尚未完成期間，能夠被點擊觸發事件。
  
 <Highlight color="#00d679">提醒</Highlight> 如需要製作 UI 動畫，可以在 ShowAnimation 跟 HideAnimation 覆寫執行相關過渡動畫 (DoTween, Animation...)，並且一定要在完成 UI 動畫後，正確呼叫 animationEnd() 回調，才能正確解除 UI 凍結狀態。
 
@@ -62,7 +62,7 @@ export const Highlight = ({children, color}) => (
 
 ### USFrame (Unity Scene)
 
-用於管理 **Unity Scene**，使用 USManager 管理 Unity 場景 (支援 AssetBundle)。
+用於管理 **Unity Scene**，使用 USManager 管理 Unity 場景 (支持 AssetBundle)。
 
 <Highlight color="#0373fc">注意</Highlight> 使用 **build#** 前墜，將切換從 **Build Settings -> Scenes In Build** 加載。反之，則使用 AssetBundle。
 
