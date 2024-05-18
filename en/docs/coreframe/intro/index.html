@@ -9,7 +9,7 @@
 
 
 <link rel="search" type="application/opensearchdescription+xml" title="OxGFrame" href="/en/opensearch.xml"><link rel="stylesheet" href="/en/assets/css/styles.f979bfe2.css">
-<script src="/en/assets/js/runtime~main.7ecfd5ed.js" defer="defer"></script>
+<script src="/en/assets/js/runtime~main.4b714487.js" defer="defer"></script>
 <script src="/en/assets/js/main.099237c5.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -23,19 +23,19 @@
 <h2 class="anchor anchorWithStickyNavbar_LWe7" id="基本說明">基本說明<a href="#基本說明" class="hash-link" aria-label="Direct link to 基本說明" title="Direct link to 基本說明">​</a></h2>
 <p>核心模塊 (連動 AssetLoader 實現自動卸載)，涵蓋遊戲主要物件製作，並且實現物件命名綁定功能。</p>
 <ul>
-<li>遊戲窗體 (UIFrame, <strong>UI = User Interface</strong>)，支援物件命名綁定。 <span style="background-color:#ff2f00;border-radius:5px;color:#fff;padding:2.5px">底線開頭 _Node@XXX</span></li>
-<li>場景資源 (SRFrame, <strong>SR = Scene Resource</strong>)，支援物件命名綁定。 <span style="background-color:#ff2f00;border-radius:5px;color:#fff;padding:2.5px">底線開頭 _Node@XXX</span></li>
+<li>遊戲窗體 (UIFrame, <strong>UI = User Interface</strong>)，支持物件命名綁定。 <span style="background-color:#ff2f00;border-radius:5px;color:#fff;padding:2.5px">底線開頭 _Node@XXX</span></li>
+<li>場景資源 (SRFrame, <strong>SR = Scene Resource</strong>)，支持物件命名綁定。 <span style="background-color:#ff2f00;border-radius:5px;color:#fff;padding:2.5px">底線開頭 _Node@XXX</span></li>
 <li>Unity 場景 (USFrame, <strong>US = Unity Scene</strong>)</li>
-<li>模板物件 (CPFrame, <strong>CP = Clone Prefab</strong>)，支援物件命名綁定。 <span style="background-color:#ff2f00;border-radius:5px;color:#fff;padding:2.5px">波浪開頭 ~Node@XXX</span></li>
+<li>模板物件 (CPFrame, <strong>CP = Clone Prefab</strong>)，支持物件命名綁定。 <span style="background-color:#ff2f00;border-radius:5px;color:#fff;padding:2.5px">波浪開頭 ~Node@XXX</span></li>
 </ul>
 <hr>
 <h2 class="anchor anchorWithStickyNavbar_LWe7" id="應用說明">應用說明<a href="#應用說明" class="hash-link" aria-label="Direct link to 應用說明" title="Direct link to 應用說明">​</a></h2>
 <h3 class="anchor anchorWithStickyNavbar_LWe7" id="uiframe-user-interface">UIFrame (User Interface)<a href="#uiframe-user-interface" class="hash-link" aria-label="Direct link to UIFrame (User Interface)" title="Direct link to UIFrame (User Interface)">​</a></h3>
-<p>用於管理<strong>窗體 Prefab</strong>，僅支援 UGUI，使用 UIManager 管理掛載 UIBase 的物件。</p>
+<p>用於管理<strong>窗體 Prefab</strong>，僅支持 UGUI，使用 UIManager 管理掛載 UIBase 的物件。</p>
 <ul>
-<li>支援 UI 反切 (Reverse Changes)。</li>
-<li>支援 UI 堆疊關閉 (Close Stack By Stack)。</li>
-<li>支援 UI 凍結功能，避免 UI 動畫尚未完成期間，能夠被點擊觸發事件。</li>
+<li>支持 UI 反切 (Reverse Changes)。</li>
+<li>支持 UI 堆疊關閉 (Close Stack By Stack)。</li>
+<li>支持 UI 凍結功能，避免 UI 動畫尚未完成期間，能夠被點擊觸發事件。</li>
 </ul>
 <p><span style="background-color:#00d679;border-radius:5px;color:#fff;padding:2.5px">提醒</span> 如需要製作 UI 動畫，可以在 ShowAnimation 跟 HideAnimation 覆寫執行相關過渡動畫 (DoTween, Animation...)，並且一定要在完成 UI 動畫後，正確呼叫 animationEnd() 回調，才能正確解除 UI 凍結狀態。</p>
 <p><span style="background-color:#00d679;border-radius:5px;color:#fff;padding:2.5px">提醒</span> 額外還有 UI 的 MaskEvent，也可以通過 override 自定義事件。</p>
@@ -44,7 +44,7 @@
 <h3 class="anchor anchorWithStickyNavbar_LWe7" id="srframe-scene-resource">SRFrame (Scene Resource)<a href="#srframe-scene-resource" class="hash-link" aria-label="Direct link to SRFrame (Scene Resource)" title="Direct link to SRFrame (Scene Resource)">​</a></h3>
 <p>用於管理<strong>場景 Prefab</strong>、<strong>功能 Prefab</strong>，使用 SRManager 管理掛載 SRBase 的物件。</p>
 <h3 class="anchor anchorWithStickyNavbar_LWe7" id="usframe-unity-scene">USFrame (Unity Scene)<a href="#usframe-unity-scene" class="hash-link" aria-label="Direct link to USFrame (Unity Scene)" title="Direct link to USFrame (Unity Scene)">​</a></h3>
-<p>用於管理 <strong>Unity Scene</strong>，使用 USManager 管理 Unity 場景 (支援 AssetBundle)。</p>
+<p>用於管理 <strong>Unity Scene</strong>，使用 USManager 管理 Unity 場景 (支持 AssetBundle)。</p>
 <p><span style="background-color:#0373fc;border-radius:5px;color:#fff;padding:2.5px">注意</span> 使用 <strong>build#</strong> 前墜，將切換從 <strong>Build Settings -&gt; Scenes In Build</strong> 加載。反之，則使用 AssetBundle。</p>
 <h3 class="anchor anchorWithStickyNavbar_LWe7" id="cpframe-clone-prefab">CPFrame (Clone Prefab)<a href="#cpframe-clone-prefab" class="hash-link" aria-label="Direct link to CPFrame (Clone Prefab)" title="Direct link to CPFrame (Clone Prefab)">​</a></h3>
 <p>用於實例 <strong>Prefab 模板物件</strong>，使用 CPManager 管理掛載 CPBase 的 Prefab，主要用在加載模板物件，例如：物品圖示模板、信件訊息模板...等等，並且直接進行 <strong>GameObject.Destroy</strong>，會<strong>自動執行計數卸載</strong>。</p>

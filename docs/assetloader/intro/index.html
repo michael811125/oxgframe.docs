@@ -9,7 +9,7 @@
 
 
 <link rel="search" type="application/opensearchdescription+xml" title="OxGFrame" href="/opensearch.xml"><link rel="stylesheet" href="/assets/css/styles.f979bfe2.css">
-<script src="/assets/js/runtime~main.1b893fc6.js" defer="defer"></script>
+<script src="/assets/js/runtime~main.29c7ccd2.js" defer="defer"></script>
 <script src="/assets/js/main.58a6830b.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -21,20 +21,21 @@
 <h3 class="anchor anchorWithStickyNavbar_LWe7" id="coding-style-wiki"><a href="https://github.com/michael811125/OxGFrame/wiki/Coding-Style" target="_blank" rel="noopener noreferrer">Coding Style wiki</a><a href="#coding-style-wiki" class="hash-link" aria-label="coding-style-wiki的直接链接" title="coding-style-wiki的直接链接">​</a></h3>
 <hr>
 <h2 class="anchor anchorWithStickyNavbar_LWe7" id="基本說明">基本說明<a href="#基本說明" class="hash-link" aria-label="基本說明的直接链接" title="基本說明的直接链接">​</a></h2>
-<p>資源加載器模塊，支援動態 Async 或 Sync 加載 (Dynamic Loading)，採用計數管理方式進行資源管控 (支援 Resources 與 AssetBundle)，如果直接使用 AssetLoaders API 進行 Load 跟 Instantiate，則在 Destroy 物件時，需要連帶調用 Unload (成對呼叫 Load &amp; Unload)。</p>
+<p>資源加載器模塊，支持動態 Async 或 Sync 加載 (Dynamic Loading)，採用計數管理方式進行資源管控 (支持 Resources 與 AssetBundle)，如果直接使用 AssetLoaders API 進行 Load 跟 Instantiate，則在 Destroy 物件時，需要連帶調用 Unload (成對呼叫 Load &amp; Unload)。</p>
 <p>集成 YooAsset 實現資源熱更新方案，額外實現 YooAsset 提供的加密接口，其中實現文件加解密的方式有。</p>
 <ul>
-<li>Offset (偏移量方式)</li>
-<li>XOR</li>
-<li>HT2XOR (Head-Tail 2 XOR)</li>
-<li>AES</li>
+<li>Offset (偏移量方式)，時間複雜度為 <span style="background-color:#00d679;border-radius:5px;color:#fff;padding:2.5px">O(1)</span></li>
+<li>XOR，時間複雜度為 <span style="background-color:#00d679;border-radius:5px;color:#fff;padding:2.5px">O(N)</span></li>
+<li>HT2XOR (Head-Tail 2 XOR)，時間複雜度為 <span style="background-color:#00d679;border-radius:5px;color:#fff;padding:2.5px">O(N/2 + 2)</span></li>
+<li>HT2XORPlus (Head-Tail 2 XOR Plus)，時間複雜度為 <span style="background-color:#00d679;border-radius:5px;color:#fff;padding:2.5px">O(N/2 + 2)</span> <strong>強化版</strong></li>
+<li>AES，時間複雜度為 <span style="background-color:#00d679;border-radius:5px;color:#fff;padding:2.5px">O(N^2)</span></li>
 </ul>
 <p>僅供參考</p>
 <ul>
-<li>運算效率 OFFSET &gt; HT2XOR &gt; XOR &gt; AES</li>
-<li>內存占用 OFFSET &gt; AES &gt; HT2XOR = XOR</li>
-<li>AB 包體積增加 OFFSET &gt; AES &gt; HT2XOR = XOR</li>
-<li>破解難度 AES &gt; HT2XOR &gt; XOR &gt; OFFSET</li>
+<li>運算效率 OFFSET &gt; HT2XOR &gt;= HT2XORPlus &gt; XOR &gt; AES</li>
+<li>內存占用 OFFSET &gt; AES &gt; HT2XORPlus = HT2XOR = XOR</li>
+<li>AB 包體積增加 OFFSET &gt; AES &gt; HT2XORPlus = HT2XOR = XOR</li>
+<li>破解難度 AES &gt; HT2XORPlus &gt; HT2XOR &gt; XOR &gt; OFFSET</li>
 </ul>
 <p>群組分包舉例</p>
 <ul>
@@ -51,7 +52,7 @@
 <h3 class="anchor anchorWithStickyNavbar_LWe7" id="檢查-playmode-是否初始完成">檢查 PlayMode 是否初始完成<a href="#檢查-playmode-是否初始完成" class="hash-link" aria-label="檢查 PlayMode 是否初始完成的直接链接" title="檢查 PlayMode 是否初始完成的直接链接">​</a></h3>
 <p>輪詢 AssetPatcher.IsInitialized() 是否完成 Preset Packages 的初始，因為初始完成後，才能開始進行 Built-in Bundle 的加載與 AssetPatcher.Check() 更新檢查，又或者邊玩邊下載。</p>
 <p><span style="background-color:#00d679;border-radius:5px;color:#fff;padding:2.5px">提醒</span> 區分 Built-in 跟 Patch (視情況自行訂定運作流程)。</p>
-<p><span style="background-color:#00d679;border-radius:5px;color:#fff;padding:2.5px">提  醒</span> 後續執行 AssetPatcher.Check() 檢查 Patch 更新完成後，就可以讀取更新資源了。</p>
+<p><span style="background-color:#00d679;border-radius:5px;color:#fff;padding:2.5px">提醒</span> 後續執行 AssetPatcher.Check() 檢查 Patch 更新完成後，就可以讀取更新資源了。</p>
 <ul>
 <li>執行 AssetPatcher.Check() 檢查流程時，<strong>會將 Preset App Packages 與 Preset DLC Packages 進行合併下載</strong>。</li>
 </ul>

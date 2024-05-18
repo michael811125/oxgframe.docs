@@ -9,7 +9,7 @@
 
 
 <link rel="search" type="application/opensearchdescription+xml" title="OxGFrame" href="/en/opensearch.xml"><link rel="stylesheet" href="/en/assets/css/styles.f979bfe2.css">
-<script src="/en/assets/js/runtime~main.7ecfd5ed.js" defer="defer"></script>
+<script src="/en/assets/js/runtime~main.4b714487.js" defer="defer"></script>
 <script src="/en/assets/js/main.099237c5.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -21,20 +21,21 @@
 <h3 class="anchor anchorWithStickyNavbar_LWe7" id="coding-style-wiki"><a href="https://github.com/michael811125/OxGFrame/wiki/Coding-Style" target="_blank" rel="noopener noreferrer">Coding Style wiki</a><a href="#coding-style-wiki" class="hash-link" aria-label="Direct link to coding-style-wiki" title="Direct link to coding-style-wiki">​</a></h3>
 <hr>
 <h2 class="anchor anchorWithStickyNavbar_LWe7" id="基本說明">基本說明<a href="#基本說明" class="hash-link" aria-label="Direct link to 基本說明" title="Direct link to 基本說明">​</a></h2>
-<p>資源加載器模塊，支援動態 Async 或 Sync 加載 (Dynamic Loading)，採用計數管理方式進行資源管控 (支援 Resources 與 AssetBundle)，如果直接使用 AssetLoaders API 進行 Load 跟 Instantiate，則在 Destroy 物件時，需要連帶調用 Unload (成對呼叫 Load &amp; Unload)。</p>
+<p>資源加載器模塊，支持動態 Async 或 Sync 加載 (Dynamic Loading)，採用計數管理方式進行資源管控 (支持 Resources 與 AssetBundle)，如果直接使用 AssetLoaders API 進行 Load 跟 Instantiate，則在 Destroy 物件時，需要連帶調用 Unload (成對呼叫 Load &amp; Unload)。</p>
 <p>集成 YooAsset 實現資源熱更新方案，額外實現 YooAsset 提供的加密接口，其中實現文件加解密的方式有。</p>
 <ul>
-<li>Offset (偏移量方式)</li>
-<li>XOR</li>
-<li>HT2XOR (Head-Tail 2 XOR)</li>
-<li>AES</li>
+<li>Offset (偏移量方式)，時間複雜度為 <span style="background-color:#00d679;border-radius:5px;color:#fff;padding:2.5px">O(1)</span></li>
+<li>XOR，時間複雜度為 <span style="background-color:#00d679;border-radius:5px;color:#fff;padding:2.5px">O(N)</span></li>
+<li>HT2XOR (Head-Tail 2 XOR)，時間複雜度為 <span style="background-color:#00d679;border-radius:5px;color:#fff;padding:2.5px">O(N/2 + 2)</span></li>
+<li>HT2XORPlus (Head-Tail 2 XOR Plus)，時間複雜度為 <span style="background-color:#00d679;border-radius:5px;color:#fff;padding:2.5px">O(N/2 + 2)</span> <strong>強化版</strong></li>
+<li>AES，時間複雜度為 <span style="background-color:#00d679;border-radius:5px;color:#fff;padding:2.5px">O(N^2)</span></li>
 </ul>
 <p>僅供參考</p>
 <ul>
-<li>運算效率 OFFSET &gt; HT2XOR &gt; XOR &gt; AES</li>
-<li>內存占用 OFFSET &gt; AES &gt; HT2XOR = XOR</li>
-<li>AB 包體積增加 OFFSET &gt; AES &gt; HT2XOR = XOR</li>
-<li>破解難度 AES &gt; HT2XOR &gt; XOR &gt; OFFSET</li>
+<li>運算效率 OFFSET &gt; HT2XOR &gt;= HT2XORPlus &gt; XOR &gt; AES</li>
+<li>內存占用 OFFSET &gt; AES &gt; HT2XORPlus = HT2XOR = XOR</li>
+<li>AB 包體積增加 OFFSET &gt; AES &gt; HT2XORPlus = HT2XOR = XOR</li>
+<li>破解難度 AES &gt; HT2XORPlus &gt; HT2XOR &gt; XOR &gt; OFFSET</li>
 </ul>
 <p>群組分包舉例</p>
 <ul>
