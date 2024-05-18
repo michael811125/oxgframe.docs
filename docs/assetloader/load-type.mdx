@@ -106,7 +106,7 @@ if (isInitialized)
 - DLC Packages
   - 路徑包含平台 (.../CDN/\<ProductName\>/\<Platform\>/DLC/\<PackageName\>/\<DlcVersion\>)。
   - 路徑不含平台 (.../CDN/\<ProductName\>/DLC/\<PackageName\>/\<DlcVersion\>)，**屬於所有平台的共用資源**。
-  - 支援特定版本 DLC package 的下載與 DLC package 卸載功能，需手動進行 AssetPatcher.InitDlcPackage，並且指定特定 dlcVersion，對於 dlcVersion 也可以單一固定 dlcVersion (ex: "latest")，變成只要 DLC 有更新就可以使用固定路徑進行更新。
+  - 支持特定版本 DLC package 的下載與 DLC package 卸載功能，需手動進行 AssetPatcher.InitDlcPackage，並且指定特定 dlcVersion，對於 dlcVersion 也可以單一固定 dlcVersion (ex: "latest")，變成只要 DLC 有更新就可以使用固定路徑進行更新。
 
 <Highlight color="#0373fc">注意</Highlight> 另外，Play Mode 的說明如下。
 - Editor Simulate Mode (模擬模式)，加快開發。
@@ -114,13 +114,18 @@ if (isInitialized)
 - Host Mode (聯機模式)，需將 AB 打包區分 Built-in 跟 Patch，並且產出相關配置，需注意 PatchLauncher 的解密設定。
   - 允許選擇 Semantic Version 版號檢查規則 (比對完整版號 X.Y.Z 或比對大小版號 X.Y)。
   - 允許跳過 Preset App Packages 主下載階段 (強制邊玩邊下載)。
-- WebGL Mode (僅支援 WebGL 平台)，需將 AB 全部打包至 Built-in (StreamingAssets)。
-  - 不支援事先下載，主要是因為 WebGL 是邊玩邊下載。
+- WebGL Mode (僅支持 WebGL 平台)，需將 AB 全部打包至 Built-in (StreamingAssets)。
+  - 不支持事先下載，主要是因為 WebGL 是邊玩邊下載。
 
 ### 步驟 4.
 
-前置作業完成後開始加載，從 DefaultPackage 中加載尋址名稱為 Cube 的物件。
+前置作業完成後，並且確保主配置流程已初始 -> AssetPatcher.IsInitialized()，就可以開始加載了，如以下。
 
+從 DefaultPackage 中加載尋址名稱為 Cube 的物件。
 ```csharp
 AssetLoaders.LoadAssetAsync<GameObject>("DefaultPackage", "Cube");
 ```
+
+> <Highlight color="#0373fc">注意</Highlight> 額外補充，流程先後順序，說明如下。
+> - 輪詢初始狀態 AssetPatcher.IsInitialized() == true -> 即可<Highlight color="#ff2f00">加載內置資源</Highlight>與<Highlight color="#ff2f00">執行檢查更新</Highlight>。
+> - 執行檢查更新 AssetPatcher.Check() -> 輪詢完成狀態 AssetPatcher.IsDone() == true -> 完成更新後 -> 即可<Highlight color="#ff2f00">加載更新資源</Highlight>。

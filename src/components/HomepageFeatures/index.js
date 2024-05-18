@@ -18,7 +18,7 @@ const translateTexts = [
   },
   {
     desc: "desc 2",
-    text: "一套框架輕鬆搞定，結合強大開源 YooAsset + HybridCLR，快速打造商業化的遊戲流程，並且協助研發團隊提升產品迭代效率，支援 Win, OSX, Android, iOS, WebGL。"
+    text: "一套框架輕鬆搞定，結合強大開源 YooAsset + HybridCLR，快速打造商業化的遊戲流程，並且協助研發團隊提升產品迭代效率，支持 Win, OSX, Android, iOS, WebGL。"
   },
   {
     desc: "title 3",
