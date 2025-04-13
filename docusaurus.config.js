@@ -28,7 +28,7 @@ const config = {
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
   //baseUrl: '/build/',
-  baseUrl: '/',  
+  baseUrl: '/',
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
@@ -93,7 +93,7 @@ const config = {
       navbar: {
         title: 'OxGFrame',
         logo: {
-          alt: 'OxGFrame Logo_v2' ,
+          alt: 'OxGFrame Logo_v2',
           src: 'img/oxgframe_logo_v2.png',
         },
         items: [
