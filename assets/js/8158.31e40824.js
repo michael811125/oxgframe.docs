@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkoxgframe_doc=self.webpackChunkoxgframe_doc||[]).push([[8158],{8158:(a,e,c)=>{c.r(e),c.d(e,{DocSearchModal:()=>o.a1});var o=c(5600)}}]);

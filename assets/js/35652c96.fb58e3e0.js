@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkoxgframe_doc=self.webpackChunkoxgframe_doc||[]).push([[9048],{1728:e=>{e.exports=JSON.parse('{"permalink":"/blog/tags/michaelo","page":1,"postsPerPage":10,"totalPages":1,"totalCount":1,"blogDescription":"Blog","blogTitle":"Blog"}')}}]);

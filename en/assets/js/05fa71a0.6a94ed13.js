@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkoxgframe_doc=self.webpackChunkoxgframe_doc||[]).push([[1242],{5523:e=>{e.exports=JSON.parse('{"authors":[{"name":"MichaelO","title":"Keep Improving, Enjoy Sharing (Game Development, Technical Research)","url":"https://github.com/michael811125","imageURL":"https://github.com/michael811125.png","key":"michaelo","page":null,"count":1}]}')}}]);

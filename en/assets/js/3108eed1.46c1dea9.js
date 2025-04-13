@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkoxgframe_doc=self.webpackChunkoxgframe_doc||[]).push([[3172],{3831:e=>{e.exports=JSON.parse('{"label":"\u4f5c\u8005","permalink":"/en/blog/tags/\u4f5c\u8005","allTagsPath":"/en/blog/tags","count":1,"unlisted":false}')}}]);

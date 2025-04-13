@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkoxgframe_doc=self.webpackChunkoxgframe_doc||[]).push([[1903],{1912:e=>{e.exports=JSON.parse('{"blogBasePath":"/en/blog","blogTitle":"Blog"}')}}]);

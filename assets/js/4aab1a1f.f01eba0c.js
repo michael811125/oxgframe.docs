@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkoxgframe_doc=self.webpackChunkoxgframe_doc||[]).push([[7572],{2815:e=>{e.exports=JSON.parse('{"title":"Editor","slug":"/category/editor-3","permalink":"/docs/category/editor-3","navigation":{"previous":{"title":"API","permalink":"/docs/category/api-3"},"next":{"title":"Coming Soon","permalink":"/docs/mediaframe/API/Editor/empty"}}}')}}]);
