@@ -127,6 +127,6 @@ Load the object with the addressable name "Cube" from the DefaultPackage.
 AssetLoaders.LoadAssetAsync<GameObject>("DefaultPackage", "Cube");
 ```
 
-> <Highlight color="#0373fc">Note</Highlight> Additionally, the sequence of the process is as follows:
+> <Highlight color="#0373fc">Attention</Highlight> Additionally, the sequence of the process is as follows:
 > - Poll the initialization state `AssetPatcher.IsInitialized() == true` -> then you can <Highlight color="#ff2f00">load built-in resources</Highlight> and <Highlight color="#ff2f00">perform update checks</Highlight>.
 > - Perform update check `AssetPatcher.Check()` -> Poll the completion state `AssetPatcher.IsDone() == true` -> After the update is completed -> you can <Highlight color="#ff2f00">load updated resources</Highlight>.
