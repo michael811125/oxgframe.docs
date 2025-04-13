@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkoxgframe_doc=self.webpackChunkoxgframe_doc||[]).push([[8121],{8070:l=>{l.exports=JSON.parse('{"tags":[{"label":"\u4f5c\u8005","permalink":"/blog/tags/\u4f5c\u8005","count":1},{"label":"hello","permalink":"/blog/tags/hello","count":1},{"label":"michaelo","permalink":"/blog/tags/michaelo","count":1}]}')}}]);
