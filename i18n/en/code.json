@@ -1,0 +1,32 @@
+{
+    "自由、快速、容易，基於 Unity 用於加快遊戲開發的框架，並且支持多平台": {
+        "message": "Free, fast, and easy framework based on Unity to accelerate game development with multi-platform support."
+    },
+    "快速入門": {
+        "message": "Quick Start"
+    },
+    "自由實現": {
+        "message": "Flexible Implementation"
+    },
+    "易於上手，兼具遊戲開發基本核心系統，不關心專案目錄、不關心遊戲業務邏輯、不關心讀表方式，全部自由打造。": {
+        "message": "Easy to use with essential core systems for game development, independent of project structure, game logic, or data table methods—completely customizable."
+    },
+    "加快開發": {
+        "message": "Accelerate Development"
+    },
+    "一套框架輕鬆搞定，結合強大開源 YooAsset + HybridCLR，快速打造商業化的遊戲流程，並且協助研發團隊提升產品迭代效率，支持 Win, OSX, Android, iOS, WebGL。": {
+        "message": "A single framework does it all—integrated with powerful open-source YooAsset + HybridCLR to rapidly build commercial game flows and boost team productivity. Supports Win, OSX, Android, iOS, and WebGL."
+    },
+    "調用容易": {
+        "message": "Easy Integration"
+    },
+    "高內聚低耦合 (插件化)，透過各模塊 API，能夠輕鬆取得各自管理的組件，提升可讀性、維護性。": {
+        "message": "Highly cohesive and loosely coupled (modularized), allowing easy access to managed components through APIs, improving readability and maintainability."
+    },
+    "博客": {
+        "message": "Blog"
+    },
+    "文檔": {
+        "message": "Documentation"
+    }
+}

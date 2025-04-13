@@ -1,0 +1,57 @@
+---
+sidebar_position: 2
+---
+
+import ReactPlayer from 'react-player'
+
+# 範例教程
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## 額外說明
+
+<Highlight color="#ff2f00">重要</Highlight> 範例工程會使用 **Unity New InputSystem**，所以建議先安裝，否則會有 **EventSystem** 失效問題。
+
+<Highlight color="#0373fc">New Project</Highlight> **[Input System](https://docs.unity3d.com/Packages/com.unity.inputsystem@1.8/manual/index.html)**
+
+透過 Package Manager 安裝 **(Install by name)**
+
+```
+com.unity.inputsystem
+```
+
+## 實現 FlappyBird 小遊戲
+
+[Github - FlappyBird_OxGFrame](https://github.com/michael811125/FlappyBird_OxGFrame)
+  - [Resources](https://github.com/michael811125/FlappyBird_OxGFrame/tree/resources)
+  - [AssetBundle](https://github.com/michael811125/FlappyBird_OxGFrame/tree/assetbundle)
+  - [AssetBundle + HybridCLR](https://github.com/michael811125/FlappyBird_OxGFrame/tree/assetbundle_clr)
+
+<ReactPlayer controls url='https://github.com/michael811125/OxGFrame/assets/30960759/5e41e84a-029d-4392-8142-7199ce45018c' />
+
+---
+
+## 框架模塊範例 
+
+從 Package Manager 中導入範例工程。
+
+<Highlight color="#00d679">提醒</Highlight> 範例 GameView 皆為 **2K Portrait (w: 1080 * h: 1920)**。
+<br/>
+<br/>
+![](/img/samples/img_1.png)

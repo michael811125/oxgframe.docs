@@ -1,0 +1,139 @@
+---
+sidebar_position: 5
+---
+
+# 資源部署
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## 內置部署
+
+### 步驟 1.
+
+<Highlight color="#ff2f00">重要</Highlight> 再使用 YooAsset 構建時，直接選擇 Clear And Copy All，將資源包輸出至 StreamingAssets (即內置)。
+
+![](/img/assetloader/img_4.png)
+
+### 步驟 2.
+
+額外需要確認 Builtin Query Mode。
+
+- Web Request：通過動態請求的方式，進行内置資源的查詢，將會占用部分內存，不過會在下一次 GC 時釋放。
+- Builtin File Manifest：通過事先建立的查詢表，進行内置資源的查詢。
+- Builtin File Manifest With CRC：通過事先建立的查詢表 + 校驗 CRC 正確性，進行内置資源的查詢。
+
+![](/img/assetloader/img_13.png)
+
+### 步驟 3.
+
+<Highlight color="#00d679">提醒</Highlight> **選擇 Web Request 直接略過此步驟**。
+
+<Highlight color="#0373fc">注意</Highlight> 如果選擇 Builtin Query Mode 選擇 Builtin File Manifest 或 Builtin File Manifest With CRC，則需要額外輸出查詢表。
+
+通過 MenuItem 點選 OxGFrame -> AssetLoader -> Export Built-in File Manifest (BuiltinFileManifest.asset)，進行查詢表輸出。
+
+![](/img/assetloader/img_14.png)
+
+查詢表輸出結果。
+
+![](/img/assetloader/img_15.png)
+
+---
+
+## 更新部署
+
+### 步驟 1.
+
+主程式版號配置構建。
+
+通過 MenuItem 點選 OxGFrame -> AssetLoader -> Export Bundle And Config Generator。
+
+![](/img/assetloader/img_9.png)
+
+開啟後，Operation Type 選擇 Export App Config To Streaming Assets，將進行 appconfig 的輸出 **(用於比對主程式版號)**。
+
+![](/img/assetloader/img_10.png)
+
+### 步驟 2.
+
+<Highlight color="#0373fc">注意</Highlight> 確認 PatchLauncher 上的預設 Packages。
+
+- 預設 App Packages。
+- 預設 DLC Packages。
+
+![](/img/assetloader/img_8.png)
+
+### 步驟 3.
+
+通過 MenuItem 點選 OxGFrame -> AssetLoader -> Export Bundle And Config Generator。
+
+![](/img/assetloader/img_9.png)
+
+開啟後，Operation Type 選擇 Export Configs And App Bundles For CDN。
+
+![](/img/assetloader/img_11.png)
+
+1. <Highlight color="#0373fc">注意</Highlight> Source Folder 為 YooAsset 構建輸出的文件夾。
+2. <Highlight color="#0373fc">注意</Highlight> 要輸出的 Packages，圖中輸出的是 DefaultPackage。
+3. 最後點擊 Process 進行輸出。
+
+### 步驟 4.
+
+將輸出的 CDN 文件夾，直接上傳至雲服務上，完成資源部署。
+
+![](/img/assetloader/img_12.png)
+
+### 步驟 5.
+
+更新資源請求的配置說明。
+
+通過 MenuItem 點選 OxGFrame -> AssetLoader -> Bundle Url Config Generator (burlconfig.conf)。
+
+![](/img/assetloader/img_23.png)
+
+支持類型為以下 **(不管輸出類型如何，都會自動判別)**：
+- Cipher Process (密文類型) -> <Highlight color="#00d679">提醒</Highlight> 建議 Release 發佈使用。
+- Plaintext Process (明文類型)。
+
+開啟後，配置以下相關請求訊息：
+- CDN Server (Domain name 或者 IP)。
+- App 商店的鏈結 (**無則略過**)。
+
+
+Cipher (密文類型)：
+
+![](/img/assetloader/img_25.png)
+
+Plaintext (明文類型)：
+
+![](/img/assetloader/img_22.png)
+
+---
+
+## 額外說明
+
+<Highlight color="#ff2f00">重要</Highlight> 如果選用以下模式：
+
+- **Offline Mode**
+- **WebGL Mode**
+
+只需要進行 [內置部署](#內置部署) 即可。
+
+
+

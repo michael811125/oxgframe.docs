@@ -1,0 +1,101 @@
+---
+sidebar_position: 0
+---
+
+import ReactPlayer from 'react-player'
+
+# 框架介紹
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## 基本說明
+
+OxGFrame 是基於 Unity 用於加快遊戲開發的框架，並且使用 UniTask 進行異步處理，能夠簡單入手與有效的加快開發效率，並且支持多平台 Win、OSX、Android、iOS、WebGL。
+- 熱修復 (Hotfixer)
+- 資源加載 (AssetLoader)
+- 遊戲窗體 (UIFrame, **UI = User Interface**)
+- 場景資源 (SRFrame, **SR = Scene Resource**)
+- Unity 場景 (USFrame, **US = Unity Scene**)
+- 模板物件 (CPFrame, **CP = Clone Prefab**)
+- 音效管理 (AudioFrame)
+- 視頻管理 (VideoFrame)
+- 階段整合 (GSIFrame, **GSI = Game Stage Integration**)
+- 網路模塊 (NetFrame)
+- 事件中心 (CenterFrame)
+
+![](/img/intro/img_1.png)
+
+---
+
+## 框架特點
+
+- **自由實現調用**
+
+  兼具遊戲開發基本核心系統，**不關心專案目錄**、**不關心遊戲業務邏輯**、**不關心讀表方式**，全部自由打造。
+  - 自由引入**其他編程框架**，像是 [Unity DOTS](https://unity.com/dots), [Entitas](https://github.com/sschmid/Entitas), [ECSLite](https://github.com/Leopotam/ecslite), [Zenject](https://github.com/modesttree/Zenject), [Extenject](https://github.com/Mathijs-Bakker/Extenject), [VContainer](https://github.com/hadashiA/VContainer) 等等，或者這些**編程框架**僅搭配 [AssetLoader](https://github.com/michael811125/OxGFrame#assetloader-dependence-yooasset) + [Hotfixer](https://github.com/michael811125/OxGFrame#hotfixer-dependence-hybridclr-assetloader) 模塊，進一步解決熱更方案。
+
+  - 自由引入**遊戲載表方式**，像是 [luban](https://github.com/focus-creative-games/luban), [ExcelToCode](https://github.com/feifeid47/ExcelToCode), [TippingExcelTool](https://github.com/TippingGame/TippingExcelTool?tab=readme-ov-file), [ExcelConverter](https://github.com/JohnsonChenz/ExcelConverter) 等等。
+
+- **高內聚低耦合**
+  
+  插件化體系，提高可讀性與維護性，讓團隊專心開發 GamePlay。
+
+- **多專案功能遷移** 
+
+  具備框架特性，幫助團隊統一前置作業的開發流程，能夠在最少修改下，從 A 專案的功能快速遷移至 B 專案。
+
+- **快速商業化流程**
+
+  輕鬆建置最小運行包、標準運行包、完整運行包概念，與主版號、資源版號流程比對，並且支持資源修復功能。
+
+- **高效代碼熱修復**
+  
+  仰賴 HybridCLR 革命熱更方案，可以在最短的時間內，快速修復已上線遊戲出現的 BUG 問題。
+
+- **靈活資源包方案**
+
+  借助 YooAsset 資源管理方案，能夠簡單管控各資源包，加強 DLC 管理機制，可以決定 DLC 是否多平台共用。
+
+- **組件綁定機制**
+
+  通過特定模塊組件 (UIFrame, SRFrame, CPFrame) 支持物件命名快速綁定，能夠提高開發效率。
+
+- **模板建立選單**
+
+  ![](/img/intro/img_2.png)
+
+---
+
+## 平台測試
+- Windows (Passed)
+- MacOSX (Passed)
+- Android (Passed)
+- iOS (Passed)
+- WebGL (Passed)
+
+<ReactPlayer controls url='https://github.com/michael811125/OxGFrame/assets/30960759/fd04f6e5-6338-400c-9f57-dcdbdf73dfff' />
+
+---
+
+## 兼容 Unity 版本
+
+框架本身長期支持 [Unity](https://unity.com/releases/editor/archive) 新版本，**依賴兼容以下**：
+
+- <Highlight color="#ff2f00">重要</Highlight> [HybridCLR 支持 Unity 的版本與平台](https://hybridclr.doc.code-philosophy.com/docs/basic/supportedplatformanduniyversion)。
+- <Highlight color="#ff2f00">重要</Highlight> [YooAsset 系統需求](https://www.yooasset.com/docs/guide-editor/QuickStart#%E7%B3%BB%E7%BB%9F%E9%9C%80%E6%B1%82)。

@@ -1,0 +1,167 @@
+---
+sidebar_position: 1
+---
+
+import ReactPlayer from 'react-player'
+
+# 模塊介紹
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## 基本說明
+
+核心模塊 (連動 AssetLoader 實現自動卸載)，涵蓋遊戲主要物件製作，並且實現物件命名綁定功能。
+
+- 遊戲窗體 (UIFrame, **UI = User Interface**)，支持物件命名綁定。 <Highlight color="#ff2f00">底線開頭 _Node@XXX</Highlight>
+- 場景資源 (SRFrame, **SR = Scene Resource**)，支持物件命名綁定。 <Highlight color="#ff2f00">底線開頭 _Node@XXX</Highlight>
+- Unity 場景 (USFrame, **US = Unity Scene**)
+- 模板物件 (CPFrame, **CP = Clone Prefab**)，支持物件命名綁定。 <Highlight color="#ff2f00">波浪開頭 ~Node@XXX</Highlight>
+
+---
+
+## 應用說明
+
+### UIFrame (User Interface)
+
+用於管理**窗體 Prefab**，僅支持 UGUI，使用 UIManager 管理掛載 UIBase 的物件。
+- 支持 UI 反切 (Reverse Changes)。
+- 支持 UI 堆疊關閉 (Close Stack By Stack)。
+- 支持 UI 凍結功能，避免 UI 動畫尚未完成期間，能夠被點擊觸發事件。
+ 
+<Highlight color="#00d679">提醒</Highlight> 如需要製作 UI 動畫，可以在 ShowAnimation 跟 HideAnimation 覆寫執行相關過渡動畫 (DoTween, Animation...)，並且一定要在完成 UI 動畫後，正確呼叫 animationEnd() 回調，才能正確解除 UI 凍結狀態。
+
+<Highlight color="#00d679">提醒</Highlight> 額外還有 UI 的 MaskEvent，也可以通過 override 自定義事件。
+
+| UI 反切運用 (Reverse Changes)  | UI 反切運用 (Reverse Changes) |
+|:-|:-|
+| ![](/img/coreframe/gif_1.gif) | ![](/img/coreframe/gif_2.gif) |
+
+| UI 堆疊關閉運用 (Close Stack By Stack)  | UI 堆疊關閉運用 (Close Stack By Stack) |
+|:-|:-|
+| ![](/img/coreframe/gif_3.gif) | ![](/img/coreframe/gif_4.gif) |
+
+### SRFrame (Scene Resource)
+
+用於管理**場景 Prefab**、**功能 Prefab**，使用 SRManager 管理掛載 SRBase 的物件。
+
+### USFrame (Unity Scene)
+
+用於管理 **Unity Scene**，使用 USManager 管理 Unity 場景 (支持 AssetBundle)。
+
+<Highlight color="#0373fc">注意</Highlight> 使用 **build#** 前墜，將切換從 **Build Settings -> Scenes In Build** 加載。反之，則使用 AssetBundle。
+
+### CPFrame (Clone Prefab)
+
+用於實例 **Prefab 模板物件**，使用 CPManager 管理掛載 CPBase 的 Prefab，主要用在加載模板物件，例如：物品圖示模板、信件訊息模板...等等，並且直接進行 **GameObject.Destroy**，會**自動執行計數卸載**。
+
+<Highlight color="#00d679">提醒</Highlight> CPManager 不進行 CPBase 的緩存處理。
+
+### 常用方法說明
+
+- OnCreate : 初始參數用。
+- OnBind : 初始事件用。
+- OnPreShow : 當有異步處理或者附屬物件控制時，可以在此處理。例如 : TopUI 附屬連動開啟 LeftUI & RightUI，那麼就可以在 TopUI 中的 OnPreShow 方法實現 Show LeftUI & RightUI。
+  - <Highlight color="#00d679">提醒</Highlight> **不建議在 OnPreClose 時進行相關 Show 的處理，如果有進行的話也沒關係，因為針對 CloseAll 的 API 有提供 disabledPreClose 參數開關。**
+- OnShow : 調用 Show 時，此方法會被激活，並且可以透過帶入的 object 進行數據傳送。
+- OnClose : 調用 Close 時，此方法會被激活。
+- OnRelease : 當物件被 Destroy 時，此方法會被激活。
+
+### 初始順序說明
+
+<Highlight color="#ff2f00">重要</Highlight> OnCreate (Once) > OnAutoBind (Once) > OnBind (Once) > OnPreShow (EveryOpen) > OnShow (EveryOpen)。
+
+### 物件綁定說明
+
+- 透過 collector.GetNode("BindName") 返回取得綁定 GameObject **(單一名綁定)**。
+  - UIBase & SRBase 使用 _Node@XXX。
+  - CPBase 使用 ~Node@XXX。
+- 透過 collector.GetNodes("BindName") 返回取得綁定 GameObject[] **(同名多綁定，物件順序由上至下)**。
+  - UIBase & SRBase 使用 _Node@XXX。
+  - CPBase 使用 ~Node@XXX。
+- 透過 collector.GetNodeComponent\<TComponent\>("BindName") 返回取得綁定 TComponent **(單一名綁定)**。
+  - UIBase & SRBase 使用 _Node@XXX。
+  - CPBase 使用 ~Node@XXX。
+- 透過 collector.GetNodeComponents\<TComponent\>("BindName") 返回取得綁定 TComponent[] **(同名多綁定，物件順序由上至下)**。
+  - UIBase & SRBase 使用 _Node@XXX。
+  - CPBase 使用 ~Node@XXX。
+
+### 自動生成停止綁定標籤 (Hotkey: Shift+E, E: End)
+
+<Highlight color="#00d679">提醒</Highlight> **建議使用 Hotkey**，不然使用 Right-Click 會執行多次 (實際上不影響自動生成)，但這是 [Unity Bug](https://issuetracker.unity3d.com/issues/menuitem-is-executed-more-than-once-when-multiple-objects-are-selected) 官方不修復了。
+
+能夠縮短 Runtime 在綁定的向下查找次數，時間複雜度為 O(N)，N = StopEndIdx (**如有大量節點物件建議使用**)。
+- <Highlight color="#ff2f00">重要</Highlight> 如果有特殊使用 **Transform.Find** 查找子物件時，剛好子物件名稱有 **#** 標籤，可以無視，因為在 Runtime 時，會 Replace **#** 標籤為 **""**，進行名稱還原。
+
+![](/img/coreframe/img_1.png)
+
+![](/img/coreframe/gif_5.gif)
+
+### 自動生成物件綁定代碼 (Hotkey: Shift+B, B: Bind)
+
+命名規範**使用 * 指向 TailName**
+- UIBase & SRBase
+  - _Node@XXX*Btn (以此類推)
+- CPBase
+  - ~Node@XXX*Btn (以此類推)
+
+### 自動綁定說明
+
+![](/img/coreframe/img_2.png)
+
+### 自動綁定配置
+
+![](/img/coreframe/img_3.png)
+
+預設組件綁定表 **(可從 BindCodeSetting 中自行新增或修改 TailName 對應綁定組件類型)**
+
+| **Tail Name** | **Component Name** | **End Remove Count** | **End Plural Txt** |
+|:-|:-|:-|:-|
+| **Other** |
+| Trans | Transform | 0 | es |
+| RectTrans | RectTransform | 0 | es |
+| **Legacy** |
+| Img | Image | 0 | s |
+| RawImg | RawImage | 0 | s |
+| Txt | Text | 0 | s | 
+| Btn | Button | 0 | s | 
+| Tgl | Toggle | 0 | s | 
+| Sld | Slider | 0 | s | 
+| ScrBar | Scrollbar | 0 | s | 
+| ScrView | ScrollRect | 0 | s | 
+| Drd | Dropdown | 0 | s | 
+| Field | InputField | 0 | s | 
+| **TMP** |
+| TmpTxt | TMP_Text | 0 | s | 
+| TmpDrd | TMP_Dropdown | 0 | s | 
+| TmpField | TMP_InputField | 0 | s |
+| **Custom** |
+| BtnPlus | ButtonPlus | 0 | es |
+| NodePool | NodePool | 0 | s |
+
+自動綁定產生器的功能有方法類型的區分，如下：
+
+- 自動 (Auto) \[預設\]，自動儲存綁定內容至代碼中，將會自動 override OnAutoBind() 與調用。
+
+<ReactPlayer controls url='https://github.com/michael811125/OxGFrame/assets/30960759/4c61bede-0bbc-4cae-baba-4a9bc7274c2e' />
+
+<br/>
+
+- 手動 (Manual) \[自選\]，手動將綁定內容複製至代碼中，將會自動 override OnAutoBind() 與調用。
+
+<ReactPlayer controls url='https://github.com/michael811125/OxGFrame/assets/30960759/8e4f63e9-b955-4f91-8ac7-be949677c54f' />
