@@ -1,0 +1,49 @@
+---
+sidebar_position: 1
+---
+
+# Module Introduction
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## Basic Introduction
+
+Network Module, network events are categorized into OnOpen, OnBinary, OnMessage, OnError, OnClose, and also implements multi-node (NetNode) support. Additionally, you can configure **heartbeat detection callback**, **timeout handling callback**, **reconnection callback**, and implement the INetTips network message interface.
+
+---
+
+## How to Use
+
+- NetManager (Network Node Manager)
+- NetNode (Network Node) 
+- INetProvider (Network Provider Interface)
+  - TcpNetProvider (TCP)
+  - KcpNetProvider (KCP) 
+  - WebSocketNetProvider (WebSocket)
+- NetOption (Connection Configuration)
+  - TcpNetOption
+  - KcpNetOption
+  - WebSocketNetOption
+- INetTips (Network Status Notification Interface)
+
+<Highlight color="#0373fc">Attention</Highlight> The following NetProviders are provided (can be extended):
+- TCP
+- KCP
+- WebSocket
+

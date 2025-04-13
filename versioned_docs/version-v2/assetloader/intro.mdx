@@ -27,16 +27,16 @@ export const Highlight = ({children, color}) => (
 資源加載器模塊，支持動態 Async 或 Sync 加載 (Dynamic Loading)，採用計數管理方式進行資源管控 (支持 Resources 與 AssetBundle)，如果直接使用 AssetLoaders API 進行 Load 跟 Instantiate，則在 Destroy 物件時，需要連帶調用 Unload (成對呼叫 Load & Unload)。
 
 集成 YooAsset 實現資源熱更新方案，額外實現 YooAsset 提供的加密接口，其中實現文件加解密的方式有。
-- Offset (偏移量方式)，時間複雜度為 <Highlight color="#00d679">O(1)</Highlight>
-- XOR，時間複雜度為 <Highlight color="#00d679">O(N)</Highlight>
-- HT2XOR (Head-Tail 2 XOR)，時間複雜度為 <Highlight color="#00d679">O(N/2 + 2)</Highlight>
-- HT2XORPlus (Head-Tail 2 XOR Plus)，時間複雜度為 <Highlight color="#00d679">O(N/2 + 2)</Highlight> **強化版**
-- AES，時間複雜度為 <Highlight color="#00d679">O(N^2)</Highlight>
+- Offset (偏移量方式)
+- XOR
+- HT2XOR (Head-Tail 2 XOR)
+- HT2XORPlus (Head-Tail 2 XOR Plus) **強化版**
+- AES
 
 僅供參考
-- 運算效率 OFFSET > HT2XOR >= HT2XORPlus > XOR > AES
-- 內存占用 OFFSET > AES > HT2XORPlus = HT2XOR = XOR
-- AB 包體積增加 OFFSET > AES > HT2XORPlus = HT2XOR = XOR
+- 運算效率 OFFSET > HT2XOR > HT2XORPlus > XOR > AES
+- 內存占用 OFFSET > AES > HT2XOR = HT2XORPlus = XOR
+- AB 包體積增加 OFFSET > AES > HT2XOR = HT2XORPlus = XOR
 - 破解難度 AES > HT2XORPlus > HT2XOR > XOR > OFFSET
 
 群組分包舉例

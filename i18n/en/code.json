@@ -9,7 +9,7 @@
         "message": "Flexible Implementation"
     },
     "易於上手，兼具遊戲開發基本核心系統，不關心專案目錄、不關心遊戲業務邏輯、不關心讀表方式，全部自由打造。": {
-        "message": "Easy to use with essential core systems for game development, independent of project structure, game logic, or data table methods—completely customizable."
+        "message": "Easy to get started, with built-in core systems for game development. It doesn't enforce project structure, game logic, or data loading methods — everything is freely customizable."
     },
     "加快開發": {
         "message": "Accelerate Development"

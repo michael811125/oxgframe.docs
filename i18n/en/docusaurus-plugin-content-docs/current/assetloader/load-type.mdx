@@ -1,0 +1,132 @@
+---
+sidebar_position: 2
+---
+
+# Loading Method
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## Loading via Resources
+
+<Highlight color="#00d679">Reminder</Highlight> When using Resources loading, no additional configuration is required. Simply place the assets under the Resources folder and load them directly by using the **res#** prefix followed by the asset path.
+
+![](/img/assetloader/img_7.png)
+
+<Highlight color="#ff2f00">Important</Highlight> Using the **res#** prefix will switch to the Resources loading method.
+
+```csharp
+// res# prefix
+AssetLoaders.LoadAssetAsync<GameObject>("res#MyPrefabs/Cube");
+```
+
+---
+
+## Loading via AssetBundle
+
+### Step 1.
+
+You must first configure it through the YooAsset Collector.
+
+<Highlight color="#0373fc">Attention</Highlight> Pay attention to the addressable names — in the example image, the DefaultPackage includes an addressable named Cube.
+
+![](/img/assetloader/img_24.png)
+
+### Step 2.
+
+When developing with AssetBundle, you also need to configure **PatchLauncher** for Runtime. This is required because when using AssetBundle loading, relevant initialization configurations are needed.
+
+![](/img/assetloader/img_6.png)
+
+<Highlight color="#0373fc">Attention</Highlight> Drag it into the Hierarchy window after importing.
+
+![](/img/assetloader/gif_1.gif)
+
+### Step 3.
+
+Configure the default Packages, which will be initialized at Runtime.
+- Default App Packages.
+- Default DLC Packages.
+
+![](/img/assetloader/latest/img_8.png)
+
+<Highlight color="#ff2f00">Important</Highlight> The default Packages will be managed and checked by the **main downloader**, so Packages not included in the defaults must be initialized manually through the API, as described below.
+
+App Package
+```csharp
+// [Load asset and download from specific package (Export App Bundles for CDN)]
+
+AppPackageInfoWithBuild packageInfo = new AppPackageInfoWithBuild()
+{
+    buildMode = BundleConfig.BuildMode.ScriptableBuildPipeline,
+    packageName = "OtherPackage"
+};
+
+bool isInitialized = await AssetPatcher.InitAppPackage(packageInfo, true);
+if (isInitialized)
+    await AssetLoaders.LoadAssetAsync<GameObject>("packageName", "assetName");
+```
+
+DLC Package
+```csharp
+// [Load asset and download from specific package (Export Individual DLC Bundles for CDN)]
+
+DlcPackageInfoWithBuild packageInfo = new DlcPackageInfoWithBuild()
+{
+    buildMode = BundleConfig.BuildMode.ScriptableBuildPipeline,
+    packageName = "DlcPackage",
+    dlcVersion = "dlcVersion",
+    withoutPlatform = false
+};
+
+bool isInitialized = await AssetPatcher.InitDlcPackage(packageInfo, true);
+if (isInitialized)
+    await AssetLoaders.LoadAssetAsync<GameObject>("packageName", "assetName");
+```
+
+<Highlight color="#0373fc">Attention</Highlight> Distinguish between App Packages and DLC Packages, noting the different paths.
+- App Packages
+  - The path follows the main program version (.../CDN/\<ProductName\>/\<Platform\>/\<AppVersion\>/\<PackageName\>).
+  - Manual initialization of AssetPatcher.InitAppPackage is required (if autoUpdate = false, you will need to manually call AssetPatcher.UpdatePackage to update the Manifest).
+- DLC Packages
+  - The path includes the platform (.../CDN/\<ProductName\>/\<Platform\>/DLC/\<PackageName\>/\<DlcVersion\>).
+  - The path does not include the platform (.../CDN/\<ProductName\>/DLC/\<PackageName\>/\<DlcVersion\>), **which is a shared resource for all platforms**.
+  - Supports downloading specific versions of DLC packages and DLC package uninstallation. You must manually call AssetPatcher.InitDlcPackage and specify a specific dlcVersion. The dlcVersion can also be set to a fixed version (e.g., "latest"), so whenever the DLC is updated, you can use a fixed path for the update.
+
+<Highlight color="#0373fc">Attention</Highlight> Additionally, the Play Mode descriptions are as follows:
+- Editor Simulate Mode (Development Mode).
+- Offline Mode.
+- Host Mode.
+- Weak Host Mode.
+- WebGL Mode.
+- WebGL Remote Mode.
+
+<Highlight color="#ff2f00">Important</Highlight> [Build Macro Definitions](https://github.com/michael811125/OxGFrame/wiki/Macro-Definitions)
+
+### Step 4.
+
+Once the preliminary setup is complete and the main configuration process is initialized -> AssetPatcher.IsInitialized(), you can begin loading as follows.
+
+Load the object with the addressable name "Cube" from the DefaultPackage.
+```csharp
+AssetLoaders.LoadAssetAsync<GameObject>("DefaultPackage", "Cube");
+```
+
+> <Highlight color="#0373fc">Note</Highlight> Additionally, the sequence of the process is as follows:
+> - Poll the initialization state `AssetPatcher.IsInitialized() == true` -> then you can <Highlight color="#ff2f00">load built-in resources</Highlight> and <Highlight color="#ff2f00">perform update checks</Highlight>.
+> - Perform update check `AssetPatcher.Check()` -> Poll the completion state `AssetPatcher.IsDone() == true` -> After the update is completed -> you can <Highlight color="#ff2f00">load updated resources</Highlight>.

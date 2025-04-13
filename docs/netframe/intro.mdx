@@ -33,14 +33,17 @@ export const Highlight = ({children, color}) => (
 - NetManager (網路節點管理器)
 - NetNode (網路節點)
 - INetProvider (網路供應者接口)
-  - TcpNetProvider (TCP/IP)
-  - WebsocketNetProvider (WebSocket)
+  - TcpNetProvider (TCP)
+  - KcpNetProvider (KCP)
+  - WebSocketNetProvider (WebSocket)
 - NetOption (連線配置)
   - TcpNetOption
-  - WebsocketNetOption 
+  - KcpNetOption
+  - WebSocketNetOption 
 - INetTips (網路狀態提示接口)
 
-<Highlight color="#0373fc">注意</Highlight> 已提供以下 NetProvider (可自行擴展 KCP, UDP...)。
-- TCP/IP
+<Highlight color="#0373fc">注意</Highlight> 已提供以下 NetProvider (可自行擴展)。
+- TCP
+- KCP
 - WebSocket
 

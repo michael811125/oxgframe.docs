@@ -58,7 +58,7 @@ export const Highlight = ({children, color}) => (
   - RenderTexture : 將 Video 映射至 RenderTexture 再透過 UGUI 的 RawImage 進行渲染 (VideoBase 使用 RenderTexture.GetTemporary 跟 RenderTexture.ReleaseTemporary 創建與釋放，確保內存正確釋放 RenderTexture)。
   - Camera : 直接透過 Camera 進行渲染。
 
-![](/img/mediaframe/gif_1.gif)
+![](/img/mediaframe/latest/gif_1.gif)
 
 ---
 
@@ -72,8 +72,8 @@ export const Highlight = ({children, color}) => (
 # audio_urlset = Audio Source Url Path
 # video_urlset = Video Source Url Path
 
-audio_urlset 127.0.0.1/audio/
-video_urlset 127.0.0.1/video/
+audio_urlset http://127.0.0.1/audio/
+video_urlset http://127.0.0.1/video/
 ```
 
 **\>\> 建立 murlconfig.txt 方式 \<\<**

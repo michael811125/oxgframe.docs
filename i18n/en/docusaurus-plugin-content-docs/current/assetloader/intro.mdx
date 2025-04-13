@@ -1,0 +1,99 @@
+---
+sidebar_position: 1
+---
+
+# Module Introduction
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## Basic Description
+
+The resource loader module supports dynamic asynchronous and synchronous loading (Dynamic Loading) and utilizes reference counting for resource management (supporting both Resources and AssetBundle). If you use the AssetLoaders API directly for loading and instantiation, you must also call Unload when destroying objects—ensuring that Load and Unload are invoked in pairs.
+
+Integrated YooAsset to implement a resource hot update solution, and additionally implemented YooAsset's encryption interfaces. The file encryption and decryption methods implemented include:
+
+- Offset
+- OffsetXOR
+- XOR
+- HT2XOR (Head-Tail 2 XOR)
+- HT2XORPlus (Head-Tail 2 XOR Plus)
+- ChaCha20
+- XXTEA
+- AES
+
+For reference only ([Efficiency Reference](https://github.com/michael811125/OxGFrame/wiki/Encryption-and-Decryption-Efficiency-Reference))
+  - Computational Efficiency: Offset > HT2XOR > XOR >= OffsetXOR >= HT2XORPlus > XXTEA > ChaCha20 > AES
+  - Memory Usage: Offset ≈ OffsetXOR > AES ≈ ChaCha20 > XXTEA > HT2XORPlus = HT2XOR = XOR
+  - AB Package Size Increase: Offset ≈ OffsetXOR > AES ≈ ChaCha20 > XXTEA > HT2XORPlus = HT2XOR = XOR
+  - Difficulty to Crack: AES ≈ ChaCha20 > XXTEA > HT2XORPlus > HT2XOR > OffsetXOR > XOR > Offset
+
+Group Packaging Examples
+  - Minimal Run Package
+  - Standard Run Package
+  - Full Run Package (default index tag is **#all**)
+
+![](/img/assetloader/img_16.png)
+
+<Highlight color="#ff2f00">Important</Highlight> If synchronous loading is to be used, the resources must be fully downloaded in advance (mainly because when resources are not local, the request for downloading is handled asynchronously). Also, remember that synchronous loading is only suitable for small resources (it is strongly recommended to use asynchronous handling for everything).
+
+<Highlight color="#0373fc">Note</Highlight> Using the prefix **res#** will switch to the Resources loading method. Otherwise, the AssetBundle method will be used.
+
+<Highlight color="#00d679">Reminder</Highlight> When using [YooAsset](https://github.com/tuyoogame/YooAsset), if you have any questions, please refer to the [official documentation](https://www.yooasset.com/) for more details.
+
+---
+
+## Process Description
+
+### Check if PlayMode Initialization is Complete
+
+Poll AssetPatcher.IsInitialized() to see if the initialization of Preset Packages is complete. Only after initialization can you start loading Built-in Bundles and perform AssetPatcher.Check() for update checks, or alternatively, download while playing.
+
+<Highlight color="#00d679">Reminder</Highlight> Distinguish between Built-in and Patch (define the workflow based on the situation).
+
+<Highlight color="#00d679">Reminder</Highlight> After running AssetPatcher.Check() to check for Patch updates, you can then load the updated resources.
+- During the execution of AssetPatcher.Check(), **Preset App Packages and Preset DLC Packages will be downloaded together**.
+
+| **Preset App Packages & Preset DLC Packages**                                                                        |
+| :------------------------------------------------------------------------------------------------------------------- |
+| Preset_App_Pkg_01 (TotalCount = 3, TotalSize = 600 KB)                                                               |
+| Preset_App_Pkg_02 (TotalCount = 6, TotalSize = 1200 KB)                                                              |
+| Preset_DLC_Pkg_01 (TotalCount = 2, TotalSize = 200 KB)                                                               |
+| Preset_DLC_Pkg_02 (TotalCount = 4, TotalSize = 400 KB)                                                               |
+| **Combination**                                                                                                      |
+| Preset_App_Pkg_01 + Preset_App_Pkg_02 + Preset_DLC_Pkg_01 + Preset_DLC_Pkg_02 (TotalCount = 15, TotalSize = 2400 KB) |
+
+![](/img/assetloader/img_17.png)
+
+<Highlight color="#ff2f00">Important</Highlight> DLC Packages set through Preset must have a **fixed version number** (e.g., "latest").
+
+### Check if Disk Space Check Process is Enabled
+
+![](/img/assetloader/img_18.png)
+
+![](/img/assetloader/img_19.png)
+
+![](/img/assetloader/img_20.png)
+
+![](/img/assetloader/img_21.png)
+
+### Check if Updates are Complete
+- Check if AssetPatcher.IsDone() indicates that updates are complete.
+
+### Summary of Execution Order
+- Poll initial status AssetPatcher.IsInitialized() -> Execute update check AssetPatcher.Check() -> Poll completion status AssetPatcher.IsDone() -> Update complete.

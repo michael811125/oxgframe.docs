@@ -1,0 +1,88 @@
+---
+sidebar_position: 1
+---
+
+# Module Introduction
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## Basic Introduction
+
+## Media Module (Integrated with AssetLoader for Auto-Unloading)
+
+Covers game Audio (2D/3D) and Video production, supporting multiple platform loading methods (Local, StreamingAssets, URL).
+
+- Sound Management (AudioFrame)  
+- Video Management (VideoFrame)  
+
+<Highlight color="#ff2f00">Important</Highlight> Special audio adjustments have been made for WebGL platform. Since WebGL cannot correctly obtain clip length for Audio requests (officially marked as "won't fix"), this causes some audio control limitations. Therefore, when creating prefabs, Preload requests can be used to preset clip length.
+
+## How to Use
+
+### AudioFrame
+
+Used for playing **Audio**, managed via AudioManager which controls prefabs with AudioBase components, utilizing Unity Mixer for audio track control.
+
+<Highlight color="#ff2f00">Important</Highlight> First drag the AudioManager prefab into the Hierarchy window (import from Package Manager).
+
+![](/img/mediaframe/img_1.png)
+
+- Audio Sound Type Explanation:
+  - Sole: Unique (cannot be played repeatedly), recommended for BGM (Background Music), Voice (Dubbing), etc.
+  - SoundEffect: Multi-instance (can be played repeatedly), recommended for Fight Sound, General Sound Effects, etc.
+
+<Highlight color="#00d679">Reminder</Highlight> Default Master Mixer is provided, but custom mixers can be used.
+
+![](/img/mediaframe/img_2.png)
+
+![](/img/mediaframe/img_3.png)
+
+### VideoFrame
+
+Used for playing **Video**, managed via VideoManager which controls prefabs with VideoBase components, supporting both RenderTexture and Camera.  
+- Video Render Mode Explanation:  
+  - RenderTexture: Maps video to RenderTexture and renders through UGUI's RawImage (VideoBase uses RenderTexture.GetTemporary and RenderTexture.ReleaseTemporary for creation and release, ensuring proper memory deallocation of RenderTexture).  
+  - Camera: Renders directly through Camera.  
+
+![](/img/mediaframe/latest/gif_1.gif)
+
+---
+
+## Other Notes
+
+#### Media [murlconfig] (Media URL Config) Format
+
+If audio and video sources are stored on **cloud services**, you can request files via URL using the following format **(If you don't specify URLs through murlconfig.txt, you can also enter complete resource URLs directly in Prefab, but the drawback is that future URL changes will be much harder to maintain)**
+
+```
+# audio_urlset = Audio Source Url Path
+# video_urlset = Video Source Url Path
+
+audio_urlset http://127.0.0.1/audio/
+video_urlset http://127.0.0.1/video/
+```
+
+**\>\> How to Create murlconfig.txt \<\<**
+- Click MenuItem: OxGFrame -> MediaFrame -> Media Url Config Generator to create murlconfig.txt (StreamingAssets/murlconfig.txt).
+
+**\>\> How to Load murlconfig.txt \<\<**
+1. If Url Cfg Request Type = Assign, specify murlconfig.txt in the prefab.
+2. If Url Cfg Request Type = Streaming Assets, the file will be requested from StreamingAssets.
+
+<Highlight color="#00d679">Reminder</Highlight> **Additional Info**: When requesting audio/video resources via URL, this method is recommended for WebGL platform because WebGL doesn't support pre-assigning AudioClip or VideoClip (Assign method) in Prefab through AssetBundle. The URL method is provided as an alternative for media file requests.

@@ -63,7 +63,7 @@ AssetLoaders.LoadAssetAsync<GameObject>("res#MyPrefabs/Cube");
 - 預設 App Packages。
 - 預設 DLC Packages。
 
-![](/img/assetloader/img_8.png)
+![](/img/assetloader/latest/img_8.png)
 
 <Highlight color="#ff2f00">重要</Highlight> 預設 Packages 將由**主下載器**進行管理與檢查，所以不包含在預設中的 Packages，必須自行通過 API 初始，說明如下。
 
@@ -109,13 +109,14 @@ if (isInitialized)
   - 支持特定版本 DLC package 的下載與 DLC package 卸載功能，需手動進行 AssetPatcher.InitDlcPackage，並且指定特定 dlcVersion，對於 dlcVersion 也可以單一固定 dlcVersion (ex: "latest")，變成只要 DLC 有更新就可以使用固定路徑進行更新。
 
 <Highlight color="#0373fc">注意</Highlight> 另外，Play Mode 的說明如下。
-- Editor Simulate Mode (模擬模式)，加快開發。
-- Offline Mode (單機模式)，需將 AB 打包至 Built-in，並且產出相關配置，需注意 PatchLauncher 的解密設定。
-- Host Mode (聯機模式)，需將 AB 打包區分 Built-in 跟 Patch，並且產出相關配置，需注意 PatchLauncher 的解密設定。
-  - 允許選擇 Semantic Version 版號檢查規則 (比對完整版號 X.Y.Z 或比對大小版號 X.Y)。
-  - 允許跳過 Preset App Packages 主下載階段 (強制邊玩邊下載)。
-- WebGL Mode (僅支持 WebGL 平台)，需將 AB 全部打包至 Built-in (StreamingAssets)。
-  - 不支持事先下載，主要是因為 WebGL 是邊玩邊下載。
+- Editor Simulate Mode (開發模式)。
+- Offline Mode (單機模式)。
+- Host Mode (聯機模式)。
+- Weak Host Mode (弱聯機模式)。
+- WebGL Mode (WebGL 模式)。
+- WebGL Remote Mode (WebGL 聯機模式)。
+
+<Highlight color="#ff2f00">重要</Highlight> [打包可用的宏定義](https://github.com/michael811125/OxGFrame/wiki/Macro-Definitions)
 
 ### 步驟 4.
 

@@ -1,0 +1,119 @@
+---
+sidebar_position: 5
+---
+
+# Asset Bundle Deployment
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## Builtin Deployment
+
+### Step 1.
+
+<Highlight color="#ff2f00">Important</Highlight> When using YooAsset for building again, simply select Clear And Copy All to output the asset bundles to StreamingAssets (i.e., built-in).
+
+![](/img/assetloader/img_4.png)
+
+---
+
+## Deploy Updated Assets
+
+### Step 1.
+
+App version configuration build.
+
+Select OxGFrame -> AssetLoader -> Export Bundle And Config Generator from the MenuItem.
+
+![](/img/assetloader/latest/img_9.png)
+
+After opening, select **Export App Config To Streaming Assets** for the Operation Type, which will output the appconfig **(used for comparing the main program version)**.
+
+![](/img/assetloader/img_10.png)
+
+### Step 2.
+
+<Highlight color="#0373fc">Attention</Highlight> Confirm the default Packages on PatchLauncher.
+
+- Preset App Packages.
+- Preset DLC Packages.
+
+![](/img/assetloader/latest/img_8.png)
+
+### Step 3.
+
+Select OxGFrame -> AssetLoader -> Export Bundle And Config Generator from the MenuItem.
+
+![](/img/assetloader/latest/img_9.png)
+
+After opening, select "Export Configs And App Bundles For CDN" as the Operation Type.
+
+![](/img/assetloader/img_11.png)
+
+1. <Highlight color="#0373fc">Attention</Highlight> The Source Folder is the folder where YooAsset exports the build.
+2. <Highlight color="#0373fc">Attention</Highlight> The Packages to be exported, in the image, the exported package is DefaultPackage.
+3. Finally, click Process to export.
+
+Additionally, you can choose to export the folder based on the full version number, which helps avoid overwriting when uploading to the CDN.
+
+![](/img/assetloader/latest/img_26.png)
+
+### Step 4.
+
+Upload the exported CDN folder directly to the cloud service to complete the resource deployment.
+
+![](/img/assetloader/img_12.png)
+
+### Step 5.
+
+Configuration instructions for updating assets requests.
+
+Select OxGFrame -> AssetLoader -> Bundle Url Config Generator (burlconfig.conf) from the MenuItem.
+
+![](/img/assetloader/latest/img_23.png)
+
+The supported types are as follows **(the type will be automatically detected regardless of the output type)**:
+- Cipher Process (Encrypted type) -> <Highlight color="#00d679">Reminder</Highlight> It is recommended to use this for Release deployments.
+- Plaintext Process (Plaintext type).
+
+After opening, configure the following related request information:
+- CDN Server (Domain name or IP).
+- App store link (**skip if not applicable**).
+
+
+Cipher：
+
+![](/img/assetloader/img_25.png)
+
+Plaintext：
+
+![](/img/assetloader/img_22.png)
+
+---
+
+## Additional Explanation
+
+<Highlight color="#ff2f00">Important</Highlight> If you select the following mode:
+
+- **Offline Mode**
+- **WebGL Mode**
+
+You only need to perform [Builtin Deployment](#builtin-deployment) 即可。
+
+
+

@@ -1,0 +1,41 @@
+---
+sidebar_position: 1
+---
+
+# Module Introduction
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## Basic Introduction
+
+The code hotfix module integrates the revolutionary hot update solution using HybridCLR (formerly Huatuo).
+
+<Highlight color="#ff2f00">Important</Highlight> After completing the relevant build, clicking HybridCLR -> OxGFrame With HybridCLR -> Compile And Copy To HotfixCollector via MenuItem will help copy to the **HotfixCollector** folder, then use YooAsset Collector for collection and packaging.
+
+<Highlight color="#00d679">Reminder</Highlight> If you have any questions about using [HybridCLR](https://github.com/focus-creative-games/hybridclr), please refer to the [official documentation](https://hybridclr.doc.code-philosophy.com/) for familiarization.
+
+---
+
+## Process Description
+
+<Highlight color="#0373fc">Attention</Highlight> For detailed usage process, please refer to HotfixerDemo (import from Package Manager).
+
+![](/img/hotfixer/img_1.png)
+![](/img/hotfixer/img_2.png)
+![](/img/hotfixer/img_3.png)

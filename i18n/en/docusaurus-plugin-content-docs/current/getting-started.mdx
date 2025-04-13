@@ -1,0 +1,170 @@
+---
+sidebar_position: 1
+---
+
+import ReactPlayer from 'react-player'
+
+# Quick Start
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+**Start Installation OxGFrame with [YooAsset](https://github.com/tuyoogame/YooAsset) + [HybridCLR](https://github.com/focus-creative-games/hybridclr)**
+
+## Step 1. (Install Dependencies)
+
+- <Highlight color="#ff2f00">1</Highlight> **[UniTask](https://github.com/Cysharp/UniTask)**
+  
+Use Package Manager to Install **(Install via git)**
+
+```
+https://github.com/Cysharp/UniTask.git?path=src/UniTask/Assets/Plugins/UniTask
+```
+
+- <Highlight color="#ff2f00">2</Highlight> **[LWMyBox](https://github.com/michael811125/LWMyBox)**
+
+Use Package Manager to Install **(Install via git)**
+
+```
+https://github.com/michael811125/LWMyBox.git
+```
+
+- <Highlight color="#ff2f00">3</Highlight> **[OxGKit.LoggingSystem](https://github.com/michael811125/OxGKit#loggingsystem-dependence-lwmybox)**
+
+Use Package Manager to Install **(Install via git)**
+
+```
+https://github.com/michael811125/OxGKit.git?path=Assets/OxGKit/LoggingSystem/Scripts
+```
+
+- <Highlight color="#ff2f00">4</Highlight> **[OxGKit.SaverSystem](https://github.com/michael811125/OxGKit#saversystem)**
+  
+Use Package Manager to Install **(Install via git)**
+
+```
+https://github.com/michael811125/OxGKit.git?path=Assets/OxGKit/SaverSystem/Scripts
+```
+
+- <Highlight color="#ff2f00">5</Highlight> **[OxGKit.TimeSystem](https://github.com/michael811125/OxGKit#timesystem)**
+  
+Use Package Manager to Install **(Install via git)**
+
+```
+https://github.com/michael811125/OxGKit.git?path=Assets/OxGKit/TimeSystem/Scripts
+```
+
+- <Highlight color="#ff2f00">6</Highlight> **[OxGKit.Utilities](https://github.com/michael811125/OxGKit#utilities-dependence-unitask)**
+  
+Use Package Manager to Install **(Install via git)**
+
+```
+https://github.com/michael811125/OxGKit.git?path=Assets/OxGKit/Utilities/Scripts
+```
+
+- <Highlight color="#ff2f00">7</Highlight> **[HybirdCLR](https://github.com/focus-creative-games/hybridclr)**
+
+Use Package Manager to Install **(Install via git)**
+
+```
+https://github.com/focus-creative-games/hybridclr_unity.git
+```
+
+- <Highlight color="#0373fc">New Project</Highlight> **[TextMeshPro](https://docs.unity3d.com/Packages/com.unity.textmeshpro@3.2/manual/index.html)**
+
+Use Package Manager to Install **(Install by name)**
+
+```
+com.unity.textmeshpro
+```
+
+- <Highlight color="#0373fc">New Project</Highlight> **[Newtonsoft](https://github.com/jilleJr/Newtonsoft.Json-for-Unity/wiki/Install-official-via-UPM)**
+
+Use Package Manager to Install **(Install by name)**
+
+```
+com.unity.nuget.newtonsoft-json
+```
+
+---
+
+Step 2. (Install the Framework)
+
+### Method 1
+
+**[OxGFrame](https://github.com/michael811125/OxGFrame)**
+
+Use Package Manager to Install **(Install via git)**
+
+```
+https://github.com/michael811125/OxGFrame.git?path=Assets/OxGFrame
+```
+
+![](/img/getting_started/img_1.png)
+
+**Manage Component Imports (Samples)**
+
+![](/img/getting_started/img_2.png)
+	
+### Method 2
+
+**Download the source code directly ([Code Download ZIP](https://github.com/michael811125/OxGFrame))**
+
+Copy the OxGFrame folder into the Assets folder of the new Unity project.
+
+<Highlight color="#00d679">Reminder</Highlight> **If there is no need to modify the framework yourself, it is recommended to install it directly using the Package Manager**.
+<br/>
+<br/>
+![](/img/getting_started/img_3.png)
+
+---
+
+## Built-in dependencies
+
+- Use [YooAsset](https://github.com/tuyoogame/YooAsset) (Powerful resource hot update solution) **Highly recommended**.
+- Use [UniFramework](https://github.com/gmhevinci/UniFramework) (UniEvent, UniMachine, UniReference)。
+- Use [UnityWebSocket](https://github.com/psygames/UnityWebSocket) (Best WebSocket solution) **Highly recommended**.
+- Use [DiskUtils by keerthik](https://github.com/keerthik/simple-disk-utils)。
+
+---
+
+## Macro Definitions
+- [Macro Definitions](https://github.com/michael811125/OxGFrame/wiki/Macro-Definitions)
+
+## Framework API
+
+- Hotfixers (using OxGFrame.Hotfixer)
+- AssetLoaders (using OxGFrame.AssetLoader)
+- AssetPatcher (using OxGFrame.AssetLoader)
+- CoreFrames (using OxGFrame.CoreFrame)
+- MediaFrames (using OxGFrame.MediaFrame)
+- NetFrames (using OxGFrame.NetFrame)
+
+※Note: It is recommended to carefully review the examples of each module (pay attention to the usage rules of "res#" and "build#").
+
+**If needed, you can write a BuildTool to call**
+
+- Editor
+  - HotfixHelper (using OxGFrame.Hotfix.Editor)
+  - BundleHelper (using OxGFrame.AssetLoader.Editor)
+  - MediaHelper (using OxGFrame.MediaFrame.Editor)
+
+- Runtime
+  - BundleConfig (using OxGFrame.AssetLoader.Bundle)
+  - PatchSetting (using OxGFrame.AssetLoader)
+    - PatchSetting.setting (**Singleton instance**)
+  - YooAssetBridge (Reflection)

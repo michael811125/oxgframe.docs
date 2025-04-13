@@ -1,0 +1,71 @@
+---
+sidebar_position: 1
+---
+
+# Module Introduction
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## Basic Introduction
+
+Game Stage Integration Module (FSM concept), where GSI stands for **Game Stage Integration**. The lack of an integration system during game development often results in fragmented operations between game systems.
+
+Game stages are generally divided into:
+- StartupStage (Startup Phase)
+- LogoStage (Logo Phase)
+- HotfixStage (Hotfix Phase)
+- PrepareStage (Preparation Phase)
+- PatchStage (Resource Hot Update Phase)
+- LoginStage (Login Phase)
+- LobbyStage (Lobby Phase)
+- FightStage (Battle Phase)
+
+And so on. The above examples outline the general division of game stages, **but the actual stages should primarily be created based on your own planning**. Once the game stages are planned, use GSIFrame to directly integrate and switch between them (after stage division, you can implement the operations for each stage independently).
+
+---
+
+## How to Use
+
+### Default API
+
+```csharp
+public static int GetCurrentId()
+
+public static U GetStage<U>() where U : GSIBase
+
+public static U GetStage<U>(int id) where U : GSIBase
+
+public static void AddStage<U>() where U : GSIBase, new()
+
+public static void AddStage<U>(int id) where U : GSIBase, new()
+
+public static void AddStage(int id, GSIBase gameStage)
+
+public static void DeleteStage<U>() where U : GSIBase
+
+public static void DeleteStage(int id)
+
+public static void ChangeStage<U>(bool force = false) where U : GSIBase
+
+public static void ChangeStage(int id, bool force = false)
+
+public static void Start()
+
+public static void Update(float dt = 0.0f)
+```

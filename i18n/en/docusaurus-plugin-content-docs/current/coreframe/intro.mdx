@@ -1,0 +1,167 @@
+---
+sidebar_position: 1
+---
+
+import ReactPlayer from 'react-player'
+
+# Module Introduction
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## Basic Introduction
+
+Core module (linked with AssetLoader for automatic unloading), covering the creation of main game objects and implementing object naming and binding functionality.
+
+- Game UI (UIFrame, **UI = User Interface**), supports object naming and binding. <Highlight color="#ff2f00">Starts with underscore _Node@XXX</Highlight>
+- Scene Resources (SRFrame, **SR = Scene Resource**), supports object naming and binding. <Highlight color="#ff2f00">Starts with underscore _Node@XXX</Highlight>
+- Unity Scene (USFrame, **US = Unity Scene**)
+- Template Objects (CPFrame, **CP = Clone Prefab**), supports object naming and binding. <Highlight color="#ff2f00">Starts with tilde ~Node@XXX</Highlight>
+
+---
+
+## How to Use
+
+### UIFrame (User Interface)
+
+Used to manage **UI Prefabs**, supports only UGUI, with UIManager handling objects mounted with UIBase.
+- Supports UI reverse changes (Reverse Changes).
+- Supports UI stack-based closing (Close Stack By Stack).
+- Supports UI freeze functionality to prevent event triggers from clicks during incomplete UI animations.
+ 
+<Highlight color="#00d679">Reminder</Highlight> To create UI animations, override ShowAnimation and HideAnimation to execute relevant transition animations (DoTween, Animation...), and ensure to call the animationEnd() callback correctly after completing the UI animation to properly release the UI freeze state.
+
+<Highlight color="#00d679">Reminder</Highlight> Additionally, UI MaskEvent is available, which can also be customized by overriding.
+
+| UI Reverse Changes Usage | UI Reverse Changes Usage |
+|:-|:-|
+| ![](/img/coreframe/gif_1.gif) | ![](/img/coreframe/gif_2.gif) |
+
+| UI Close Stack By Stack Usage | UI Close Stack By Stack Usage |
+|:-|:-|
+| ![](/img/coreframe/gif_3.gif) | ![](/img/coreframe/gif_4.gif) |
+
+### SRFrame (Scene Resource)
+
+Used to manage **Scene Prefabs** and **Function Prefabs**, with SRManager handling objects mounted with SRBase.
+
+### USFrame (Unity Scene)
+
+Used to manage **Unity Scene**, with USManager handling Unity scenes (supports AssetBundle).
+
+<Highlight color="#0373fc">Note</Highlight> Using the **build#** prefix will switch to loading from **Build Settings -> Scenes In Build**. Otherwise, AssetBundle is used.
+
+### CPFrame (Clone Prefab)
+
+Used to instantiate **Prefab template objects**, with CPManager handling Prefabs mounted with CPBase. Primarily used for loading template objects, such as item icon templates, mail message templates, etc. Directly performing **GameObject.Destroy** will **automatically execute reference counting unloading**.
+
+<Highlight color="#00d679">Reminder</Highlight> CPManager does not perform caching for CPBase.
+
+### Common Method Descriptions
+
+- OnCreate: Used for initializing parameters.
+- OnBind: Used for initializing events.
+- OnPreShow: When there is asynchronous processing or control of dependent objects, it can be handled here. For example: If TopUI is linked to open LeftUI & RightUI, you can implement Show LeftUI & RightUI in the OnPreShow method of TopUI.
+  - <Highlight color="#00d679">Reminder</Highlight> **It is not recommended to handle Show-related processing in OnPreClose. If it is done, it’s fine, as the CloseAll API provides a disabledPreClose parameter switch.**
+- OnShow: This method is activated when Show is called, and data can be passed through the provided object.
+- OnClose: This method is activated when Close is called.
+- OnRelease: This method is activated when the object is Destroyed.
+
+### Initialization Order Description
+
+<Highlight color="#ff2f00">Important</Highlight> OnCreate (Once) > OnAutoBind (Once) > OnBind (Once) > OnPreShow (EveryOpen) > OnShow (EveryOpen).
+
+### Object Binding Description
+
+- Use collector.GetNode("BindName") to return a bound GameObject **(single name binding)**.
+  - UIBase & SRBase use _Node@XXX.
+  - CPBase uses ~Node@XXX.
+- Use collector.GetNodes("BindName") to return bound GameObject[] **(multiple bindings with the same name, ordered from top to bottom)**.
+  - UIBase & SRBase use _Node@XXX.
+  - CPBase uses ~Node@XXX.
+- Use collector.GetNodeComponent\<TComponent\>("BindName") to return a bound TComponent **(single name binding)**.
+  - UIBase & SRBase use _Node@XXX.
+  - CPBase uses ~Node@XXX.
+- Use collector.GetNodeComponents\<TComponent\>("BindName") to return bound TComponent[] **(multiple bindings with the same name, ordered from top to bottom)**.
+  - UIBase & SRBase use _Node@XXX.
+  - CPBase uses ~Node@XXX.
+
+### Auto-Generate Stop Binding Tag (Hotkey: Shift+E, E: End)
+
+<Highlight color="#00d679">Reminder</Highlight> **Using the Hotkey is recommended**, as Right-Click may execute multiple times (does not affect auto-generation), but this is a [Unity Bug](https://issuetracker.unity3d.com/issues/menuitem-is-executed-more-than-once-when-multiple-objects-are-selected) that Unity officially will not fix.
+
+Reduces the number of downward searches for bindings during Runtime, with a time complexity of O(N), where N = StopEndIdx (**recommended for scenarios with a large number of node objects**).
+- <Highlight color="#ff2f00">Important</Highlight> If **Transform.Find** is used to search for child objects and the child object name contains a **#** tag, it can be ignored, as during Runtime, the **#** tag will be replaced with **""** to restore the original name.
+
+![](/img/coreframe/img_1.png)
+
+![](/img/coreframe/gif_5.gif)
+
+### Auto-Generate Object Binding Code (Hotkey: Shift+B, B: Bind)
+
+Naming convention **uses * to point to TailName**
+- UIBase & SRBase
+  - _Node@XXX*Btn (and so on)
+- CPBase
+  - ~Node@XXX*Btn (and so on)
+
+### Auto-Binding Description
+
+![](/img/coreframe/img_2.png)
+
+### Auto-Binding Configuration
+
+![](/img/coreframe/img_3.png)
+
+Default Component Binding Table **(You can add or modify TailName corresponding to binding component types from BindCodeSetting)**
+
+| **Tail Name** | **Component Name** | **End Remove Count** | **End Plural Txt** |
+|:-|:-|:-|:-|
+| **Other** |
+| Trans | Transform | 0 | es |
+| RectTrans | RectTransform | 0 | es |
+| **Legacy** |
+| Img | Image | 0 | s |
+| RawImg | RawImage | 0 | s |
+| Txt | Text | 0 | s | 
+| Btn | Button | 0 | s | 
+| Tgl | Toggle | 0 | s | 
+| Sld | Slider | 0 | s | 
+| ScrBar | Scrollbar | 0 | s | 
+| ScrView | ScrollRect | 0 | s | 
+| Drd | Dropdown | 0 | s | 
+| Field | InputField | 0 | s | 
+| **TMP** |
+| TmpTxt | TMP_Text | 0 | s | 
+| TmpDrd | TMP_Dropdown | 0 | s | 
+| TmpField | TMP_InputField | 0 | s |
+| **Custom** |
+| BtnPlus | ButtonPlus | 0 | es |
+| NodePool | NodePool | 0 | s |
+
+The auto-binding generator's functionality is distinguished by method types, as follows:
+
+- Auto \[Default\], automatically saves binding content to the code, overriding and calling OnAutoBind() automatically.
+
+<ReactPlayer controls url='https://github.com/michael811125/OxGFrame/assets/30960759/4c61bede-0bbc-4cae-baba-4a9bc7274c2e' />
+
+<br/>
+
+- Manual \[Optional\], manually copies binding content to the code, overriding and calling OnAutoBind() automatically.
+
+<ReactPlayer controls url='https://github.com/michael811125/OxGFrame/assets/30960759/8e4f63e9-b955-4f91-8ac7-be949677c54f' />

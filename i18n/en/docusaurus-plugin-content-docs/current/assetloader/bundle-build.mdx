@@ -1,0 +1,50 @@
+---
+sidebar_position: 4
+---
+
+# Asset Bundle Build
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## Build Description
+
+<Highlight color="#0373fc">Attention</Highlight> For more details, refer to [YooAsset Asset Configuration](https://www.yooasset.com/docs/guide-editor/AssetBundleCollector) (Collect)。
+
+Through the MenuItem, click YooAsset -> AssetBundle Collector to begin configuring the resources. (Collect)。
+
+![](/img/assetloader/img_5.png)
+
+Diagram Explanation:
+
+1. <Highlight color="#00d679">Reminder</Highlight> Display the Packages Window.
+2. <Highlight color="#00d679">Reminder</Highlight> Asset Address Name.
+
+## Start Building
+
+<Highlight color="#0373fc">Attention</Highlight> For more details, refer to [YooAsset Asset Building](https://www.yooasset.com/docs/guide-editor/AssetBundleBuilder) (Build)。
+
+Through the MenuItem, click YooAsset -> AssetBundle Builder, start selecting the Package and BuildPipeline to build, then choose the encryption method, and finally click Click Build.
+
+<Highlight color="#ff2f00">Important</Highlight> Remember not to change the Build Version, use the default date **(because the package needs to be filtered based on the date)**.
+
+![](/img/assetloader/img_3.png)
+
+<Highlight color="#00d679">Reminder</Highlight> **Built-in resources** depend on the Copy Buildin File Option. After YooAsset is built, the resources will be placed under StreamingAssets according to the settings.
+
+![](/img/assetloader/img_4.png)

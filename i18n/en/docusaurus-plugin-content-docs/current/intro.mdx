@@ -2,4 +2,101 @@
 sidebar_position: 0
 ---
 
-# Coming Soon
+import ReactPlayer from 'react-player'
+
+# Framework Introduction
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## Basic Description
+
+OxGFrame is a Unity-based framework designed to accelerate game development. It utilizes UniTask for asynchronous processing, making it easy to learn and significantly boosting development efficiency. Additionally, it supports multiple platforms including Windows, OSX, Android, iOS, and WebGL.
+- Hotfixer
+- AssetLoader
+- UIFrame, **UI = User Interface**
+- SRFrame, **SR = Scene Resource**
+- USFrame, **US = Unity Scene**
+- CPFrame, **CP = Clone Prefab**
+- AudioFrame
+- VideoFrame
+- GSIFrame, **GSI = Game Stage Integration**
+- NetFrame
+- CenterFrame
+
+![](/img/intro/img_1.png)
+
+---
+
+## Framework Features
+
+- **Flexible**
+
+  Includes essential core systems for game development, while remaining **agnostic to project folder structure**, **game business logic**, and **data table parsing methods**—giving you full freedom to build as you wish.
+
+  - Freely integrate **other programming frameworks** such as [Unity DOTS](https://unity.com/dots), [Entitas](https://github.com/sschmid/Entitas), [ECSLite](https://github.com/Leopotam/ecslite), [Zenject](https://github.com/modesttree/Zenject), [Extenject](https://github.com/Mathijs-Bakker/Extenject), [VContainer](https://github.com/hadashiA/VContainer), etc. These **programming frameworks** can also be used solely with the [AssetLoader](https://github.com/michael811125/OxGFrame#assetloader-dependence-yooasset) and [Hotfixer](https://github.com/michael811125/OxGFrame#hotfixer-dependence-hybridclr-assetloader) modules to provide a complete hot-update solution.
+
+  - Freely integrate **game data table loading methods**, such as [luban](https://github.com/focus-creative-games/luban), [ExcelToCode](https://github.com/feifeid47/ExcelToCode), [TippingExcelTool](https://github.com/TippingGame/TippingExcelTool?tab=readme-ov-file), [ExcelConverter](https://github.com/JohnsonChenz/ExcelConverter), and more.
+
+- **High Cohesion, Low Coupling**
+
+  A plugin-based architecture that improves code readability and maintainability, allowing the team to focus on GamePlay development.
+
+- **Cross-Project Feature Migration**
+
+  With framework features in place, teams can standardize development workflows, enabling features to be migrated from Project A to Project B with minimal changes.
+
+- **Rapid Commercialization Process**
+
+  Easily build minimal runtime packages, standard runtime packages, and full runtime packages, with version comparison between main version and asset version. Also supports asset repair functionality.
+
+- **Efficient Hot Code Fixing**
+
+  Leverages the revolutionary HybridCLR hotfix solution to quickly fix bugs in released games with minimal downtime.
+
+- **Flexible Asset Bundle Strategy**
+
+  Powered by YooAsset, resources can be easily managed and bundled. Strengthens DLC management and allows control over whether DLCs are shared across platforms.
+
+- **Component Binding Mechanism**
+
+  With module-based components (UIFrame, SRFrame, CPFrame), supports quick binding via object naming, significantly improving development efficiency.
+
+- **Template Creation Menu**
+
+  ![](/img/intro/img_2.png)
+
+---
+
+## Platform Testing
+- Windows (Passed)
+- MacOSX (Passed)
+- Android (Passed)
+- iOS (Passed)
+- WebGL (Passed)
+
+<ReactPlayer controls url='https://github.com/michael811125/OxGFrame/assets/30960759/fd04f6e5-6338-400c-9f57-dcdbdf73dfff' />
+
+---
+
+## Supported Unity Versions
+
+The framework continuously supports new versions of [Unity](https://unity.com/releases/editor/archive), **dependent on compatibility with the following**:
+
+- <Highlight color="#ff2f00">Important</Highlight> [HybridCLR supported Unity versions and platforms](https://hybridclr.doc.code-philosophy.com/docs/basic/supportedplatformanduniyversion).
+- <Highlight color="#ff2f00">Important</Highlight> [YooAsset system requirements](https://www.yooasset.com/docs/guide-editor/QuickStart#%E7%B3%BB%E7%BB%9F%E9%9C%80%E6%B1%82).
