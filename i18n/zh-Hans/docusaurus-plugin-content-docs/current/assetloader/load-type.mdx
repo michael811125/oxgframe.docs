@@ -1,0 +1,132 @@
+---
+sidebar_position: 2
+---
+
+# 加载方式
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## 通过 Resources 加载
+
+<Highlight color="#00d679">提醒</Highlight> 使用 Resources 加载时，不需要进行额外配置，仅将资源放在 Resources 下，并且直接使用 **res#** 作为前缀 + 资源路径进行加载。
+
+![](/img/assetloader/img_7.png)
+
+<Highlight color="#ff2f00">重要</Highlight> 使用 **res#** 作为前缀时，将会切换成 Resources 加载方式。
+
+```csharp
+// res# prefix
+AssetLoaders.LoadAssetAsync<GameObject>("res#MyPrefabs/Cube");
+```
+
+---
+
+## 通过 AssetBundle 加载
+
+### 步骤 1.
+
+必须先通过 YooAsset Collector 配置。
+
+<Highlight color="#0373fc">注意</Highlight> 寻址名称需要注意，图中的 DefaultPackage 包含寻址名称的有 Cube。
+
+![](/img/assetloader/img_24.png)
+
+### 步骤 2.
+
+另外使用 AssestBundle 进行开发时，也需要 **PatchLauncher** 进行 Runtime 配置，主要是使用 AssetBundle 加载时，需要初始相关配置。
+
+![](/img/assetloader/img_6.png)
+
+<Highlight color="#0373fc">注意</Highlight> 导入后拖曳到 Hierarchy 窗口。
+
+![](/img/assetloader/gif_1.gif)
+
+### 步骤 3.
+
+配置默认 Packages，将会在 Runtime 时进行初始。
+- 默认 App Packages。
+- 默认 DLC Packages。
+
+![](/img/assetloader/latest/img_8.png)
+
+<Highlight color="#ff2f00">重要</Highlight> 默认 Packages 将由**主下载器**进行管理与检查，所以不包含在默认中的 Packages，必须自行通过 API 初始，说明如下。
+
+App Package
+```csharp
+// [Load asset and download from specific package (Export App Bundles for CDN)]
+
+AppPackageInfoWithBuild packageInfo = new AppPackageInfoWithBuild()
+{
+    buildMode = BundleConfig.BuildMode.ScriptableBuildPipeline,
+    packageName = "OtherPackage"
+};
+
+bool isInitialized = await AssetPatcher.InitAppPackage(packageInfo, true);
+if (isInitialized)
+    await AssetLoaders.LoadAssetAsync<GameObject>("packageName", "assetName");
+```
+
+DLC Package
+```csharp
+// [Load asset and download from specific package (Export Individual DLC Bundles for CDN)]
+
+DlcPackageInfoWithBuild packageInfo = new DlcPackageInfoWithBuild()
+{
+    buildMode = BundleConfig.BuildMode.ScriptableBuildPipeline,
+    packageName = "DlcPackage",
+    dlcVersion = "dlcVersion",
+    withoutPlatform = false
+};
+
+bool isInitialized = await AssetPatcher.InitDlcPackage(packageInfo, true);
+if (isInitialized)
+    await AssetLoaders.LoadAssetAsync<GameObject>("packageName", "assetName");
+```
+
+<Highlight color="#0373fc">注意</Highlight> 区分 App Packages 和 DLC Packages，注意路径不同。
+- App Packages
+  - 路径随着主程序版号 (.../CDN/\<ProductName\>/\<Platform\>/\<AppVersion\>/\<PackageName\>)。
+  - 手动进行 AssetPatcher.InitAppPackage 的初始 (如果 autoUpdate = false，则需要自行另外调用 AssetPatcher.UpdatePackage 进行 Manifest 的更新)。
+- DLC Packages
+  - 路径包含平台 (.../CDN/\<ProductName\>/\<Platform\>/DLC/\<PackageName\>/\<DlcVersion\>)。
+  - 路径不含平台 (.../CDN/\<ProductName\>/DLC/\<PackageName\>/\<DlcVersion\>)，**属于所有平台的共用资源**。
+  - 支持特定版本 DLC package 的下载与 DLC package 卸载功能，需手动进行 AssetPatcher.InitDlcPackage，并且指定特定 dlcVersion，对于 dlcVersion 也可以单一固定 dlcVersion (ex: "latest")，变成只要 DLC 有更新就可以使用固定路径进行更新。
+
+<Highlight color="#0373fc">注意</Highlight> 另外，Play Mode 的说明如下。
+- Editor Simulate Mode (开发模式)。
+- Offline Mode (离线模式)。
+- Host Mode (联机模式)。
+- Weak Host Mode (弱联机模式)。
+- WebGL Mode (WebGL 模式)。
+- WebGL Remote Mode (WebGL 联机模式)。
+
+<Highlight color="#ff2f00">重要</Highlight> [打包可用的宏定义](https://github.com/michael811125/OxGFrame/wiki/Macro-Definitions)
+
+### 步骤 4.
+
+前置作业完成后，并且确保主配置流程已初始 -> AssetPatcher.IsInitialized()，就可以开始加载了，如以下。
+
+从 DefaultPackage 中加载寻址名称为 Cube 的对象。
+```csharp
+AssetLoaders.LoadAssetAsync<GameObject>("DefaultPackage", "Cube");
+```
+
+> <Highlight color="#0373fc">注意</Highlight> 额外补充，流程先后顺序，说明如下。
+> - 轮询初始状态 AssetPatcher.IsInitialized() == true -> 即可<Highlight color="#ff2f00">加载内置资源</Highlight>与<Highlight color="#ff2f00">执行检查更新</Highlight>。
+> - 执行检查更新 AssetPatcher.Check() -> 轮询完成状态 AssetPatcher.IsDone() == true -> 完成更新后 -> 即可<Highlight color="#ff2f00">加载更新资源</Highlight>。

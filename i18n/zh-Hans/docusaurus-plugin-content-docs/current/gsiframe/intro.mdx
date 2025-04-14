@@ -1,0 +1,71 @@
+---
+sidebar_position: 1
+---
+
+# 模块介绍
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## 基本说明
+
+游戏阶段整合模块 (FSM 概念)，而 GSI 为 **Game Stage Integration** 的缩写，对于游戏制作的时候缺乏整合系统，导致游戏系统运作之间过于零散。
+
+基本上游戏阶段区分为 
+- StartupStage (启动阶段)
+- LogoStage (商标阶段)
+- HotfixStage (热修复阶段)
+- PrepareStage (准备阶段)
+- PatchStage (资源热更阶段)
+- LoginStage (登入阶段)
+- LobbyStage (大厅阶段)
+- FightStage (战斗阶段) 
+
+等等，以上举例为大致上游戏阶段之间的划分，**基本上还是依照自己规划创建为主**，当游戏阶段规划好后，使用 GSIFrame 直接进行整合与切换 (阶段划分后就可以自行实现每阶段的运作)。
+
+---
+
+## 应用说明
+
+### Default API
+
+```csharp
+public static int GetCurrentId()
+
+public static U GetStage<U>() where U : GSIBase
+
+public static U GetStage<U>(int id) where U : GSIBase
+
+public static void AddStage<U>() where U : GSIBase, new()
+
+public static void AddStage<U>(int id) where U : GSIBase, new()
+
+public static void AddStage(int id, GSIBase gameStage)
+
+public static void DeleteStage<U>() where U : GSIBase
+
+public static void DeleteStage(int id)
+
+public static void ChangeStage<U>(bool force = false) where U : GSIBase
+
+public static void ChangeStage(int id, bool force = false)
+
+public static void Start()
+
+public static void Update(float dt = 0.0f)
+```

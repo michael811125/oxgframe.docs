@@ -1,0 +1,41 @@
+---
+sidebar_position: 1
+---
+
+# 模块介绍
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## 基本说明
+
+代码热修复模块，使用 HybridCLR (前身 Huatuo) 革命性的热更新方案进行整合。
+
+<Highlight color="#ff2f00">重要</Highlight> 如果相关建置完毕后，通过 MenuItem 点选 HybridCLR -> OxGFrame With HybirdCLR -> Complie And Copy To HotfixCollector，将会帮忙拷贝至 **HotfixCollector** 文件夹，再使用 YooAsset Collector 进行收集打包。
+
+<Highlight color="#00d679">提醒</Highlight> 使用 [HybridCLR](https://github.com/focus-creative-games/hybridclr) 如有疑问时，请前往[官方文档](https://hybridclr.doc.code-philosophy.com/)进行熟悉。
+
+---
+
+## 流程说明
+
+<Highlight color="#0373fc">注意</Highlight> 使用流程详看 HotfixerDemo (从 Package Manager 导入)。
+
+![](/img/hotfixer/img_1.png)
+![](/img/hotfixer/img_2.png)
+![](/img/hotfixer/img_3.png)

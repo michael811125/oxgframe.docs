@@ -1,0 +1,86 @@
+---
+sidebar_position: 1
+---
+
+# 模块介绍
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## 基本说明
+
+影音模块 (联动 AssetLoader 实现自动卸载)，涵盖游戏 Audio (2D/3D) 跟 Video 的制作，支持多平台加载方式 (Local, StreamingAssets, URL)。
+
+- 音效管理 (AudioFrame)
+- 视频管理 (VideoFrame)
+
+<Highlight color="#ff2f00">重要</Highlight> 另外针对 Audio 在 WebGL 平台有进行细节校正，因为 WebGL 对于 Audio 请求 Clip 无法取得正确长度 (官方放弃修正)，导致音讯控制会有部分缺陷，所以支持预置体制作时，可进行 Preload 请求 Clip 长度进行预设。
+
+## 应用说明
+
+### AudioFrame
+
+用于播放 **Audio**，使用 AudioManager 管理挂载 AudioBase 的 Prefab，且采用 Unity Mixer 进行各音轨控制。 
+
+<Highlight color="#ff2f00">重要</Highlight> 需先将 AudioManager 预置体拖曳到 Hierarchy 窗口 (从 Package Manager 导入)。
+
+![](/img/mediaframe/img_1.png)
+
+- Audio Sound Type 说明：
+  - Sole : 唯一性 (无法重复播放)，建议种类为 BGM (背景音乐), Voice (配音) 等。
+  - SoundEffect : 多实例 (可以重复播放)，建议种类为 Fight Sound (战斗音效), General Sound (一般音效) 等。
+
+<Highlight color="#00d679">提醒</Highlight> 已提供预设 Master Mixer，也可以自行定义。
+
+![](/img/mediaframe/img_2.png)
+
+![](/img/mediaframe/img_3.png)
+
+### VideoFrame
+
+用于播放 **Video**，使用 VideoManager 管理挂载 VideoBase 的 Prefab，且支持 RenderTexture, Camera。
+- Video Render Mode 说明：
+  - RenderTexture : 将 Video 映射至 RenderTexture 再透过 UGUI 的 RawImage 进行渲染 (VideoBase 使用 RenderTexture.GetTemporary 跟 RenderTexture.ReleaseTemporary 创建与释放，确保内存正确释放 RenderTexture)。
+  - Camera : 直接透过 Camera 进行渲染。
+
+![](/img/mediaframe/latest/gif_1.gif)
+
+---
+
+## 其他说明
+
+#### Media [murlconfig] (Media URL Config) 格式
+
+如果音讯跟影片来源存放于**云服务**上，可以使用 URL 的方式进行文件请求，格式如下 **(如果不透过 murlconfig.txt 指定 URL 的话，也可以输入完整资源 URL 至 Prefab 中，不过缺点就是对于未来改动 URL，要进行更改维护就会非常麻烦)**
+
+```
+# audio_urlset = Audio Source Url Path
+# video_urlset = Video Source Url Path
+
+audio_urlset http://127.0.0.1/audio/
+video_urlset http://127.0.0.1/video/
+```
+
+**\>\> 建立 murlconfig.txt 方式 \<\<**
+- 通过 MenuItem 点选 OxGFrame -> MediaFrame -> Media Url Config Generator，开始创建 murlconfig.txt (StreamingAssets/murlconfig.txt)。
+
+**\>\> 加载 murlconfig.txt 方式 \<\<**
+1. 如果选择 Url Cfg Request Type = Assign，则指定 murlconfig.txt 至 prefab 中。
+2. 如果选择 Url Cfg Request Type = Streaming Assets，将会从 StreamingAssets 进行请求 murlconfig.txt 文件。
+
+<Highlight color="#00d679">提醒</Highlight> **额外说明**：如果透过 URL 方式请求音讯或影片资源，建议于 WebGL 平台上使用，因为 WebGL 不支持 AssetBundle 事先指定 AudioClip 或 VideoClip (Assign 方式) 至 Prefab 中，所以提供 URL 的方式进行影音文件请求。

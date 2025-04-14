@@ -1,0 +1,98 @@
+---
+sidebar_position: 1
+---
+
+# 模块介绍
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## 基本说明
+
+资源加载器模块，支持动态 Async 或 Sync 加载 (Dynamic Loading)，采用计数管理方式进行资源管控 (支持 Resources 与 AssetBundle)，如果直接使用 AssetLoaders API 进行 Load 和 Instantiate，则在 Destroy 对象时，需要连带调用 Unload (成对调用 Load & Unload)。
+
+集成 YooAsset 实现资源热更新方案，额外实现 YooAsset 提供的加密接口，其中实现文件加解密的方式有。
+- Offset (偏移量方式)
+- OffsetXOR (偏移量 + XOR)
+- XOR
+- HT2XOR (Head-Tail 2 XOR)
+- HT2XORPlus (Head-Tail 2 XOR Plus) **强化版**
+- ChaCha20
+- XXTEA
+- AES
+
+仅供参考 ([效率参考](https://github.com/michael811125/OxGFrame/wiki/Encryption-and-Decryption-Efficiency-Reference))
+  - 运算效率 Offset > HT2XOR > XOR >= OffsetXOR >= HT2XORPlus > XXTEA > ChaCha20 > AES
+  - 内存占用 Offset ≈ OffsetXOR > AES ≈ ChaCha20 > XXTEA > HT2XORPlus = HT2XOR = XOR 
+  - AB 包体积增加 Offset ≈ OffsetXOR > AES ≈ ChaCha20 > XXTEA > HT2XORPlus = HT2XOR = XOR
+  - 破解难度 AES ≈ ChaCha20 > XXTEA > HT2XORPlus > HT2XOR > OffsetXOR > XOR > Offset
+
+分组分包举例
+  - 最小运行包
+  - 标准运行包
+  - 全部运行包 (默认索引标签为 **#all**)
+
+![](/img/assetloader/img_16.png)
+
+<Highlight color="#ff2f00">重要</Highlight> 如果要使用同步加载，资源一定要是事先下载完成的 (主要是资源不在本地时，请求下载部分是异步处理)，也提醒同步加载只适合小资源 (当然强烈建议全部都使用异步处理)。
+
+<Highlight color="#0373fc">注意</Highlight> 使用 **res#** 前缀，将切换成 Resources 加载方式。反之，则使用 AssetBundle。
+
+<Highlight color="#00d679">提醒</Highlight> 使用 [YooAsset](https://github.com/tuyoogame/YooAsset) 如有疑问时，请前往[官方文档](https://www.yooasset.com/)进行熟悉。
+
+---
+
+## 流程说明
+
+### 检查 PlayMode 是否初始完成
+
+轮询 AssetPatcher.IsInitialized() 是否完成 Preset Packages 的初始，因为初始完成后，才能开始进行 Built-in Bundle 的加载与 AssetPatcher.Check() 更新检查，又或者边玩边下载。
+
+<Highlight color="#00d679">提醒</Highlight> 区分 Built-in 和 Patch (视情况自行订立运作流程)。
+
+<Highlight color="#00d679">提醒</Highlight> 后续执行 AssetPatcher.Check() 检查 Patch 更新完成后，就可以读取更新资源了。
+- 执行 AssetPatcher.Check() 检查流程时，**会将 Preset App Packages 与 Preset DLC Packages 进行合并下载**。  
+
+| **Preset App Packages & Preset DLC Packages**                                                                        |
+| :------------------------------------------------------------------------------------------------------------------- |
+| Preset_App_Pkg_01 (TotalCount = 3, TotalSize = 600 KB)                                                               |
+| Preset_App_Pkg_02 (TotalCount = 6, TotalSize = 1200 KB)                                                              |
+| Preset_DLC_Pkg_01 (TotalCount = 2, TotalSize = 200 KB)                                                               |
+| Preset_DLC_Pkg_02 (TotalCount = 4, TotalSize = 400 KB)                                                               |
+| **Combination**                                                                                                      |
+| Preset_App_Pkg_01 + Preset_App_Pkg_02 + Preset_DLC_Pkg_01 + Preset_DLC_Pkg_02 (TotalCount = 15, TotalSize = 2400 KB) |
+
+![](/img/assetloader/img_17.png)
+
+<Highlight color="#ff2f00">重要</Highlight> 通过 Preset 设置的 DLC Packages 必须是**固定版号** (ex: "latest")。
+
+### 是否启用 Disk Space 检查流程
+
+![](/img/assetloader/img_18.png)
+
+![](/img/assetloader/img_19.png)
+
+![](/img/assetloader/img_20.png)
+
+![](/img/assetloader/img_21.png)
+
+### 检查是否更新完成
+- 判断检查 AssetPatcher.IsDone() 是否更新完成。
+
+### 总结执行顺序流程
+- 轮询初始状态 AssetPatcher.IsInitialized() -> 执行检查更新 AssetPatcher.Check() -> 轮询完成状态 AssetPatcher.IsDone() -> 完成更新。

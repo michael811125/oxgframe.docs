@@ -1,0 +1,37 @@
+---
+sidebar_position: 3
+---
+
+# 全局配置
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## 配置说明
+
+了解全局配置文件。
+
+![](/img/assetloader/img_1.png)
+
+通过右键创建配置文件 (Project 窗口内右键 -> Create -> OxGFrame -> Create Settings -> Create Patch Setting)
+
+![](/img/assetloader/img_2.png)
+
+<Highlight color="#ff2f00">重要</Highlight> 请将配置文件放在 Resources 文件夹底下。
+
+<Highlight color="#0373fc">注意</Highlight> 另外详见 [YooAsset 全局配置](https://www.yooasset.com/docs/guide-editor/GlobalSettings)。
