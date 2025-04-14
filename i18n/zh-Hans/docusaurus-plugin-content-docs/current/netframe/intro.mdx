@@ -1,0 +1,49 @@
+---
+sidebar_position: 1
+---
+
+# 模块介绍
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## 基本说明
+
+网络模块，网络事件分为 OnOpen, OnBinary, OnMessage, OnError, OnClose，也实现多节点 (NetNode)，另外可以设置**心跳检测回调**、**超时处理回调**、**断线重连回调**，并且也能实现 INetTips 网络消息接口的实作。
+
+---
+
+## 应用说明
+
+- NetManager (网络节点管理器)
+- NetNode (网络节点)
+- INetProvider (网络供应者接口)
+  - TcpNetProvider (TCP)
+  - KcpNetProvider (KCP)
+  - WebSocketNetProvider (WebSocket)
+- NetOption (连线配置)
+  - TcpNetOption
+  - KcpNetOption
+  - WebSocketNetOption 
+- INetTips (网络状态提示接口)
+
+<Highlight color="#0373fc">注意</Highlight> 已提供以下 NetProvider (可自行扩展)。
+- TCP
+- KCP
+- WebSocket
+

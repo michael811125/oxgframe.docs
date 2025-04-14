@@ -1,0 +1,119 @@
+---
+sidebar_position: 5
+---
+
+# 资源部署
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## 内置部署
+
+### 步骤 1.
+
+<Highlight color="#ff2f00">重要</Highlight> 再使用 YooAsset 构建时，直接选择 Clear And Copy All，将资源包输出至 StreamingAssets (即内置)。
+
+![](/img/assetloader/img_4.png)
+
+---
+
+## 更新部署
+
+### 步骤 1.
+
+主程序版号配置构建。
+
+通过 MenuItem 点击 OxGFrame -> AssetLoader -> Export Bundle And Config Generator。
+
+![](/img/assetloader/latest/img_9.png)
+
+开启后，Operation Type 选择 Export App Config To Streaming Assets，将进行 appconfig 的输出 **(用于比对主程序版号)**。
+
+![](/img/assetloader/img_10.png)
+
+### 步骤 2.
+
+<Highlight color="#0373fc">注意</Highlight> 确认 PatchLauncher 上的默认 Packages。
+
+- 默认 App Packages。
+- 默认 DLC Packages。
+
+![](/img/assetloader/latest/img_8.png)
+
+### 步骤 3.
+
+通过 MenuItem 点击 OxGFrame -> AssetLoader -> Export Bundle And Config Generator。
+
+![](/img/assetloader/latest/img_9.png)
+
+开启后，Operation Type 选择 Export Configs And App Bundles For CDN。
+
+![](/img/assetloader/img_11.png)
+
+1. <Highlight color="#0373fc">注意</Highlight> Source Folder 为 YooAsset 构建输出的文件夹。
+2. <Highlight color="#0373fc">注意</Highlight> 要输出的 Packages，图中输出的是 DefaultPackage。
+3. 最后点击 Process 进行输出。
+
+另外，可以选择是否依照完整版号输出文件夹，可以避免覆盖的方式上传至 CDN。
+
+![](/img/assetloader/latest/img_26.png)
+
+### 步骤 4.
+
+将输出的 CDN 文件夹，直接上传至云服务上，完成资源部署。
+
+![](/img/assetloader/img_12.png)
+
+### 步骤 5.
+
+更新资源请求的配置说明。
+
+通过 MenuItem 点击 OxGFrame -> AssetLoader -> Bundle Url Config Generator (burlconfig.conf)。
+
+![](/img/assetloader/latest/img_23.png)
+
+支持类型为以下 **(不管输出类型如何，都会自动判别)**：
+- Cipher Process (密文类型) -> <Highlight color="#00d679">提醒</Highlight> 建议 Release 发布使用。
+- Plaintext Process (明文类型)。
+
+开启后，配置以下相关请求信息：
+- CDN Server (Domain name 或者 IP)。
+- App 商店的链接 (**无则略过**)。
+
+
+Cipher (密文类型)：
+
+![](/img/assetloader/img_25.png)
+
+Plaintext (明文类型)：
+
+![](/img/assetloader/img_22.png)
+
+---
+
+## 额外说明
+
+<Highlight color="#ff2f00">重要</Highlight> 如果选用以下模式：
+
+- **Offline Mode (离线模式)**
+- **WebGL Mode (WebGL 模式)**
+
+只需要进行 [内置部署](#内置部署) 即可。
+
+
+

@@ -1,0 +1,167 @@
+---
+sidebar_position: 1
+---
+
+import ReactPlayer from 'react-player'
+
+# 模块介绍
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## 基本说明
+
+核心模块 (联动 AssetLoader 实现自动卸载)，涵盖游戏主要物件制作，并且实现物件命名绑定功能。
+
+- 游戏窗口 (UIFrame, **UI = User Interface**)，支持物件命名绑定。 <Highlight color="#ff2f00">底线下划线开头 _Node@XXX</Highlight>
+- 场景资源 (SRFrame, **SR = Scene Resource**)，支持物件命名绑定。 <Highlight color="#ff2f00">底线下划线开头 _Node@XXX</Highlight>
+- Unity 场景 (USFrame, **US = Unity Scene**)
+- 模板物件 (CPFrame, **CP = Clone Prefab**)，支持物件命名绑定。 <Highlight color="#ff2f00">波浪开头 ~Node@XXX</Highlight>
+
+---
+
+## 应用说明
+
+### UIFrame (User Interface)
+
+用于管理**窗口 Prefab**，仅支持 UGUI，使用 UIManager 管理挂载 UIBase 的物件。
+- 支持 UI 反切 (Reverse Changes)。
+- 支持 UI 堆叠关闭 (Close Stack By Stack)。
+- 支持 UI 冻结功能，避免 UI 动画尚未完成期间，能够被点击触发事件。
+ 
+<Highlight color="#00d679">提醒</Highlight> 如需要制作 UI 动画，可以在 ShowAnimation 跟 HideAnimation 覆写执行相关过渡动画 (DoTween, Animation...)，并且一定要在完成 UI 动画后，正确调用 animationEnd() 回调，才能正确解除 UI 冻结状态。
+
+<Highlight color="#00d679">提醒</Highlight> 额外还有 UI 的 MaskEvent，也可以通过 override 自定义事件。
+
+| UI 反切运用 (Reverse Changes) | UI 反切运用 (Reverse Changes) |
+| :---------------------------- | :---------------------------- |
+| ![](/img/coreframe/gif_1.gif) | ![](/img/coreframe/gif_2.gif) |
+
+| UI 堆叠关闭运用 (Close Stack By Stack) | UI 堆叠关闭运用 (Close Stack By Stack) |
+| :------------------------------------- | :------------------------------------- |
+| ![](/img/coreframe/gif_3.gif)          | ![](/img/coreframe/gif_4.gif)          |
+
+### SRFrame (Scene Resource)
+
+用于管理**场景 Prefab**、**功能 Prefab**，使用 SRManager 管理挂载 SRBase 的物件。
+
+### USFrame (Unity Scene)
+
+用于管理 **Unity Scene**，使用 USManager 管理 Unity 场景 (支持 AssetBundle)。
+
+<Highlight color="#0373fc">注意</Highlight> 使用 **build#** 前缀，将切换从 **Build Settings -> Scenes In Build** 加载。反之，则使用 AssetBundle。
+
+### CPFrame (Clone Prefab)
+
+用于实例 **Prefab 模板物件**，使用 CPManager 管理挂载 CPBase 的 Prefab，主要用在加载模板物件，例如：物品图标模板、信件消息模板...等等，并且直接进行 **GameObject.Destroy**，会**自动执行计数卸载**。
+
+<Highlight color="#00d679">提醒</Highlight> CPManager 不进行 CPBase 的缓存处理。
+
+### 常用方法说明
+
+- OnCreate : 初始参数用。
+- OnBind : 初始事件用。
+- OnPreShow : 当有异步处理或者附属物件控制时，可以在此处理。例如 : TopUI 附属联动开启 LeftUI & RightUI，那么就可以在 TopUI 中的 OnPreShow 方法实现 Show LeftUI & RightUI。
+  - <Highlight color="#00d679">提醒</Highlight> **不建议在 OnPreClose 时进行相关 Show 的处理，如果有进行的话也没关系，因为针对 CloseAll 的 API 有提供 disabledPreClose 参数开关。**
+- OnShow : 调用 Show 时，此方法会被激活，并且可以通过带入的 object 进行数据传送。
+- OnClose : 调用 Close 时，此方法会被激活。
+- OnRelease : 当物件被 Destroy 时，此方法会被激活。
+
+### 初始顺序说明
+
+<Highlight color="#ff2f00">重要</Highlight> OnCreate (Once) > OnAutoBind (Once) > OnBind (Once) > OnPreShow (EveryOpen) > OnShow (EveryOpen)。
+
+### 物件绑定说明
+
+- 通过 collector.GetNode("BindName") 返回取得绑定 GameObject **(单一名绑定)**。
+  - UIBase & SRBase 使用 _Node@XXX。
+  - CPBase 使用 ~Node@XXX。
+- 通过 collector.GetNodes("BindName") 返回取得绑定 GameObject[] **(同名多绑定，物件顺序由上至下)**。
+  - UIBase & SRBase 使用 _Node@XXX。
+  - CPBase 使用 ~Node@XXX。
+- 通过 collector.GetNodeComponent\<TComponent\>("BindName") 返回取得绑定 TComponent **(单一名绑定)**。
+  - UIBase & SRBase 使用 _Node@XXX。
+  - CPBase 使用 ~Node@XXX。
+- 通过 collector.GetNodeComponents\<TComponent\>("BindName") 返回取得绑定 TComponent[] **(同名多绑定，物件顺序由上至下)**。
+  - UIBase & SRBase 使用 _Node@XXX。
+  - CPBase 使用 ~Node@XXX。
+
+### 自动生成停止绑定标签 (Hotkey: Shift+E, E: End)
+
+<Highlight color="#00d679">提醒</Highlight> **建议使用 Hotkey**，不然使用 Right-Click 会执行多次 (实际上不影响自动生成)，但这是 [Unity Bug](https://issuetracker.unity3d.com/issues/menuitem-is-executed-more-than-once-when-multiple-objects-are-selected) 官方不修复了。
+
+能够缩短 Runtime 在绑定的向下查找次数，时间复杂度为 O(N)，N = StopEndIdx (**如有大量节点物件建议使用**)。
+- <Highlight color="#ff2f00">重要</Highlight> 如果有特殊使用 **Transform.Find** 查找子物件时，刚好子物件名称有 **#** 标签，可以无视，因为在 Runtime 时，会 Replace **#** 标签为 **""**，进行名称还原。
+
+![](/img/coreframe/img_1.png)
+
+![](/img/coreframe/gif_5.gif)
+
+### 自动生成物件绑定代码 (Hotkey: Shift+B, B: Bind)
+
+命名规范**使用 * 指向 TailName**
+- UIBase & SRBase
+  - _Node@XXX*Btn (以此类推)
+- CPBase
+  - ~Node@XXX*Btn (以此类推)
+
+### 自动绑定说明
+
+![](/img/coreframe/img_2.png)
+
+### 自动绑定配置
+
+![](/img/coreframe/img_3.png)
+
+默认组件绑定表 **(可从 BindCodeSetting 中自行新增或修改 TailName 对应绑定组件类型)**
+
+| **Tail Name** | **Component Name** | **End Remove Count** | **End Plural Txt** |
+| :------------ | :----------------- | :------------------- | :----------------- |
+| **Other**     |
+| Trans         | Transform          | 0                    | es                 |
+| RectTrans     | RectTransform      | 0                    | es                 |
+| **Legacy**    |
+| Img           | Image              | 0                    | s                  |
+| RawImg        | RawImage           | 0                    | s                  |
+| Txt           | Text               | 0                    | s                  |
+| Btn           | Button             | 0                    | s                  |
+| Tgl           | Toggle             | 0                    | s                  |
+| Sld           | Slider             | 0                    | s                  |
+| ScrBar        | Scrollbar          | 0                    | s                  |
+| ScrView       | ScrollRect         | 0                    | s                  |
+| Drd           | Dropdown           | 0                    | s                  |
+| Field         | InputField         | 0                    | s                  |
+| **TMP**       |
+| TmpTxt        | TMP_Text           | 0                    | s                  |
+| TmpDrd        | TMP_Dropdown       | 0                    | s                  |
+| TmpField      | TMP_InputField     | 0                    | s                  |
+| **Custom**    |
+| BtnPlus       | ButtonPlus         | 0                    | es                 |
+| NodePool      | NodePool           | 0                    | s                  |
+
+自动绑定产生器的功能有方法类型的区分，如下：
+
+- 自动 (Auto) \[默认\]，自动储存绑定内容至代码中，将会自动 override OnAutoBind() 与调用。
+
+<ReactPlayer controls url='https://github.com/michael811125/OxGFrame/assets/30960759/4c61bede-0bbc-4cae-baba-4a9bc7274c2e' />
+
+<br/>
+
+- 手动 (Manual) \[自选\]，手动将绑定内容复制至代码中，将会自动 override OnAutoBind() 与调用。
+
+<ReactPlayer controls url='https://github.com/michael811125/OxGFrame/assets/30960759/8e4f63e9-b955-4f91-8ac7-be949677c54f' />

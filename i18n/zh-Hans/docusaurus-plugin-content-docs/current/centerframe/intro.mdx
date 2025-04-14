@@ -1,0 +1,65 @@
+---
+sidebar_position: 1
+---
+
+# 模块介绍
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## 基本说明
+
+事件委派中心，可以自行实现 TClass 注册类型，再由自定义管理类统一继承 CenterBase&lt;TCenter, TClass&gt;，实现简易事件派送，默认提供以下。
+
+---
+
+## 应用说明
+
+### Default API
+
+```csharp
+public static void Add<UClass>() where UClass : TClass, new()
+
+public static void Add<UClass>(int id) where UClass : TClass, new()
+
+public static void Add(int id, TClass @class)
+
+public static void Delete<UClass>() where UClass : TClass
+		
+public static void Delete(int id)
+	
+public static void DeleteAll()
+	
+public static UClass Find<UClass>() where UClass : TClass
+
+public static UClass Find<UClass>(int id) where UClass : TClass
+```
+
+### EventCenter
+
+集中式 Event 整合模块，可以自定义每个 Event 的格式进行派送 (也可列出事件 ID 交由策划填表填入已注册的 ID，就能读表取出事件 ID 进行派送)。
+- TClass: EventBase，单个 Event 基类，通过右键创建 **(Project 窗口内右键 -> Create -> OxGFrame -> Center Frame -> Event Center -> Template Event.cs)**。
+- TCenter: EventCenter，用于继承管理层，主要用于注册阶段，通过右键创建 **(Project 窗口内右键 -> Create -> OxGFrame -> Center Frame -> Event Center -> Template EventCenter.cs)**。
+  - 使用 Default API 进行 Find 调用。
+
+### APICenter
+
+集中式 API 整合模块，可以自定义每个 API 的格式，进行 Http API 短连接请求，能够有效的集中管理各型式的 API 格式，使用 Acax (类似 Ajax 方式，请求 API)。
+- TClass: APIBase，单个 API 基类，通过右键创建 **(Project 窗口内右键 -> Create -> OxGFrame -> Center Frame -> API Center -> Template API.cs)**。
+- TCenter: APICenter，用于继承管理层，主要用于注册阶段，通过右键创建 **(Project 窗口内右键 -> Create -> OxGFrame -> Center Frame -> API Center -> Template APICenter.cs)**。
+  - 使用 Default API 进行 Find 调用。

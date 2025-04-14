@@ -1,0 +1,170 @@
+---
+sidebar_position: 1
+---
+
+import ReactPlayer from 'react-player'
+
+# 快速上手
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+**开始安装 OxGFrame with [YooAsset](https://github.com/tuyoogame/YooAsset) + [HybridCLR](https://github.com/focus-creative-games/hybridclr)**
+
+## 步骤 1. (安装依赖)
+
+- <Highlight color="#ff2f00">1</Highlight> **[UniTask](https://github.com/Cysharp/UniTask)**
+  
+通过 Package Manager 安装 **(Install via git)**
+
+```
+https://github.com/Cysharp/UniTask.git?path=src/UniTask/Assets/Plugins/UniTask
+```
+
+- <Highlight color="#ff2f00">2</Highlight> **[LWMyBox](https://github.com/michael811125/LWMyBox)**
+
+通过 Package Manager 安装 **(Install via git)**
+
+```
+https://github.com/michael811125/LWMyBox.git
+```
+
+- <Highlight color="#ff2f00">3</Highlight> **[OxGKit.LoggingSystem](https://github.com/michael811125/OxGKit#loggingsystem-dependence-lwmybox)**
+
+通过 Package Manager 安装 **(Install via git)**
+
+```
+https://github.com/michael811125/OxGKit.git?path=Assets/OxGKit/LoggingSystem/Scripts
+```
+
+- <Highlight color="#ff2f00">4</Highlight> **[OxGKit.SaverSystem](https://github.com/michael811125/OxGKit#saversystem)**
+  
+通过 Package Manager 安装 **(Install via git)**
+
+```
+https://github.com/michael811125/OxGKit.git?path=Assets/OxGKit/SaverSystem/Scripts
+```
+
+- <Highlight color="#ff2f00">5</Highlight> **[OxGKit.TimeSystem](https://github.com/michael811125/OxGKit#timesystem)**
+  
+通过 Package Manager 安装 **(Install via git)**
+
+```
+https://github.com/michael811125/OxGKit.git?path=Assets/OxGKit/TimeSystem/Scripts
+```
+
+- <Highlight color="#ff2f00">6</Highlight> **[OxGKit.Utilities](https://github.com/michael811125/OxGKit#utilities-dependence-unitask)**
+  
+通过 Package Manager 安装 **(Install via git)**
+
+```
+https://github.com/michael811125/OxGKit.git?path=Assets/OxGKit/Utilities/Scripts
+```
+
+- <Highlight color="#ff2f00">7</Highlight> **[HybirdCLR](https://github.com/focus-creative-games/hybridclr)**
+
+通过 Package Manager 安装 **(Install via git)**
+
+```
+https://github.com/focus-creative-games/hybridclr_unity.git
+```
+
+- <Highlight color="#0373fc">New Project</Highlight> **[TextMeshPro](https://docs.unity3d.com/Packages/com.unity.textmeshpro@3.2/manual/index.html)**
+
+通过 Package Manager 安装 **(Install by name)**
+
+```
+com.unity.textmeshpro
+```
+
+- <Highlight color="#0373fc">New Project</Highlight> **[Newtonsoft](https://github.com/jilleJr/Newtonsoft.Json-for-Unity/wiki/Install-official-via-UPM)**
+
+通过 Package Manager 安装 **(Install by name)**
+
+```
+com.unity.nuget.newtonsoft-json
+```
+
+---
+
+## 步骤 2. (安装框架)
+
+### 方法一
+
+**[OxGFrame](https://github.com/michael811125/OxGFrame)**
+
+通过 Package Manager 安装 **(Install via git)**
+
+```
+https://github.com/michael811125/OxGFrame.git?path=Assets/OxGFrame
+```
+
+![](/img/getting_started/latest/img_1.png)
+
+**管理组件导入 (Samples)**
+
+![](/img/getting_started/img_2.png)
+	
+### 方法二
+
+**直接下载源码 ([Code Download ZIP](https://github.com/michael811125/OxGFrame))**
+
+复制 OxGFrame 文件夹到 Unity 新项目的 Assets 下。
+
+<Highlight color="#00d679">提醒</Highlight> **如果没有要自行更改框架的需求，建议直接使用 Package Manager 方式安装**。
+<br/>
+<br/>
+![](/img/getting_started/img_3.png)
+
+---
+
+## 内置依赖库
+
+- 使用 [YooAsset](https://github.com/tuyoogame/YooAsset) (强大的资源热更新方案) **特别推荐**。
+- 使用 [UniFramework](https://github.com/gmhevinci/UniFramework) (UniEvent, UniMachine, UniReference)。
+- 使用 [UnityWebSocket](https://github.com/psygames/UnityWebSocket) (最佳 WebSocket 解决方案) **特别推荐**。
+- 使用 [DiskUtils by keerthik](https://github.com/keerthik/simple-disk-utils)。
+
+---
+
+## 宏定义
+- [Macro Definitions](https://github.com/michael811125/OxGFrame/wiki/Macro-Definitions)
+
+## 框架 API
+
+- Hotfixers (using OxGFrame.Hotfixer)
+- AssetLoaders (using OxGFrame.AssetLoader)
+- AssetPatcher (using OxGFrame.AssetLoader)
+- CoreFrames (using OxGFrame.CoreFrame)
+- MediaFrames (using OxGFrame.MediaFrame)
+- NetFrames (using OxGFrame.NetFrame)
+
+※备注 : 建议详看各模块的 Example (注意 "res#" 和 "build#" 的使用规则)。
+
+**额外有需要编写 BuildTool 的可以调用**
+
+- Editor
+  - HotfixHelper (using OxGFrame.Hotfix.Editor)
+  - BundleHelper (using OxGFrame.AssetLoader.Editor)
+  - MediaHelper (using OxGFrame.MediaFrame.Editor)
+
+- Runtime
+  - BundleConfig (using OxGFrame.AssetLoader.Bundle)
+  - PatchSetting (using OxGFrame.AssetLoader)
+    - PatchSetting.setting (**Singleton instance**)
+  - YooAssetBridge (Reflection)
