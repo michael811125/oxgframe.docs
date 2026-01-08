@@ -1,0 +1,107 @@
+---
+sidebar_position: 11
+---
+
+# MediaFrames
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.MediaFrame;
+
+## AudioFrame
+
+`AudioFrame` 專門負責管理遊戲中的所有音效與音樂（如 BGM, SFX），並與 Unity 的 `AudioMixer` 深度整合。
+
+### 基礎方法
+* **InitInstance()**
+    * 初始化 `AudioManager` 實例。
+* **GetComponent\<T\>(string assetName)**
+    * 取得已載入音訊物件上的 `AudioBase` 組件。
+    * **Params**: `assetName` (資源名稱)
+* **GetComponents\<T\>(string assetName)**
+    * 取得複數個同名稱音訊物件上的組件。
+
+### AudioMixer 控制
+用於實現環境音效變化或全域音量控制。
+
+* **SetMixerExposedParam(AudioMixer mixer, string expParam, float val)**
+    * 設置 Mixer 暴露出的參數（Exposed Parameters）。
+    * **Params**: `mixer` (混音器), `expParam` (參數名), `val` (數值)
+* **ClearMixerExposedParam(AudioMixer mixer, string expParam)**
+    * 清除特定暴露參數的自定義設置，恢復預設值。
+* **AutoClearMixerExposedParams / AutoRestoreMixerExposedParams**
+    * 自動化管理全域 Mixer 參數的清除與還原。
+* **SetMixerSnapshot(AudioMixer mixer, string snapshotName)**
+    * 立即切換 Mixer 快照。
+* **SetMixerTransitionToSnapshot(AudioMixer mixer, AudioMixerSnapshot[] snapshots, float[] weights, float timeToReach)**
+    * 在指定時間內平滑過渡至多個快照的混合狀態。
+    * **Params**: `timeToReach` (過渡時間，預設 0.02s)
+
+### 音訊播放與管理
+支持從 Resources 或 Asset Bundle 加載資源。
+
+* **Preload(string assetName / string[] assetNames)**
+    * 預加載音訊資源，避免播放時產生延遲。
+* **Play(string assetName, Transform parent, int loops, float volume)**
+    * 播放指定的音訊。
+    * **Params**: 
+        * `assetName`: 資源名稱 (帶有 `res#` 前綴則從 Resources 加載)。
+        * `parent`: 掛載的父節點 (用於 3D 音訊)。
+        * `loops`: 循環次數 (-1 為無限循環)。
+        * `volume`: 音量大小 (0 為使用 AudioSource 預設值)。
+* **Stop(string assetName, bool disabledEndEvent, bool forceDestroy)**
+    * 停止播放特定音訊。
+    * **Params**: `disabledEndEvent` (是否禁用結束事件回調), `forceDestroy` (是否直接銷毀物件)。
+* **ResumeAll / PauseAll / StopAll**
+    * 全域控制所有音訊的暫停、恢復與停止。
+
+---
+
+## VideoFrame
+
+`VideoFrame` 用於控制影片的載入與播放，適用於過場動畫或 UI 動態背景。
+
+### 基礎方法
+* **InitInstance()**
+    * 初始化 `VideoManager` 實例。
+* **GetComponent\<T\> / GetComponents\<T\>**
+    * 獲取對應影片資源上的 `VideoBase` 組件。
+
+### 影片播放與管理
+
+* **Preload(string assetName / string[] assetNames)**
+    * 異步預載影片檔案至緩存。
+* **Play(string assetName, VideoClip sourceClip, Transform parent, int loops, float volume)**
+    * 執行影片播放。
+    * **Params**:
+        * `assetName`: 資源路徑。
+        * `sourceClip`: 可選，直接傳入 `VideoClip` 資源。
+        * `parent`: 掛載點。
+        * `loops`: 循環模式。
+        * `volume`: 播放音量。
+* **Stop / Pause / ResumeAll**
+    * 針對特定影片或全域影片進行播放控制。
+* **ForceUnload(string assetName)**
+    * <Highlight color="#ff2f00">重要</Highlight> 影片檔案通常較大，當確定不再需要該影片時，應手動調用此方法強制釋放內存。
+
+---
+
+<Highlight color="#0373fc">注意</Highlight> `MediaFrames` 底層皆具備引用計數管理。
+
+---

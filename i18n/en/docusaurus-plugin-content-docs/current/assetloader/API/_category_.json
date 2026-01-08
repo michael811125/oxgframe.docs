@@ -1,5 +1,6 @@
 {
   "label": "API",
+  "key": "assetloader-api",
   "position": 99,
   "link": {
     "type": "generated-index"

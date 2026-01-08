@@ -1,0 +1,99 @@
+---
+sidebar_position: 3
+---
+
+# INetTips
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.NetFrame;
+
+## 核心設計概念
+
+`INetTips` 是一個連線狀態監聽介面。在網絡通訊過程中，當連線狀態發生變化（如：開始連線、成功、失敗或斷開）時，`NetFrame` 會自動觸發實作者中的對應方法。這對於實作 **Loading 遮罩** 或 **斷線重連提示** 非常重要。
+
+---
+
+## Interface Methods (介面方法)
+
+### OnConnecting()
+* **觸發時機**: 當調用連線方法（如 `Connect()`）並開始啟動連線程序時。
+* **用途**: 通常在此處開啟「連線中」的 UI 遮罩，防止使用者重複操作。
+
+### OnConnected(object payload)
+* **觸發時機**: 成功建立網絡連線時。
+* **Params**: `payload`: 包含連線成功的相關資訊。
+* **用途**: 關閉連線遮罩，並開始執行如「登入」或「同步資料」等後續邏輯。
+
+### OnConnectionError(object payload)
+* **觸發時機**: 連線嘗試失敗時。
+* **Params**: `payload`: 錯誤原因或異常訊息。
+* **用途**: 彈出錯誤訊息視窗，提示使用者檢查網絡環境。
+
+### OnDisconnected(object payload)
+* **觸發時機**: 已建立的連線被斷開時（無論是手動或意外）。
+* **Params**: `payload`: 斷開連線的狀態碼或原因。
+* **用途**: 執行資料清理，或跳轉回登入畫面。
+
+### OnReconnecting()
+* **觸發時機**: 當連線斷開且 `NetOption` 啟動自動重連機制時。
+* **用途**: 顯示「網路不穩定，嘗試重連中...」的提示 UI。
+
+---
+
+## 實作範例 (Implementation Example)
+
+您可以定義一個類別並實作 `INetTips`，然後將其傳入連線管理器中。
+
+```csharp
+public class NetTipsExample : INetTips
+{
+    public void OnConnecting()
+    {
+        // 開啟 Loading 遮罩
+        Debug.Log("連線中...");
+    }
+
+    public void OnConnected(object payload)
+    {
+        // 關閉 Loading 遮罩，進入遊戲
+        Debug.Log($"連線成功: {payload}");
+    }
+
+    public void OnConnectionError(object payload)
+    {
+        // 顯示連線錯誤提示
+        Debug.LogError($"連線失敗: {payload}");
+    }
+
+    public void OnDisconnected(object payload)
+    {
+        // 處理斷線邏輯
+        Debug.LogWarning($"連線斷開: {payload}");
+    }
+
+    public void OnReconnecting()
+    {
+        // 顯示重連中 UI
+        Debug.Log("嘗試重新連線中...");
+    }
+}
+```
+
+<Highlight color="#0373fc">注意</Highlight> payload 的具體內容取決於您底層使用的傳輸協議（TCP/UDP/WebSocket），在使用前建議進行型別檢查（Type Check）。

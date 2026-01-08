@@ -1,0 +1,66 @@
+---
+sidebar_position: 2
+---
+
+# YooAssetBridge
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.AssetLoader.Bundle;
+
+## Classes & Methods
+
+`YooAssetBridge` 是一個橋接工具，利用反射（Reflection）機制存取 `YooAsset` 內部受保護或私有的成員，確保框架在不更動原生套件源碼的情況下獲取必要資訊。
+
+---
+
+### YooAssetSettingsData
+處理 YooAsset 的全域配置數據。
+
+* **GetPackageManifestPrefix()**
+    * 取得 `PackageManifestPrefix`（清單前綴名稱）。
+* **GetYooDefaultCacheRoot()**
+    * 取得 YooAsset 預設的緩存檔案根目錄（Sandbox）。
+* **GetYooDefaultBuildinRoot()**
+    * 取得 YooAsset 預設的內置檔案根目錄（StreamingAssets）。
+
+---
+
+### DownloadSystemHelper
+輔助下載與路徑轉換系統。
+
+* **ConvertToWWWPath(string path)**
+    * 將一般路徑轉換為適用於 `UnityWebRequest` 或 `WWW` 的格式。
+    * **Params**: `string path` (原始路徑)
+
+<Highlight color="#0373fc">注意</Highlight> 此方法會根據執行平台自動處理檔案協定前綴（如 `file://`）。
+
+---
+
+### DefaultBuildinFileSystemDefine
+定義內置檔案系統的核心檔案名稱。
+
+* **BuildinCatalogBinaryFileName()**
+    * 取得內置資源目錄清單的二進制檔案名稱（Catalog Binary File）。
+
+---
+
+<Highlight color="#ff2f00">重要</Highlight> 由於 `YooAssetBridge` 高度依賴反射，若未來 `YooAsset` 套件版本更新並更動了內部類別名稱或欄位定義，此處會同步維護。
+
+---

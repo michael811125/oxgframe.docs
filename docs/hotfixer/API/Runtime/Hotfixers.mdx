@@ -1,0 +1,79 @@
+---
+sidebar_position: 1
+---
+
+# Hotfixers
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.Hotfixer;
+
+## 核心機制說明
+
+`Hotfixers` 主要與 **[HybridCLR](https://github.com/focus-creative-games/hybridclr)** 整合，負責在運行時：
+1. **補充 AOT 元數據**: 解決泛型實例化等問題。
+2. **加載熱更新 DLL**: 將更新後的邏輯注入執行緒。
+
+---
+
+## Patch Operation (更新與檢查)
+
+執行熱更新檢查與加載的核心方法。
+
+### CheckHotfix
+開始下載並加載所有熱更新相關檔案。
+
+* **自動配置模式**
+    * `CheckHotfix(string packageName, Action errorAction = null)`
+    * `CheckHotfix(PackageInfoWithBuild packageInfo, Action errorAction = null)`
+    * <Highlight color="#00d679">提醒</Highlight> 此模式會自動讀取 `StreamingAssets` 中的 `hotfixdllconfig.conf` 配置文件。
+
+* **手動指定模式**
+    * `CheckHotfix(string packageName, string[] aotAssemblies, string[] hotfixAssemblies)`
+    * 支持手動傳入需要補充的 AOT 程式集與熱更新程式集清單。
+
+---
+
+## Status & Cache (狀態與緩存)
+
+* **IsDone()**
+    * 返回熱更新是否已完成加載。
+    * 等待 Hotfixers.IsDone() 之後再進入遊戲主邏輯與資源更新。
+* **IsDisabled()**
+    * 檢查當前環境是否禁用了熱更新功能（通常用於開發者模式）。
+    * <Highlight color="#ff2f00">重要</Highlight> 如果禁用 HybridCLR，必須搭配 Macro [OXGFRAME_HYBRIDCLR_DISABLED](https://github.com/michael811125/OxGFrame/wiki/Macro-Definitions)，才能有效剔除熱更流程。
+* **Reset()**
+    * 重置熱更新的標記與緩存數據，如果不是社群版的話，是商業版支持 HotReload 則可以使用 Reset 重置。
+
+---
+
+## Assembly Info (程式集資訊)
+
+提供運行時已載入的程式集查詢。
+
+### AOT Assemblies (元數據程式集)
+* **GetAOTAssemblyNames()**: 獲取 AOT 程式集名稱（含 `.dll` 擴展名）。
+* **GetAotAssemblyNamesWithoutExtensions()**: 獲取 AOT 程式集名稱（不含擴展名）。
+
+### Hotfix Assemblies (熱更新程式集)
+* **GetHotfixAssemblyNames()**: 獲取熱更新程式集名稱（含 `.dll` 擴展名）。
+* **GetHotfixAssemblyNamesWithoutExtensions()**: 獲取熱更新程式集名稱（不含擴展名）。
+* **GetHotfixAssembly(string assemblyName)**: 根據名稱獲取已載入的 `Assembly` 對象。
+
+---

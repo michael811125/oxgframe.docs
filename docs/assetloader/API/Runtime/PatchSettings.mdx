@@ -1,0 +1,84 @@
+---
+sidebar_position: 3
+---
+
+# PatchSettings
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.AssetLoader;
+
+## Settings Fields
+
+`PatchSettings` 繼承自 `ScriptableObject`，用於儲存熱更新與資源包的全局路徑與檔案名稱設定。開發者可透過 `PatchSettings.settings.{fieldName}` 進行動態調用。
+
+---
+
+### App Config Settings
+定義應用程式基礎配置文件的基本資訊。
+
+* **appCfgName**
+    * 類型：`string` (預設: `"appconfig"`)
+    * 說明：定義 APP 配置文件（AppConfig）的檔案名稱。
+* **appCfgExtension**
+    * 類型：`string` (預設: `".json"`)
+    * 說明：APP 配置文件的副檔名。
+
+<Highlight color="#0373fc">注意</Highlight> 副檔名必須包含點號（例如：`.conf`, `.json`）。
+
+---
+
+### Patch Config Settings
+定義補丁（版本更新）配置文件的基本資訊。
+
+* **patchCfgName**
+    * 類型：`string` (預設: `"patchconfig"`)
+    * 說明：定義補丁配置文件（PatchConfig）的檔案名稱。
+* **patchCfgExtension**
+    * 類型：`string` (預設: `".json"`)
+    * 說明：補丁配置文件的副檔名。
+
+---
+
+### Bundle URL Config Settings
+定義部署環境（CDN 請求端點）的相關配置。
+
+* **bundleUrlCfgCipher**
+    * 類型：`byte`
+    * 說明：資源請求端點配置文件（burlconfig）的加解密金鑰。
+* **bundleUrlCfgName**
+    * 類型：`string` (預設: `"burlconfig"`)
+    * 說明：資源請求端點的配置文件名稱。
+* **bundleUrlCfgExtension**
+    * 類型：`string` (預設: `".conf"`)
+    * 說明：資源請求端點配置文件的副檔名。
+
+---
+
+### Folder Settings
+定義輸出資源包時的資料夾歸類邏輯。
+
+* **rootFolderName**
+    * 類型：`string` (預設: `"CDN"`)
+    * 說明：CDN 輸出資源的根目錄資料夾名稱。
+* **dlcFolderName**
+    * 類型：`string` (預設: `"DLC"`)
+    * 說明：DLC 資源包存放的子目錄資料夾名稱。
+
+---

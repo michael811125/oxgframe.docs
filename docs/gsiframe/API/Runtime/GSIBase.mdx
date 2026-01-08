@@ -1,0 +1,97 @@
+---
+sidebar_position: 2
+---
+
+# GSIBase
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.GSIFrame;
+
+## 核心設計概念
+
+`GSIBase` 定義了一個遊戲階段完整的生命週期。透過 `BeginInit` 的自動化流程，確保階段在進入時會依照「停止更新 -> 執行初始 -> 開啟更新」的順序執行，並支持異步處理（UniTask）。
+
+---
+
+## 屬性與狀態
+
+* **id**
+    * 類型：`int`
+    * 說明：階段的唯一識別碼，由 `GSIManager` 註冊時自動分配。
+* **runUpdate**
+    * 類型：`bool`
+    * 說明：控制該階段的 `OnUpdate` 是否執行的開關。
+* **_isInitialized**
+    * 類型：`bool`
+    * 說明：內部標記，確保 `OnCreate` 在整個生命週期中只會被調用一次。
+
+---
+
+## 內建流程控制
+
+### BeginInit 說明
+<Highlight color="#0373fc">注意</Highlight> 此方法由 `GSIManager` 自動調用，開發者通常不需要手動執行。
+
+**執行順序：**
+1. **首次檢查**: 若尚未初始化，執行 `OnCreate`。
+2. **Step 1**: 調用 `StopUpdate()` 暫停刷新。
+3. **Step 2**: 調用 `OnEnter()` 進行該階段的異步初始化邏輯。
+4. **Step 3**: 調用 `RunUpdate()` 開啟 `OnUpdate` 刷新。
+
+---
+
+## 必須實作的方法 (Implementation)
+
+繼承 `GSIBase` 後，必須實作以下生命週期方法：
+
+### OnCreate()
+* **回傳值**: `UniTask`
+* **觸發時機**: 該階段實體「第一次」被切換時。
+* **用途**: 適合進行一次性的資源預載或物件初始化。
+
+### OnEnter()
+* **回傳值**: `UniTask`
+* **觸發時機**: 每次切換進入該階段時。
+* **用途**: 處理進入階段時的邏輯，例如開啟 UI 視窗、播放轉場動畫。
+
+### OnUpdate(float dt)
+* **回傳值**: `void`
+* **觸發時機**: `runUpdate` 為 true 且階段活躍時，隨遊戲幀率刷新。
+* **用途**: 處理階段內的循環邏輯（如計時器、角色控制等）。
+
+### OnExit()
+* **回傳值**: `void`
+* **觸發時機**: 切換至下一個階段前。
+* **用途**: 清理該階段產生的臨時資料、關閉相關 UI 或停止音效。
+
+---
+
+## 階段狀態操作
+
+開發者可以在階段內部透過以下方法手動控制更新行為：
+
+* **RunUpdate()**: 手動開啟 `OnUpdate` 執行。
+* **StopUpdate()**: 手動暫停 `OnUpdate` 執行。
+
+---
+
+<Highlight color="#00d679">提醒</Highlight> 由於 `OnCreate` 與 `OnEnter` 支持 `UniTask`，您可以方便地在這些方法中使用 `await` 等待資源加載完成，系統會自動在加載完成後才開啟 `OnUpdate`。
+
+---

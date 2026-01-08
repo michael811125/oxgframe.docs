@@ -6,7 +6,7 @@ import ReactPlayer from 'react-player'
 
 # 快速上手
 
-export const Highlight = ({children, color}) => (
+export const Highlight = ({ children, color }) => (
   <span
     style={{
       backgroundColor: color,
@@ -131,6 +131,39 @@ https://github.com/michael811125/OxGFrame.git?path=Assets/OxGFrame
 <br/>
 ![](/img/getting_started/img_3.png)
 
+### 方法三
+
+如果只有特定模塊使用需求，可以單獨安裝該模塊。
+
+- AssetLoader
+```
+https://github.com/michael811125/OxGFrame.git?path=Assets/OxGFrame/AssetLoader
+```
+- CoreFrame (依賴 AssetLoader)
+```
+https://github.com/michael811125/OxGFrame.git?path=Assets/OxGFrame/CoreFrame
+```
+- MediaFrame (依賴 AssetLoader)
+```
+https://github.com/michael811125/OxGFrame.git?path=Assets/OxGFrame/MediaFrame
+```
+- Hotfixer (依賴 AssetLoader)
+```
+https://github.com/michael811125/OxGFrame.git?path=Assets/OxGFrame/Hotfixer
+```
+- GSIFrame
+```
+https://github.com/michael811125/OxGFrame.git?path=Assets/OxGFrame/GSIFrame
+```
+- CenterFrame
+```
+https://github.com/michael811125/OxGFrame.git?path=Assets/OxGFrame/CenterFrame
+```
+- NetFrame
+```
+https://github.com/michael811125/OxGFrame.git?path=Assets/OxGFrame/NetFrame
+```
+
 ---
 
 ## 內置依賴庫
@@ -165,6 +198,28 @@ https://github.com/michael811125/OxGFrame.git?path=Assets/OxGFrame
 
 - Runtime
   - BundleConfig (using OxGFrame.AssetLoader.Bundle)
-  - PatchSetting (using OxGFrame.AssetLoader)
-    - PatchSetting.setting (**Singleton instance**)
+  - PatchSettings (using OxGFrame.AssetLoader)
+    - PatchSettings.settings (**Singleton instance**)
   - YooAssetBridge (Reflection)
+
+## 框架配置
+
+可以透過 Right-Click 建立配置文件，進行部分設定客製化。
+
+![](/img/getting_started/latest/img_4.png)
+
+### PatchSettings
+
+![](/img/getting_started/latest/img_5.png)
+
+### HotfixSettings
+
+![](/img/getting_started/latest/img_6.png)
+
+### CodeBindingSettings
+
+![](/img/getting_started/latest/img_7.png)
+
+### CryptogramSettings
+
+![](/img/getting_started/latest/img_8.png)

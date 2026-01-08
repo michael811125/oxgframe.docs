@@ -1,0 +1,70 @@
+---
+sidebar_position: 1
+---
+
+# HotfixHelper
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.Hotfixer.Editor;
+
+## Methods
+
+### ToRelativeAssetPath
+將絕對路徑轉換為相對於專案的 `Assets/` 路徑。
+
+**Params**
+* `string s`：完整檔案路徑
+
+---
+
+### CopyAOTDllsAndHotfixDlls
+一鍵執行 AOT 與 Hotfix 程式集的複製操作，將所有相關檔案收集至 `HotfixCollector` 目錄中。
+
+---
+
+### CopyAOTAssembliesToDestination
+複製 AOT 程式集（經由 IL2CPP 裁剪後的 DLL）至目標目錄。此方法會自動將副檔名更改為 `.dll.bytes` 以利於資源載入。
+
+
+
+**Params**
+* `string dstDir`：自定義輸出路徑（若為 null，則輸出至預設的 `HotfixCollector` 目錄）
+
+<Highlight color="#ff2f00">重要</Highlight> 裁剪後的 AOT DLL 僅在 **HybridCLR -> Generate All** 之後才會產生。如果提示檔案不存在，請先執行 [Generate All](https://www.hybridclr.cn/docs/beginner/quickstart#%E6%89%93%E5%8C%85%E8%BF%90%E8%A1%8C)。
+
+---
+
+### CopyHotfixAssembliesToDestination
+複製熱更新程式集（Hotfix DLLs）至目標目錄，並自動將副檔名更改為 `.bytes`。
+
+**Params**
+* `string dstDir`：自定義輸出路徑（若為 null，則輸出至預設的 `HotfixCollector` 目錄）
+
+---
+
+### ExportHotfixDllConfig
+產生熱更新 DLL 的配置文件（HotfixDllConfig），支持 JSON 或加密後的二進制格式。
+
+**Params**
+* `List<string> aotDlls`：需要補充元數據（Metadata）的 AOT 程式集清單
+* `List<string> hotfixDlls`：熱更新程式集清單
+* `bool cipher`：是否啟用加密（若為 true 則輸出為 Bytes 格式，否則為 Json）
+
+---

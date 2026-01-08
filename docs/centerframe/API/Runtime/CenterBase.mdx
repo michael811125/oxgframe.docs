@@ -1,0 +1,88 @@
+---
+sidebar_position: 1
+---
+
+# CenterBase
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.CenterFrame;
+
+## 核心設計概念
+
+`CenterBase<TCenter, TClass>` 採用了 **CRTP (Curiously Recurring Template Pattern)** 模式與 **Thread-Safe Singleton** 設計。它建立了一個類型安全的緩存池，讓所有繼承自此類的中心點都能擁有統一的對象管理邏輯。
+
+---
+
+## Default APIs (靜態調用接口)
+
+以下方法皆為靜態接口，開發者可直接透過子類別名稱調用（例如：`YourCenter.Add<YourClass>()`）。
+
+### Register (註冊/新增)
+
+將對象實例化並加入緩存管理中。
+
+* **Add\<UClass\>()**
+    * 以 `UClass` 的類型 Hash 作為 ID 進行註冊。
+* **Add\<UClass\>(int id)**
+    * 指定特定的 `id` 註冊 `UClass` 實例。
+* **Add(int id, TClass @class)**
+    * 直接將已存在的實例以指定 `id` 加入緩存。
+
+<Highlight color="#00d679">提醒</Highlight> 使用泛型註冊時，該類別必須具備無參數構造函數（`new()`）。
+
+---
+
+### Remove (刪除/卸載)
+
+從緩存池中移除對象。
+
+* **Delete\<UClass\>()**
+    * 根據類型移除對應的實例。
+* **Delete(int id)**
+    * 根據指定 `id` 移除實例。
+* **DeleteAll()**
+    * 清空緩存池中所有的對象。
+
+---
+
+### Get (尋找/獲取)
+
+從緩存池中檢索對象並自動轉型。
+
+* **Find\<UClass\>()**
+    * 根據類型尋找對象。
+* **Find\<UClass\>(int id)**
+    * 根據指定 `id` 尋找對象，並強制轉換為 `UClass` 類型。
+
+---
+
+## 內部實作細節
+
+### Thread-Safe Singleton
+內建雙重檢查鎖定（Double-Checked Locking），確保在多執行緒環境下 `GetInstance()` 的唯一性與安全性。
+
+### Cache System
+底層使用 `Dictionary<int, TClass>` 進行儲存：
+* **Key**: 對象的唯一識別碼（ID 或 Type Hash）。
+* **Value**: 實例化後的對象。
+
+<Highlight color="#ff2f00">重要</Highlight> `CenterBase` 僅負責對象的存儲生命週期，若管理的對象涉及 Unity 資源（如 Prefab），請配合 `AssetLoaders` 進行正確的銷毀處理。
+
+---

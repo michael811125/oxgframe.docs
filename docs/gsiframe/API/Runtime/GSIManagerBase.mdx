@@ -1,0 +1,85 @@
+---
+sidebar_position: 1
+---
+
+# GSIManagerBase
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.GSIFrame;
+
+## 核心設計概念
+
+`GSIManagerBase<T>` 是一個專門管理 `GSIBase` (Game Stage) 的狀態管理器。它負責控制遊戲流程的切換、初始化、更新與釋放。通常一個遊戲只需要一個繼承自此類的實體（如 `GameStageManager`）。
+
+<Highlight color="#00d679">提醒</Highlight> 如果有熱更工程，建議區分兩個 GameStageManager 進行管理（如 AotGameStageManager 與 HotfixGameStageManager）。
+
+---
+
+## Default APIs (靜態全域接口)
+
+開發者通常直接透過繼承後的類別調用以下靜態方法，無需直接存取實例。
+
+### Stage 查詢與獲取
+* **GetCurrentId()**
+    * 取得當前正在執行的階段 ID。
+* **GetStage\<U\>() / GetStage\<U\>(int id)**
+    * 從緩存中搜尋並取得特定的 Stage 實體。
+
+### Stage 註冊 (Add)
+* **AddStage\<U\>() / AddStage\<U\>(int id)**
+    * 將新的 Stage 類別實例化並註冊至管理器。若未指定 ID，則預設使用該類別的 `GetHashCode()` 作為唯一識別碼。
+* **AddStage(int id, GSIBase gameStage)**
+    * 將已存在的實例以指定 ID 進行註冊。
+
+<Highlight color="#ff2f00">重要</Highlight> 不能於建構式中調用 AddStage 靜態方法，會導致 StackOverflow，僅能使用成員方法 AddGameStage。
+
+### Stage 切換 (Change)
+* **ChangeStage\<U\>(bool force = false) / ChangeStage(int id, bool force = false)**
+    * **一般切換**: 設定 `incomingId`，將在下一幀進行過渡切換。不允許切換至相同階段。
+    * **強制切換 (force = true)**: 立即觸發 `OnExit` 並執行目標階段的 `OnEnter`。
+
+### 驅動接口 (Driving)
+<Highlight color="#ff2f00">重要</Highlight> 必須在主入口（如 `Main.cs` 繼承 `MonoBehaviour`）調用以下方法以驅動 GSI 運作。
+* **DriveStart()**: 在 `Start()` 中調用，啟動 GSI 運作。
+* **DriveUpdate(float dt)**: 在 `Update()` 中調用，驅動當前階段的 `OnUpdate`。
+
+---
+
+## Public 成員方法 (繼承後使用)
+
+若您在繼承後的子類別內部需要進行更細緻的操作，可以使用以下成員方法：
+
+### 階段管理成員方法
+| 方法名稱 | 說明 |
+| :--- | :--- |
+| **GetCurrentGameStageId()** | 返回當前 `_currentId`。 |
+| **GetGameStage\<U\>(int id)** | 返回緩存字典 `_dictGameStage` 中的實體。 |
+| **AddGameStage(int id, GSIBase gameStage)** | 執行註冊邏輯，並會自動調用 `gameStage.SetId(id)`。 |
+| **DeleteGameStage(int id)** | 從緩存中移除特定的階段實體。 |
+
+### 切換與生命週期控制
+* **ChangeGameStage(int id)**: 修改 `_incomingId`，等待 `OnUpdate` 判斷並執行 `ReleaseGameStage` 與 `InitGameStage`。
+* **ChangeGameStageForce(int id)**: 立即序列執行「釋放舊階段 -> 更新 ID -> 初始新階段」。
+
+---
+
+<Highlight color="#0373fc">注意</Highlight> 當調用 `ChangeStage` 後，舊階段的 `OnExit` 會先被觸發，接著新階段會調用 `BeginInit`（非同步）進入初始化流程。
+
+---

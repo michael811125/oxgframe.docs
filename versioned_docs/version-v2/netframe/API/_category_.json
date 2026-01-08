@@ -1,5 +1,6 @@
 {
   "label": "API",
+  "key": "v2-netframe-api",
   "position": 99,
   "link": {
     "type": "generated-index"
