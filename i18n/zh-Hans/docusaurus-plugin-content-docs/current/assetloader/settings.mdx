@@ -51,7 +51,7 @@ Bundle 资源热更模式。
 - Offline Mode (离线模式)
 - Host Mode (联机模式)
 - Weak Host Mode (弱联机模式)，首次启动必须联机，以完成初始配置记录与资源下载。
-  - <Highlight color="#0373fc">注意</Highlight>：不支持 Skip Download (边玩边下载)，当失去联网时，会验证上一次资源版本的清单内容完整性。
+  - <Highlight color="#0373fc">注意</Highlight>：不建议边玩边下载，因为当失去网络连接时，会验证上一次资源版本的清单内容完整性。
   - 另外，如果突然失去联网又进行 Repair 时，当验证到资源不完整，则会发送 PatchVersionUpdateFailed 事件 (因为必须重新从获取资源版本的流程开始运行, 只要网络恢复, 则可以正确获取到远端版本进行更新)。
 - WebGL Mode (WebGL 模式)，仅请求自身 StreamingAssets 中的资源。
 - WebGL Remote Mode (WebGL 联机模式)，可以请求远端 CDN 的资源，不仅限于自身 StreamingAssets。

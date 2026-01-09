@@ -36,6 +36,8 @@ Create configuration files via right-click (Right-click in Project window -> Cre
 
 <Highlight color="#0373fc">Attention</Highlight> Additionally, see [YooAsset Global Configuration](https://www.yooasset.com/docs/guide-editor/GlobalSettings).
 
+---
+
 ## PatchLauncher Configuration Instructions
 
 PatchLauncher is the runtime configuration and must be dragged into the scene as the sole runtime configuration.
@@ -49,7 +51,7 @@ Bundle resource hot-update mode.
 - Offline Mode (Offline Mode)
 - Host Mode (Online Mode)
 - Weak Host Mode (Weak Online Mode). Must be online for the first startup to complete initial configuration recording and resource download.
-  - <Highlight color="#0373fc">Attention</Highlight>: Does not support Skip Download (download while playing). When internet is lost, it will verify the integrity of the manifest content of the last resource version.
+  - <Highlight color="#0373fc">Attention</Highlight>: "Play-while-downloading" is not recommended. If the connection is lost, the system will perform an integrity check on the manifest of the previous resource version.
   - Additionally, if Repair is performed after suddenly losing internet, and incomplete resources are detected, a PatchVersionUpdateFailed event will be sent (because it must restart from the process of obtaining resource version; once network is restored, the remote version can be correctly obtained for updating).
 - WebGL Mode (WebGL Mode). Only requests resources in its own StreamingAssets.
 - WebGL Remote Mode (WebGL Online Mode). Can request resources from remote CDN, not limited to its own StreamingAssets.
