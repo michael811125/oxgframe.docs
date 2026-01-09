@@ -1,0 +1,59 @@
+---
+sidebar_position: 2
+---
+
+# Collection Example
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## Create Hotfix Package
+
+Create an independent Package to collect related DLLs.
+
+![](/img/hotfixer/img_6.png)
+
+<Highlight color="#0373fc">Attention</Highlight> The image example here is an independent Package. If you want to use a single Package for development and collection, it depends on the team's development needs.
+
+## Collect Hotfix Main Scene
+
+A dedicated main driver scene for the hot-update project.
+
+![](/img/hotfixer/img_7.png)
+
+<Highlight color="#00d679">Reminder</Highlight> Process Overview: Build and run AOT Main Scene -> After hotfixing in AOT -> Load Hotfix Main Scene (driving subsequent stages of the entire project's hot-update process) -> Complete hot-update.
+
+Basically, more than 80 \~ 90% of the project is hot-updated, and even the code implementing AOT business logic may be less than 5 \~ 10% of the project.
+
+## Collect AOT DLL
+
+Drag the AOTDlls from the HotfixCollector folder into the YooAsset collector, as shown in the figure.
+
+<Highlight color="#00d679">Reminder</Highlight> You can collect them in your own way. This is just an example.
+
+![](/img/hotfixer/img_4.png)
+
+## Collect Hotfix DLL
+
+Drag the HotfixDlls from the HotfixCollector folder into the YooAsset collector, as shown in the figure.
+
+<Highlight color="#00d679">Reminder</Highlight> You can collect them in your own way. This is just an example.
+
+![](/img/hotfixer/img_5.png)
+
+Additionally, you can refer to the thinking in [Master Project and Hotfix Project Process Architecture Description](https://hackmd.io/jUJZnbXQTr65EYTiqdGpUA) for process construction.

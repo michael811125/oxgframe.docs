@@ -1,0 +1,45 @@
+---
+sidebar_position: 2
+---
+
+# 批量转换
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+### AudioFrame
+
+选择 Audio Clips 后，点击 Right-Click -> OxGFrame -> MediaFrame -> 选择想要转换的类型。
+
+- Sole (BGM 类型)
+- SoundEffect (音效类型)
+
+![](/img/mediaframe/latest/gif_2.gif)
+
+<Highlight color="#00d679">提醒</Highlight> 批量转换成 AudioBase Prefab 后，再自行批量选择更改配置。
+
+### VideoFrame
+
+选择 Video Clips 后，点击 Right-Click -> OxGFrame -> MediaFrame -> 选择想要转换的类型。
+
+- Camera
+- RenderTexture
+
+![](/img/mediaframe/latest/gif_3.gif)
+
+<Highlight color="#00d679">提醒</Highlight> 批量转换成 VideoBase Prefab 后，再自行批量选择更改配置。

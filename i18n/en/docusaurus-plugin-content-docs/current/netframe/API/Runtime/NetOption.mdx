@@ -1,0 +1,98 @@
+---
+sidebar_position: 1
+---
+
+# NetOption
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.NetFrame;
+
+## Core Design Concept
+
+`NetOption` is an abstract base class. When implementing custom network protocols (such as TCP, UDP, WebSocket), developers must inherit from this class to define specific configurations for that connection.
+
+---
+
+## Properties
+
+### autoReconnectCount
+* Type: `int`
+* Description: Set the number of automatic reconnection attempts.
+* **Value Rules**:
+    * <Highlight color="#00d679">Positive integer (n)</Highlight>: When the connection is disconnected, it will try to reconnect automatically N times.
+    * <Highlight color="#0373fc">-1</Highlight>: **Disable automatic reconnection** (Default value).
+    * <Highlight color="#ff2f00">int.MaxValue</Highlight>: Theoretical infinite reconnection attempts.
+
+---
+
+## Constructor
+
+### NetOption(int autoReconnectCount)
+* **Params**:
+    * `autoReconnectCount`: Number of reconnection attempts for initialization. Default is `-1`.
+
+---
+
+## How to Extend (Custom Option)
+
+When you implement a specific network service, you can add more parameters by inheriting from `NetOption`.
+
+**Example Code:**
+
+```csharp
+public class TcpNetOption : NetOption
+{
+    public string host { get; set; }
+
+    public int port { get; set; }
+
+    /// <summary>
+    /// Processes up to 'limit' messages per tick
+    /// </summary>
+    public int processLimitPerTick = _DEFAULT_PROCESS_LIMIT_PER_TICK;
+
+    /// <summary>
+    /// Max buffer size of single packet
+    /// </summary>
+    public int maxBufferSize = _MAX_BUFFER_SIZE;
+
+    /// <summary>
+    /// Default: process up to 64 packets per frame
+    /// </summary>
+    private const int _DEFAULT_PROCESS_LIMIT_PER_TICK = 64;
+
+    /// <summary>
+    /// Max packet size: 64KB (65536 bytes)
+    /// </summary>
+    private const int _MAX_BUFFER_SIZE = 65536;
+
+    public TcpNetOption(string host, int port, int autoReconnectCount = -1) : base(autoReconnectCount)
+    {
+        this.host = host;
+        this.port = port;
+    }
+
+    public TcpNetOption(string host, int port, int processLimitPerTick, int maxBufferSize = _MAX_BUFFER_SIZE, int autoReconnectCount = -1) : this(host, port, autoReconnectCount)
+    {
+        this.maxBufferSize = maxBufferSize;
+        this.processLimitPerTick = processLimitPerTick;
+    }
+}
+```

@@ -1,0 +1,90 @@
+---
+sidebar_position: 1
+---
+
+# BundleConfig
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.AssetLoader.Bundle;
+
+## Methods
+
+### GetValueFromUrlCfg
+從 `burlconfig.conf` 佈署配置文件中取得指定的鍵值（Key-Value）。支持自動偵測加密狀態並解密。
+
+**Params**
+* `string key`：設定檔中的鍵名（如 `BUNDLE_IP`）
+
+<Highlight color="#0373fc">注意</Highlight> 若檔案標頭符合加密標記，將會使用專案設定的 Cipher Key 進行解密。
+
+---
+
+### GetAppConfigFromStreamingAssets / HostServer
+獲取應用程式基礎配置（AppConfig）。
+* **StreamingAssets**: 從隨包內置資源讀取。
+* **HostServer**: 從遠端伺服器讀取（支持弱聯網處理，若失敗則嘗試回退至上次成功的緩存版本）。
+
+---
+
+### GetHostServerUrl / GetFallbackHostServerUrl
+根據 Package 名稱組合出完整的遠端資源下載地址。
+* **Host**: 主要 CDN 位址。
+* **Fallback**: 備用 CDN 位址。
+
+**Params**
+* `string packageName`：資源包名稱
+
+<Highlight color="#00d679">提醒</Highlight> 路徑組合邏輯會自動根據 `SEMANTIC_RULE`（語義化規則）決定版本資料夾格式（如 `v1.0` 或 `v1.0.0`）。
+
+---
+
+### GetDlcHostServerUrl / GetDlcFallbackHostServerUrl
+獲取 DLC 包裹位於遠端伺服器的端點路徑。
+
+**Params**
+* `string packageName`：DLC 包名稱
+* `string dlcVersion`：DLC 版本號
+* `bool withoutPlatform`：是否忽略平台路徑層級（預設為 false）
+
+---
+
+### GoToAppStore
+取得 `STORE_LINK` 設置並直接調用系統瀏覽器開啟主程式商店連結（Google Play / App Store）。
+
+---
+
+### Local & Builtin Path Operations
+提供資源路徑的定位功能：
+
+| 方法名稱 | 說明 |
+| :--- | :--- |
+| **GetLocalSandboxRootPath** | 取得本地持久化資源（Sandbox）的根目錄路徑。 |
+| **GetLocalSandboxPackagePath** | 取得特定 Package 在本地的儲存路徑。 |
+| **GetBuiltinRootPath** | 取得內置資源（Built-in）的根目錄路徑。 |
+| **GetRequestStreamingAssetsPath** | 取得適用於 WebRequest 的 StreamingAssets 路徑（自動處理 iOS/OSX 的 `file://` 前綴）。 |
+
+---
+
+### GetHostServerAppConfigPath / PatchConfigPath
+獲取遠端伺服器上配置文件（AppConfig / PatchConfig）的完整 URL 路徑。
+
+<Highlight color="#ff2f00">重要</Highlight> 此方法會優先讀取內置的 AppConfig 以確定當前產品名稱與平台，再向遠端請求對應路徑下的配置文件。
+
+---

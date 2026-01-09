@@ -1,0 +1,84 @@
+---
+sidebar_position: 3
+---
+
+# PatchSettings
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.AssetLoader;
+
+## Settings Fields
+
+`PatchSettings` 继承自 `ScriptableObject`，用于储存热更新与资源包的全局路径与文件名称设定。开发者可透过 `PatchSettings.settings.{fieldName}` 进行动态调用。
+
+---
+
+### App Config Settings
+定义应用程序基础配置文件的基本信息。
+
+* **appCfgName**
+    * 类型：`string` (预设: `"appconfig"`)
+    * 说明：定义 APP 配置文件（AppConfig）的文件名称。
+* **appCfgExtension**
+    * 类型：`string` (预设: `".json"`)
+    * 说明：APP 配置文件的副档名。
+
+<Highlight color="#0373fc">注意</Highlight> 副档名必须包含点号（例如：`.conf`, `.json`）。
+
+---
+
+### Patch Config Settings
+定义补丁（版本更新）配置文件的基本信息。
+
+* **patchCfgName**
+    * 类型：`string` (预设: `"patchconfig"`)
+    * 说明：定义补丁配置文件（PatchConfig）的文件名称。
+* **patchCfgExtension**
+    * 类型：`string` (预设: `".json"`)
+    * 说明：补丁配置文件的副档名。
+
+---
+
+### Bundle URL Config Settings
+定义部署环境（CDN 请求端点）的相关配置。
+
+* **bundleUrlCfgCipher**
+    * 类型：`byte`
+    * 说明：资源请求端点配置文件（burlconfig）的加解密密钥。
+* **bundleUrlCfgName**
+    * 类型：`string` (预设: `"burlconfig"`)
+    * 说明：资源请求端点的配置文件名称。
+* **bundleUrlCfgExtension**
+    * 类型：`string` (预设: `".conf"`)
+    * 说明：资源请求端点配置文件的副档名。
+
+---
+
+### Folder Settings
+定义输出资源包时的数据夹归类逻辑。
+
+* **rootFolderName**
+    * 类型：`string` (预设: `"CDN"`)
+    * 说明：CDN 输出资源的根目录数据夹名称。
+* **dlcFolderName**
+    * 类型：`string` (预设: `"DLC"`)
+    * 说明：DLC 资源包存放的子目录数据夹名称。
+
+---

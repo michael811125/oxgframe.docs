@@ -1,0 +1,85 @@
+---
+sidebar_position: 1
+---
+
+# GSIManagerBase
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.GSIFrame;
+
+## 核心设计概念
+
+`GSIManagerBase<T>` 是一个专门管理 `GSIBase` (Game Stage) 的状态管理器。它负责控制游戏流程的切换、初始化、更新与释放。通常一个游戏只需要一个继承自此类的实体（如 `GameStageManager` 或 `GSIManager`）。
+
+<Highlight color="#00d679">提醒</Highlight> 如果有热更工程，建议区分两个 GameStageManager 进行管理（如 AotGameStageManager 与 HotfixGameStageManager）。
+
+---
+
+## Default APIs (静态全局接口)
+
+开发者通常直接透过继承后的类别调用以下静态方法，无需直接存取实例。
+
+### Stage 查询与获取
+* **GetCurrentId()**
+    * 取得当前正在执行的阶段 ID。
+* **GetStage\<U\>() / GetStage\<U\>(int id)**
+    * 从缓存中搜寻并取得特定的 Stage 实体。
+
+### Stage 注册 (Add)
+* **AddStage\<U\>() / AddStage\<U\>(int id)**
+    * 将新的 Stage 类别实例化并注册至管理器。若未指定 ID，则预设使用该类别的 `GetHashCode()` 作为唯一识别码。
+* **AddStage(int id, GSIBase gameStage)**
+    * 将已存在的实例以指定 ID 进行注册。
+
+### Stage 切换 (Change)
+* **ChangeStage\<U\>(bool force = false) / ChangeStage(int id, bool force = false)**
+    * **一般切换**: 设定 `incomingId`，将在下一帧进行过渡切换。不允许切换至相同阶段。
+    * **强制切换 (force = true)**: 立即触发 `OnExit` 并执行目标阶段的 `OnEnter`。
+
+### 驱动接口 (Driving)
+<Highlight color="#ff2f00">重要</Highlight> 必须在主入口（如 `Main.cs` 继承 `MonoBehaviour`）调用以下方法以驱动 GSI 运作。
+* **DriveStart()**: 在 `Start()` 中调用，启动 GSI 运作。
+* **DriveUpdate(float dt)**: 在 `Update()` 中调用，驱动当前阶段的 `OnUpdate`。
+
+<Highlight color="#ff2f00">重要</Highlight> 不能于 Constructor 中调用任何 Default APIs 静态方法，因为会导致 StackOverflow (死循环)，仅能使用成员方法如 AddGameStage 于 Constructor 中进行注册初始。
+
+---
+
+## Public 成员方法 (继承后使用)
+
+若您在继承后的子类别内部需要进行更细致的操作，可以使用以下成员方法：
+
+### 阶段管理成员方法
+| 方法名称 | 说明 |
+| :--- | :--- |
+| **GetCurrentGameStageId()** | 返回当前 `_currentId`。 |
+| **GetGameStage\<U\>(int id)** | 返回缓存字典 `_dictGameStage` 中的实体。 |
+| **AddGameStage(int id, GSIBase gameStage)** | 执行注册逻辑，并会自动调用 `gameStage.SetId(id)`。 |
+| **DeleteGameStage(int id)** | 从缓存中移除特定的阶段实体。 |
+
+### 切换与生命周期控制
+* **ChangeGameStage(int id)**: 修改 `_incomingId`，等待 `OnUpdate` 判断并执行 `ReleaseGameStage` 与 `InitGameStage`。
+* **ChangeGameStageForce(int id)**: 立即序列执行「释放旧阶段 -> 更新 ID -> 初始新阶段」。
+
+---
+
+<Highlight color="#0373fc">注意</Highlight> 当调用 `ChangeStage` 后，旧阶段的 `OnExit` 会先被触发，接着新阶段会调用 `BeginInit`（非同步）进入初始化流程。
+
+---

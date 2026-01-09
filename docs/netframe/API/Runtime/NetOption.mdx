@@ -1,0 +1,98 @@
+---
+sidebar_position: 1
+---
+
+# NetOption
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.NetFrame;
+
+## 核心設計概念
+
+`NetOption` 是一個抽象基類，開發者在實作自定義的網絡協議（如 TCP, UDP, WebSocket）時，必須繼承此類別來定義該連線的特定配置。
+
+---
+
+## Properties (屬性)
+
+### autoReconnectCount
+* 類型：`int`
+* 說明：設定自動重連的嘗試次數。
+* **數值規則**：
+    * <Highlight color="#00d679">正整數 (n)</Highlight>：當連線斷開時，會嘗試自動重新連線 N 次。
+    * <Highlight color="#0373fc">-1</Highlight>：**禁用自動重連**（預設值）。
+    * <Highlight color="#ff2f00">int.MaxValue</Highlight>：理論上的無限次嘗試重連。
+
+---
+
+## Constructor (建構函式)
+
+### NetOption(int autoReconnectCount)
+* **Params**:
+    * `autoReconnectCount`: 初始化的重連次數。預設為 `-1`。
+
+---
+
+## 如何擴充 (Custom Option)
+
+當您實作特定的網絡服務時，可以透過繼承 `NetOption` 來加入更多參數。
+
+**範例代碼：**
+
+```csharp
+public class TcpNetOption : NetOption
+{
+    public string host { get; set; }
+
+    public int port { get; set; }
+
+    /// <summary>
+    /// Processes up to 'limit' messages per tick
+    /// </summary>
+    public int processLimitPerTick = _DEFAULT_PROCESS_LIMIT_PER_TICK;
+
+    /// <summary>
+    /// Max buffer size of single packet
+    /// </summary>
+    public int maxBufferSize = _MAX_BUFFER_SIZE;
+
+    /// <summary>
+    /// Default: process up to 64 packets per frame
+    /// </summary>
+    private const int _DEFAULT_PROCESS_LIMIT_PER_TICK = 64;
+
+    /// <summary>
+    /// Max packet size: 64KB (65536 bytes)
+    /// </summary>
+    private const int _MAX_BUFFER_SIZE = 65536;
+
+    public TcpNetOption(string host, int port, int autoReconnectCount = -1) : base(autoReconnectCount)
+    {
+        this.host = host;
+        this.port = port;
+    }
+
+    public TcpNetOption(string host, int port, int processLimitPerTick, int maxBufferSize = _MAX_BUFFER_SIZE, int autoReconnectCount = -1) : this(host, port, autoReconnectCount)
+    {
+        this.maxBufferSize = maxBufferSize;
+        this.processLimitPerTick = processLimitPerTick;
+    }
+}
+```

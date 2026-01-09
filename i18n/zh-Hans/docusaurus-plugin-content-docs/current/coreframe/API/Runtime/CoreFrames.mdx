@@ -1,0 +1,127 @@
+---
+sidebar_position: 1
+---
+
+# CoreFrames
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.CoreFrame;
+
+## 核心机制：自动路径解析
+
+`CoreFrames` 内置解析器，会根据传入的名称前缀决定资源来源：
+
+| 前缀 | 适用框架 | 说明 | 示例 |
+| :--- | :--- | :--- | :--- |
+| **res#** | UI, SR, CP | 从 Unity 原生 **Resources** 加载资源。 | `res#Prefabs/PlayerUI` |
+| **build#** | US | 从 **Scenes In Build** 清单内的场景清单加载场景。 | `build#MainScene` |
+| **无前缀** | 全部 | 预设从 **Asset Bundle (YooAsset)** 加载资源。 | `PlayerUI` |
+
+---
+
+## UIFrame (User Interface)
+
+管理所有 UI 窗口。支持 `Group` 多群组 UI 窗口管理 (如大厅群组 UIs、战斗群组 UIs 等...)、`Stack` 堆叠管理。
+
+### 全域常量
+
+| 常量 | 值 | 说明 |
+| :--- | :--- | :--- |
+| **DEFAULT_GROUP_ID** | 0 | 预设使用的群组 ID。 |
+| **DO_ALL_GROUPS** | -1 | 执行操作时（如 `CloseAll`），将对象范围设为所有群组。 |
+
+### 状态设定
+* **ignoreTimeScale**: `bool`，UI 是否忽略 TimeScale 影响。
+* **enabledUpdate / enabledFixedUpdate / enabledLateUpdate**: 控制 UI 系统的轮询开关。
+
+### 核心方法
+#### Show / Show\<T\>
+载入并显示 UI。
+* **Params**:
+    * `int groupId`: 群组 ID (预设 0)。
+    * `string packageName`: 资源包名称。
+    * `string assetName`: 资源名称。
+    * `object data`: 传递给 `UIBase.OnShow` 的参数。
+    * `string awaitingUIAssetName`: 开启前显示的过渡 UI 名称。
+    * `float awaitingUIExtraDuration`: 过渡 UI 的额外停留时间 (秒)。
+    * `uint priority`: 加载优先级。
+
+#### Close / CloseAll / CloseStackByStack
+* **Close**: 关闭指定 UI。
+* **CloseAll**: 关闭群组内 UI。`withoutAssetNames` 可设定排除名单。
+* **CloseStackByStack**: 关闭特定 Canvas 内的顶层 UI (LIFO)。
+
+#### SendRefreshData / SendRefreshDataToAll
+向开启中的 UI 发送数据更新通知，常用于**多语系切换**刷新、**接收服务端数据**显示刷新 (如储值后，需要刷新金额显示) 等。
+* **Params**: `RefreshInfo`: 包含目标 UI 名称与要更新的 `object data`。
+
+---
+
+## SRFrame (Scene Resource)
+
+用于管理场景中的 3D 资源（如 NPC、建筑、特效物件、场中需求的管理组件、AudioListener 等），其操作逻辑与 UIFrame 相似。
+
+### 主要操作
+* **Show / Hide / Reveal**: 控制资源的加载显示、暂时隐藏与再次显现。
+* **Preload**: 异步预载资源至缓存池中，优化运行效能。
+    * **Params**: `uint priority`: 优先级 (0 最低)。
+* **CheckHasAnyHiding**: 检查群组内是否有任何处于隐藏状态的资源。
+
+---
+
+## USFrame (Unity Scene)
+
+增强型场景管理系统，支持多场景并发加载与同步，封装了 Unity 原生 `SceneManager` 的功能，并扩充了对 Bundle 场景的支持。
+
+### 场景加载方法
+#### LoadSingleSceneAsync / LoadAdditiveSceneAsync
+* **Params**:
+    * `string sceneName`: 场景名称 (支持 `build#` 前缀)。
+    * `LocalPhysicsMode localPhysicsMode`: 设置该场景的独立物理模式。
+    * `bool activateOnLoad`: 加载完后是否自动激活。
+    * `Progression progression`: 加载进度回调。
+
+#### LoadMainAndSubScenesAsync
+<Highlight color="#0373fc">推荐使用</Highlight> 一次性加载一个主场景与多个子场景 (自动整并处理)。
+* **Params**:
+    * `string singleSceneName`: 主场景名称。
+    * `AdditiveSceneInfo[] additiveSceneInfos`: 子场景信息数组，包含 `sceneName` 与 `activeRootGameObjects` 设定。
+
+---
+
+## CPFrame (Clone Prefab)
+
+专门处理从 Prefab 实例化（Clone）出来的小型物件管理，如掉落物 (如急救包、药草等...)、子弹、UI 模板元件 (如物品 ICON 等...)，特性是直接销毁 (`Destroy`) 即可，会自动连动 AssetLoader 进行卸载，以确保资源计数正确。
+
+### 核心方法
+#### LoadWithCloneAsync\<T\> / LoadWithClone\<T\>
+载入并克隆 Prefab。
+* **Params**:
+    * `Transform parent`: 挂载的父节点。
+    * `bool worldPositionStays`: 是否维持世界坐标。
+    * `Vector3 position`: 初始坐标。
+    * `Quaternion rotation`: 初始旋转。
+    * `Vector3? scale`: 初始缩放。
+
+#### PreloadAsync\<T\> / Preload\<T\>
+将 Prefab 预先载入至缓存池。
+* **Params**: `T`: 继承自 `Object` 的资源类型。
+
+---

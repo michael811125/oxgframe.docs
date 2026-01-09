@@ -1,0 +1,79 @@
+---
+sidebar_position: 1
+---
+
+# Hotfixers
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.Hotfixer;
+
+## 核心机制说明
+
+`Hotfixers` 主要与 **[HybridCLR](https://github.com/focus-creative-games/hybridclr)** 整合，负责在运行时：
+1. **补充 AOT 元数据**: 解决泛型实例化等问题。
+2. **加载热更新 DLL**: 将更新后的逻辑注入执行绪。
+
+---
+
+## Patch Operation (更新与检查)
+
+执行热更新检查与加载的核心方法。
+
+### CheckHotfix
+开始下载并加载所有热更新相关文件。
+
+* **自动配置模式**
+    * `CheckHotfix(string packageName, Action errorAction = null)`
+    * `CheckHotfix(PackageInfoWithBuild packageInfo, Action errorAction = null)`
+    * <Highlight color="#00d679">提醒</Highlight> 此模式会自动读取 `StreamingAssets` 中的 `hotfixdllconfig.conf` 配置文件。
+
+* **手动指定模式**
+    * `CheckHotfix(string packageName, string[] aotAssemblies, string[] hotfixAssemblies)`
+    * 支持手动传入需要补充的 AOT 程序集与热更新程序集清单。
+
+---
+
+## Status & Cache (状态与缓存)
+
+* **IsDone()**
+    * 返回热更新是否已完成加载。
+    * 等待 Hotfixers.IsDone() 之后再进入游戏主逻辑与资源更新。
+* **IsDisabled()**
+    * 检查当前环境是否禁用了热更新功能（通常用于开发者模式）。
+    * <Highlight color="#ff2f00">重要</Highlight> 如果禁用 HybridCLR，必须搭配 Macro [OXGFRAME_HYBRIDCLR_DISABLED](https://github.com/michael811125/OxGFrame/wiki/Macro-Definitions)，才能有效剔除热更流程。
+* **Reset()**
+    * 重置热更新的标记与缓存数据，如果不是社群版的话，是商业版支持 HotReload 则可以使用 Reset 重置。
+
+---
+
+## Assembly Info (程序集信息)
+
+提供运行时已载入的程序集查询。
+
+### AOT Assemblies (元数据程序集)
+* **GetAOTAssemblyNames()**: 获取 AOT 程序集名称（含 `.dll` 扩展名）。
+* **GetAotAssemblyNamesWithoutExtensions()**: 获取 AOT 程序集名称（不含扩展名）。
+
+### Hotfix Assemblies (热更新程序集)
+* **GetHotfixAssemblyNames()**: 获取热更新程序集名称（含 `.dll` 扩展名）。
+* **GetHotfixAssemblyNamesWithoutExtensions()**: 获取热更新程序集名称（不含扩展名）。
+* **GetHotfixAssembly(string assemblyName)**: 根据名称获取已载入的 `Assembly` 对象。
+
+---

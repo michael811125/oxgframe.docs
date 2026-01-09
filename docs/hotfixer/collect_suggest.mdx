@@ -1,0 +1,59 @@
+---
+sidebar_position: 2
+---
+
+# 收集示例
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## 創建 Hotfix Package
+
+創建一個獨立的 Package 進行相關 DLL 的收集。
+
+![](/img/hotfixer/img_6.png)
+
+<Highlight color="#0373fc">注意</Highlight> 這邊的圖片範例為獨立 Package，如果想要使用單一 Package 進行開發收集也可以，視團隊開發需求。
+
+## 收集 Hotfix Main Scene
+
+熱更工程專用的主驅動場景。
+
+![](/img/hotfixer/img_7.png)
+
+<Highlight color="#00d679">提醒</Highlight> 流程概述：打包運行 AOT Main Scene -> 於 AOT 進行 Hotfix 後 -> 再加載 Hotfix Main Scene (驅動整個項目熱更工程的後續階段) -> 完成熱更。
+
+基本上項目 80 \~ 90% 以上皆為熱更，甚至實現 AOT 業務邏輯的代碼可能不到項目的 5 \~ 10%。
+
+## 收集 AOT DLL
+
+拖曳 HotfixCollector 文件夾中的 AOTDlls 至 YooAsset 收集器中，如圖。
+
+<Highlight color="#00d679">提醒</Highlight> 都可以依照自己的方式進行收集，這邊只是範例而已。
+
+![](/img/hotfixer/img_4.png)
+
+## 收集 Hotfix DLL
+
+拖曳 HotfixCollector 文件夾中的 HotfixDlls 至 YooAsset 收集器中，如圖。
+
+<Highlight color="#00d679">提醒</Highlight> 都可以依照自己的方式進行收集，這邊只是範例而已。
+
+![](/img/hotfixer/img_5.png)
+
+另外也可以參考[主工程與熱更工程的流程架構說明](https://hackmd.io/jUJZnbXQTr65EYTiqdGpUA)的思路進行流程建構。

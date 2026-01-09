@@ -1,0 +1,139 @@
+---
+sidebar_position: 2
+---
+
+# INetProvider
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.NetFrame;
+
+## 核心设计概念
+
+`INetProvider` 定义了网络底层传输的标准行为。它扮演着「传输驱动层」的角色，将不同的通讯库（如 Telepathy, Mirror, WebSocketSharp 等...）封装成统一的接口，供上层的 `NetNode` 或 `NetManager` 调用。
+
+---
+
+## Events (事件监听)
+
+实作者必须处理以下事件，以便通知上层状态变更：
+
+* **OnOpen**: 连线成功开启时触发。`payload` 通常为连线信息。
+* **OnBinary**: 接收到二进制数据时触发。传入参数为 `byte[]`。
+* **OnMessage**: 接收到字符串数据时触发。传入参数为 `string`。
+* **OnError**: 通讯发生异常时触发。
+* **OnClose**: 连线关闭时触发。
+
+---
+
+## Interface Methods (接口方法)
+
+### CreateConnect(NetOption netOption)
+根据提供的配置开启连线。
+* **Params**: 
+    * `NetOption netOption`: 包含连线目标（Host/Port）与各项参数的配置物件。实作时需将其转型为对应的子类别（如 `TcpNetOption`）。
+
+### IsConnected()
+* **Returns**: `bool`，返回当前底层传输是否处于连线状态。
+
+### SendBinary(byte[] buffer)
+发送二进制数据。
+* **Params**: `byte[] buffer`: 要发送的原始位元组数据。
+* **Returns**: `bool`，发送成功返回 true。
+
+### SendMessage(string text)
+发送字符串数据。
+* **Params**: `string text`: 要发送的字符串。
+* **注意**: 并非所有协议都支持直接发送字符串（如纯 TCP），实作时需视情况抛出异常或进行 UTF-8 转换。
+
+### OnUpdate()
+驱动底层传输的轮询（Polling）。
+* **用途**: 通常用于从接收队列中提取封包并触发事件。对于异步传输库，此方法可确保回调发生在 Unity 主线程中。
+
+### Close()
+中断连线并清理底层资源。
+
+---
+
+## 实作示例：TcpNetProvider (基于 Telepathy)
+
+以下展示如何使用第三方库 Telepathy 实作 TCP 传输层：
+
+```csharp
+public class TcpNetProvider : INetProvider
+{
+    private Client _client = null;
+    
+    // 每帧处理封包上限
+    public int processLimitPerTick;
+
+    // 实作接口定义的事件
+    public event EventHandler<object> OnOpen;
+    public event EventHandler<byte[]> OnBinary;
+    public event EventHandler<string> OnMessage;
+    public event EventHandler<object> OnError;
+    public event EventHandler<object> OnClose;
+
+    public void CreateConnect(NetOption netOption)
+    {
+        var opt = netOption as TcpNetOption;
+        this._client = new Client(opt.maxBufferSize);
+        this.processLimitPerTick = opt.processLimitPerTick;
+
+        // 绑定底层事件
+        this._client.OnConnected += () => this.OnOpen?.Invoke(this, 0);
+        this._client.OnData += (arrSeg) => {
+            byte[] data = new byte[arrSeg.Count];
+            Buffer.BlockCopy(arrSeg.Array, arrSeg.Offset, data, 0, arrSeg.Count);
+            this.OnBinary?.Invoke(this, data);
+        };
+        this._client.OnDisconnected += () => this.OnClose?.Invoke(this, -1);
+
+        this._client.Connect(opt.host, opt.port);
+    }
+
+    public void OnUpdate()
+    {
+        // 驱动底层轮询，将数据推送至事件
+        this._client?.Tick(this.processLimitPerTick);
+    }
+
+    public bool SendBinary(byte[] buffer)
+    {
+        if (!IsConnected()) return false;
+        return this._client.Send(new ArraySegment<byte>(buffer));
+    }
+
+    public bool SendMessage(string text)
+    {
+        // TCP 通常不支持纯文本发送，需由开发者决定是否自行封装 UTF8 转换
+        throw new NotSupportedException("TCP not supports SendMessage, use SendBinary.");
+    }
+
+    public bool IsConnected() => this._client?.Connected ?? false;
+
+    public void Close()
+    {
+        this._client?.Disconnect();
+        this._client = null;
+    }
+}
+```
+
+<Highlight color="#ff2f00">重要</Highlight> 由于 OnUpdate 会在每一帧被调用，请确保其中的 Tick 逻辑足够轻量。

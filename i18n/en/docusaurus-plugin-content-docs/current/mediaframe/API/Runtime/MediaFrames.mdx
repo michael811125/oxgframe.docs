@@ -1,0 +1,107 @@
+---
+sidebar_position: 11
+---
+
+# MediaFrames
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.MediaFrame;
+
+## AudioFrame
+
+`AudioFrame` is specifically responsible for managing all sound effects and music in the game (such as BGM, SFX) and is deeply integrated with Unity's `AudioMixer`.
+
+### Basic Methods
+* **InitInstance()**
+    * Initializes the `AudioManager` instance.
+* **GetComponent\<T\>(string assetName)**
+    * Gets the `AudioBase` component on the loaded audio object.
+    * **Params**: `assetName` (Resource name)
+* **GetComponents\<T\>(string assetName)**
+    * Gets components on multiple audio objects with the same name.
+
+### AudioMixer Control
+Used to achieve environmental sound effect changes or global volume control.
+
+* **SetMixerExposedParam(AudioMixer mixer, string expParam, float val)**
+    * Sets the Exposed Parameters of the Mixer.
+    * **Params**: `mixer` (Mixer), `expParam` (Parameter name), `val` (Value)
+* **ClearMixerExposedParam(AudioMixer mixer, string expParam)**
+    * Clears custom settings for a specific exposed parameter, restoring the default value.
+* **AutoClearMixerExposedParams / AutoRestoreMixerExposedParams**
+    * Automatically manages the clearing and restoration of global Mixer parameters.
+* **SetMixerSnapshot(AudioMixer mixer, string snapshotName)**
+    * Switches the Mixer snapshot immediately.
+* **SetMixerTransitionToSnapshot(AudioMixer mixer, AudioMixerSnapshot[] snapshots, float[] weights, float timeToReach)**
+    * Smoothly transitions to a mixed state of multiple snapshots within a specified time.
+    * **Params**: `timeToReach` (Transition time, default 0.02s)
+
+### Audio Playback and Management
+Supports loading resources from Resources or Asset Bundle.
+
+* **Preload(string assetName / string[] assetNames)**
+    * Preloads audio resources to avoid delays during playback.
+* **Play(string assetName, Transform parent, int loops, float volume)**
+    * Plays specified audio.
+    * **Params**: 
+        * `assetName`: Resource name (loads from Resources if it has the `res#` prefix).
+        * `parent`: Mounted parent node (used for 3D audio).
+        * `loops`: Number of loops (-1 for infinite loop).
+        * `volume`: Volume size (0 to use AudioSource default value).
+* **Stop(string assetName, bool disabledEndEvent, bool forceDestroy)**
+    * Stops playback of specific audio.
+    * **Params**: `disabledEndEvent` (Whether to disable end event callback), `forceDestroy` (Whether to directly destroy the object).
+* **ResumeAll / PauseAll / StopAll**
+    * Globally controls pausing, resuming, and stopping of all audio.
+
+---
+
+## VideoFrame
+
+`VideoFrame` is used to control the loading and playback of videos, suitable for cutscenes or UI dynamic backgrounds.
+
+### Basic Methods
+* **InitInstance()**
+    * Initializes the `VideoManager` instance.
+* **GetComponent\<T\> / GetComponents\<T\>**
+    * Gets the `VideoBase` component on the corresponding video resource.
+
+### Video Playback and Management
+
+* **Preload(string assetName / string[] assetNames)**
+    * Asynchronously preloads video files into the cache.
+* **Play(string assetName, VideoClip sourceClip, Transform parent, int loops, float volume)**
+    * Performs video playback.
+    * **Params**:
+        * `assetName`: Resource path.
+        * `sourceClip`: Optional, directly pass `VideoClip` resource.
+        * `parent`: Mounting point.
+        * `loops`: Loop mode.
+        * `volume`: Playback volume.
+* **Stop / Pause / ResumeAll**
+    * Playback control for specific videos or global videos.
+* **ForceUnload(string assetName)**
+    * <Highlight color="#ff2f00">Important</Highlight> Video files are typically large. When it is certain that the video is no longer needed, this method should be called manually to force release memory.
+
+---
+
+<Highlight color="#0373fc">Attention</Highlight> `MediaFrames` bottom layer both have reference counting management.
+
+---

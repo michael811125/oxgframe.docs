@@ -4,7 +4,7 @@ sidebar_position: 3
 
 # Global Configuration
 
-export const Highlight = ({children, color}) => (
+export const Highlight = ({ children, color }) => (
   <span
     style={{
       backgroundColor: color,
@@ -24,14 +24,124 @@ export const Highlight = ({children, color}) => (
 
 ## Configuration Description
 
-Understand the Global Configuration File.
+Understand global configuration files.
 
 ![](/img/assetloader/img_1.png)
 
-Create a configuration file via right-click (Right-click in the Project window -> Create -> OxGFrame -> Create Settings -> Create Patch Setting).
+Create configuration files via right-click (Right-click in Project window -> Create -> OxGFrame -> Create Settings -> Create Patch Settings)
 
 ![](/img/assetloader/img_2.png)
 
-<Highlight color="#ff2f00">Important</Highlight> Please place the configuration file under the Resources folder.
+<Highlight color="#ff2f00">Important</Highlight> Please put the configuration file under the Resources folder.
 
-<Highlight color="#0373fc">Attention</Highlight> For more details, refer to [YooAsset Global Configuration](https://www.yooasset.com/docs/guide-editor/GlobalSettings)。
+<Highlight color="#0373fc">Attention</Highlight> Additionally, see [YooAsset Global Configuration](https://www.yooasset.com/docs/guide-editor/GlobalSettings).
+
+## PatchLauncher Configuration Instructions
+
+PatchLauncher is the runtime configuration and must be dragged into the scene as the sole runtime configuration.
+
+![](/img/assetloader/img_33.png)
+
+### PlayMode
+
+Bundle resource hot-update mode.
+- Editor Simulate Mode (Development Mode)
+- Offline Mode (Offline Mode)
+- Host Mode (Online Mode)
+- Weak Host Mode (Weak Online Mode). Must be online for the first startup to complete initial configuration recording and resource download.
+  - <Highlight color="#0373fc">Attention</Highlight>: Does not support Skip Download (download while playing). When internet is lost, it will verify the integrity of the manifest content of the last resource version.
+  - Additionally, if Repair is performed after suddenly losing internet, and incomplete resources are detected, a PatchVersionUpdateFailed event will be sent (because it must restart from the process of obtaining resource version; once network is restored, the remote version can be correctly obtained for updating).
+- WebGL Mode (WebGL Mode). Only requests resources in its own StreamingAssets.
+- WebGL Remote Mode (WebGL Online Mode). Can request resources from remote CDN, not limited to its own StreamingAssets.
+- Custom Mode (Custom Mode). Dedicated for mini-games.
+
+[Packaging Macro](https://github.com/michael811125/OxGFrame/wiki/Macro-Definitions) (Forced to switch to this mode during release):
+- OXGFRAME_OFFLINE_MODE (Offline Mode)
+- OXGFRAME_HOST_MODE (Online Mode)
+- OXGFRAME_WEAK_HOST_MODE (Weak Online Mode)
+- OXGFRAME_WEBGL_MODE (WebGL Mode)
+- OXGFRAME_WEBGL_REMOTE_MODE (WebGL Online Mode)
+- OXGFRAME_CUSTOM_MODE (Custom Mode)
+
+![](/img/assetloader/img_28.png)
+
+```csharp
+public static class PlayModeParametersDefine
+{
+    /// <summary>
+    /// [Boolean] Initialize Preset Packages
+    /// </summary>
+    public const string INITIALIZE_PRESET_PACKAGES = "INITIALIZE_PRESET_PACKAGES";
+    /// <summary>
+    /// [Boolean] Fetch Remote App Config File from Server
+    /// </summary>
+    public const string FETCH_APP_CONFIG_FROM_SERVER = "FETCH_APP_CONFIG_FROM_SERVER";
+    /// <summary>
+    /// [Boolean] Version PATCH Check Rule
+    /// </summary>
+    public const string SEMANTIC_RULE_PATCH = "SEMANTIC_RULE_PATCH";
+    /// <summary>
+    /// [Boolean] Whether to Automatically Check and Set Request Endpoints (Host Server, Fallback Host Server)
+    /// </summary>
+    public const string AUTO_CONFIGURE_SERVER_ENDPOINTS = "AUTO_CONFIGURE_SERVER_ENDPOINTS";
+    /// <summary>
+    /// [Boolean] Whether to Create PresetPackages Downloader
+    /// </summary>
+    public const string CREATE_PRESET_PACKAGES_DOWNLOADER = "CREATE_PRESET_PACKAGES_DOWNLOADER";
+    /// <summary>
+    /// [Boolean] Whether to Enable Disk Space Check (Checks when creating PresetPackages downloader)
+    /// </summary>
+    public const string ENABLE_DISK_SPACE_CHECK_FOR_PRESET_PACKAGES_DOWNLOADER = "ENABLE_DISK_SPACE_CHECK_FOR_PRESET_PACKAGES_DOWNLOADER";
+    /// <summary>
+    /// [Boolean] Whether to Check Last Local Version (Used in weak network environment)
+    /// </summary>
+    public const string ENABLE_LAST_LOCAL_VERSIONS_CHECK_IN_WEAK_NETWORK = "ENABLE_LAST_LOCAL_VERSIONS_CHECK_IN_WEAK_NETWORK";
+}
+```
+
+#### CustomMode
+
+CustomMode supports custom YooAsset package running modes <Highlight color="#ff2f00">**(The process is complex, pay attention to initial steps)**</Highlight>.
+  - Used for: [WeChat Mini Game](https://www.yooasset.com/docs/MiniGame#%E5%BE%AE%E4%BF%A1%E5%B0%8F%E6%B8%B8%E6%88%8F), [Douyin Mini Game](https://www.yooasset.com/docs/MiniGame#%E6%8A%96%E9%9F%B3%E5%B0%8F%E6%B8%B8%E6%88%8F), [Alipay Mini Game](https://www.yooasset.com/docs/MiniGame#%E6%94%AF%E4%BB%98%E5%AE%9D%E5%B0%8F%E6%B8%B8%E6%88%8F), [TapTap Mini Game](https://www.yooasset.com/docs/MiniGame#taptap%E5%B0%8F%E6%B8%B8%E6%88%8F), [CustomPlayModeParameters](https://www.yooasset.com/docs/guide-runtime/CodeTutorial1#%E8%87%AA%E5%AE%9A%E4%B9%89%E8%BF%90%E8%A1%8C%E6%A8%A1%E5%BC%8F--customplaymode), etc.
+  - **Note: When using CustomMode, all YooAsset package initializations need to be implemented yourself.**
+  - CustomMode Initialization Process Overview:
+    1. Check if there are Preset Packages requirements. 
+    1. If so, you can customize and set AssetPatcher.SetPresetPackages(List\<AppPackageInfoWithBuild\> appPackages, List\<DlcPackageInfoWithBuild\> dlcPackages).
+    2. Regardless of whether there are Preset Packages requirements, you **must manually call async AssetPatcher.InitializePresetPackages()**.
+      - Poll AssetPatcher.isInitialized() to judge if the flag returns true. 
+
+#### CustomMode Implementation Example
+
+(Omitted coding section for brevity as it is already code)
+
+### ParameterEntry 
+
+ParameterEntry list is configured in PatchLauncher, which can additionally add YooAsset FileSystem parameter configurations for different modes, but must specify the type (Reference: [FileSystemParametersDefine](https://www.yooasset.com/docs/api/YooAsset/FileSystemParametersDefine) + [File System](https://www.yooasset.com/docs/guide-runtime/FileSystem#%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E5%88%9D%E5%A7%8B%E5%8C%96%E5%8F%82%E6%95%B0)).
+
+(Omitted coding section)
+
+![](/img/assetloader/img_26.png)
+
+![](/img/assetloader/img_27.png)
+
+### Preset Packages
+
+Preset package configurations for App Packages & DLC Packages, which will be updated by the AssetPatcher.Check main update phase.
+
+![](/img/assetloader/img_29.png)
+
+### Process Options, Download Options, Load Options
+
+Runtime configurations of YooAsset and some framework configurations.
+
+![](/img/assetloader/img_30.png)
+
+### Cryptogram Options
+
+Decryption configuration at runtime, must be set according to the instructions.
+
+![](/img/assetloader/img_31.png)
+
+Setting format can refer to Tooltip hints.
+
+![](/img/assetloader/img_32.png)

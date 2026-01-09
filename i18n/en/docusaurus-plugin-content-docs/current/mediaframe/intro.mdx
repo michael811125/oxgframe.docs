@@ -2,9 +2,9 @@
 sidebar_position: 1
 ---
 
-# Module Introduction
+# Module Intro
 
-export const Highlight = ({children, color}) => (
+export const Highlight = ({ children, color }) => (
   <span
     style={{
       backgroundColor: color,
@@ -22,32 +22,30 @@ export const Highlight = ({children, color}) => (
 
 ---
 
-## Basic Introduction
+## Basic Instructions
 
-## Media Module (Integrated with AssetLoader for Auto-Unloading)
+Audio/Video module (linked with AssetLoader to achieve automatic unloading), covering the production of game Audio (2D/3D) and Video, supporting multi-platform loading methods (Local, StreamingAssets, URL).
 
-Covers game Audio (2D/3D) and Video production, supporting multiple platform loading methods (Local, StreamingAssets, URL).
+- Audio Management (AudioFrame)
+- Video Management (VideoFrame)
 
-- Sound Management (AudioFrame)  
-- Video Management (VideoFrame)  
+<Highlight color="#ff2f00">Important</Highlight> Additionally, detail correction has been performed for Audio on the WebGL platform because WebGL cannot obtain the correct length for Audio Clip requests (Official gives up fixing), resulting in some defects in audio control. Therefore, during prefab production, Preload can be used to request Clip length for pre-setting.
 
-<Highlight color="#ff2f00">Important</Highlight> Special audio adjustments have been made for WebGL platform. Since WebGL cannot correctly obtain clip length for Audio requests (officially marked as "won't fix"), this causes some audio control limitations. Therefore, when creating prefabs, Preload requests can be used to preset clip length.
-
-## How to Use
+## Application Description
 
 ### AudioFrame
 
-Used for playing **Audio**, managed via AudioManager which controls prefabs with AudioBase components, utilizing Unity Mixer for audio track control.
+Used to play **Audio**, using AudioManager to manage Prefabs with AudioBase mounted, and employing Unity Mixer for controlling each track. 
 
-<Highlight color="#ff2f00">Important</Highlight> First drag the AudioManager prefab into the Hierarchy window (import from Package Manager).
+<Highlight color="#ff2f00">Important</Highlight> You need to drag the AudioManager prefab into the Hierarchy window first (imported from Package Manager).
 
 ![](/img/mediaframe/img_1.png)
 
-- Audio Sound Type Explanation:
-  - Sole: Unique (cannot be played repeatedly), recommended for BGM (Background Music), Voice (Dubbing), etc.
-  - SoundEffect: Multi-instance (can be played repeatedly), recommended for Fight Sound, General Sound Effects, etc.
+- Audio Sound Type Description:
+  - Sole: Uniqueness (cannot be replayed), recommended types are BGM (Background Music), Voice (Dubbing), etc.
+  - SoundEffect: Multi-instance (can be replayed), recommended types are Fight Sound (Combat sound effect), General Sound (General sound effect), etc.
 
-<Highlight color="#00d679">Reminder</Highlight> Default Master Mixer is provided, but custom mixers can be used.
+<Highlight color="#00d679">Reminder</Highlight> Default Master Mixer has been provided, you can also define your own.
 
 ![](/img/mediaframe/img_2.png)
 
@@ -55,20 +53,22 @@ Used for playing **Audio**, managed via AudioManager which controls prefabs with
 
 ### VideoFrame
 
-Used for playing **Video**, managed via VideoManager which controls prefabs with VideoBase components, supporting both RenderTexture and Camera.  
-- Video Render Mode Explanation:  
-  - RenderTexture: Maps video to RenderTexture and renders through UGUI's RawImage (VideoBase uses RenderTexture.GetTemporary and RenderTexture.ReleaseTemporary for creation and release, ensuring proper memory deallocation of RenderTexture).  
-  - Camera: Renders directly through Camera.  
+Used to play **Video**, using VideoManager to manage Prefabs with VideoBase mounted, and supporting RenderTexture, Camera.
+- Video Render Mode Description:
+  - RenderTexture: Maps the video to RenderTexture and then renders it through UGUI's RawImage (VideoBase uses RenderTexture.GetTemporary and RenderTexture.ReleaseTemporary to create and release, ensuring correct memory release of RenderTexture).
+  - Camera: Renders directly through Camera.
+
+Supports adjustment of timeline and playback speed.
 
 ![](/img/mediaframe/latest/gif_1.gif)
 
 ---
 
-## Other Notes
+## Other Instructions
 
 #### Media [murlconfig] (Media URL Config) Format
 
-If audio and video sources are stored on **cloud services**, you can request files via URL using the following format **(If you don't specify URLs through murlconfig.txt, you can also enter complete resource URLs directly in Prefab, but the drawback is that future URL changes will be much harder to maintain)**
+If audio and video sources are stored on **Cloud services**, you can request files using URL. The format is as follows **(If URL is not specified through murlconfig.txt, you can also enter the full resource URL in the Prefab, but the disadvantage is that for future URL changes, maintenance will be very troublesome)**:
 
 ```
 # audio_urlset = Audio Source Url Path
@@ -78,11 +78,11 @@ audio_urlset http://127.0.0.1/audio/
 video_urlset http://127.0.0.1/video/
 ```
 
-**\>\> How to Create murlconfig.txt \<\<**
-- Click MenuItem: OxGFrame -> MediaFrame -> Media Url Config Generator to create murlconfig.txt (StreamingAssets/murlconfig.txt).
+**\>\> How to establish murlconfig.txt \<\<**
+- Click OxGFrame -> MediaFrame -> Media Url Config Generator via MenuItem to start creating murlconfig.txt (StreamingAssets/murlconfig.txt).
 
-**\>\> How to Load murlconfig.txt \<\<**
-1. If Url Cfg Request Type = Assign, specify murlconfig.txt in the prefab.
-2. If Url Cfg Request Type = Streaming Assets, the file will be requested from StreamingAssets.
+**\>\> How to load murlconfig.txt \<\<**
+1. If Url Cfg Request Type = Assign is selected, then specify murlconfig.txt in the prefab.
+2. If Url Cfg Request Type = Streaming Assets is selected, the murlconfig.txt file will be requested from StreamingAssets.
 
-<Highlight color="#00d679">Reminder</Highlight> **Additional Info**: When requesting audio/video resources via URL, this method is recommended for WebGL platform because WebGL doesn't support pre-assigning AudioClip or VideoClip (Assign method) in Prefab through AssetBundle. The URL method is provided as an alternative for media file requests.
+<Highlight color="#00d679">Reminder</Highlight> **Additional Description**: If requesting audio or video resources through URL, it is recommended to use it on the WebGL platform because WebGL does not support pre-specifying AudioClip or VideoClip (Assign method) to the Prefab in AssetBundle. Therefore, the URL method is provided for requesting audio/video files.

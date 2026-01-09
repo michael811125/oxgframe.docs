@@ -1,0 +1,127 @@
+---
+sidebar_position: 1
+---
+
+# CoreFrames
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.CoreFrame;
+
+## Core Mechanism: Automatic Path Resolution
+
+`CoreFrames` has a built-in parser that determines the resource source based on the input name prefix:
+
+| Prefix | Applicable Framework | Description | Example |
+| :--- | :--- | :--- | :--- |
+| **res#** | UI, SR, CP | Loads resources from Unity's native **Resources**. | `res#Prefabs/PlayerUI` |
+| **build#** | US | Loads scenes from the **Scenes In Build** list. | `build#MainScene` |
+| **No Prefix** | All | Defaults to loading resources from **Asset Bundle (YooAsset)**. | `PlayerUI` |
+
+---
+
+## UIFrame (User Interface)
+
+Manages all UI windows. Supports `Group` multi-group UI window management (e.g., Lobby group UIs, Battle group UIs, etc.) and `Stack` management.
+
+### Global Constants
+
+| Constant | Value | Description |
+| :--- | :--- | :--- |
+| **DEFAULT_GROUP_ID** | 0 | Default group ID. |
+| **DO_ALL_GROUPS** | -1 | Set object range to all groups when performing operations (e.g., `CloseAll`). |
+
+### State Settings
+* **ignoreTimeScale**: `bool`, whether the UI ignores the influence of TimeScale.
+* **enabledUpdate / enabledFixedUpdate / enabledLateUpdate**: Controls the polling switch for the UI system.
+
+### Core Methods
+#### Show / Show\<T\>
+Loads and displays the UI.
+* **Params**:
+    * `int groupId`: Group ID (default 0).
+    * `string packageName`: Resource package name.
+    * `string assetName`: Resource name.
+    * `object data`: Parameters passed to `UIBase.OnShow`.
+    * `string awaitingUIAssetName`: Name of the transition UI displayed before opening.
+    * `float awaitingUIExtraDuration`: Extra duration for the transition UI (seconds).
+    * `uint priority`: Loading priority.
+
+#### Close / CloseAll / CloseStackByStack
+* **Close**: Closes the specified UI.
+* **CloseAll**: Closes UIs within a group. `withoutAssetNames` can set an exclusion list.
+* **CloseStackByStack**: Closes the top-level UI within a specific Canvas (LIFO).
+
+#### SendRefreshData / SendRefreshDataToAll
+Sends data update notifications to open UIs, commonly used for **multi-language switching** refreshes, **receiving server-side data** display refreshes (e.g., after recharging, money display needs to refresh), etc.
+* **Params**: `RefreshInfo`: Contains target UI name and `object data` to be updated.
+
+---
+
+## SRFrame (Scene Resource)
+
+Used to manage 3D resources in the scene (such as NPCs, buildings, effect objects, management components required in the scene, AudioListener, etc.), with operation logic similar to UIFrame.
+
+### Main Operations
+* **Show / Hide / Reveal**: Controls loading display, temporary hiding, and reappearance of resources.
+* **Preload**: Asynchronously preloads resources into the cache pool to optimize runtime performance.
+    * **Params**: `uint priority`: Priority (0 is lowest).
+* **CheckHasAnyHiding**: Checks if there are any resources in a hidden state within the group.
+
+---
+
+## USFrame (Unity Scene)
+
+Enhanced scene management system, supporting concurrent scene loading and synchronization, encapsulating Unity's native `SceneManager` functionality, and extending support for Bundle scenes.
+
+### Scene Loading Methods
+#### LoadSingleSceneAsync / LoadAdditiveSceneAsync
+* **Params**:
+    * `string sceneName`: Scene name (supports `build#` prefix).
+    * `LocalPhysicsMode localPhysicsMode`: Sets independent physics mode for the scene.
+    * `bool activateOnLoad`: Whether to automatically activate after loading.
+    * `Progression progression`: Loading progress callback.
+
+#### LoadMainAndSubScenesAsync
+<Highlight color="#0373fc">Recommended</Highlight> Loads one main scene and multiple sub-scenes at once (handles consolidation automatically).
+* **Params**:
+    * `string singleSceneName`: Main scene name.
+    * `AdditiveSceneInfo[] additiveSceneInfos`: Sub-scene information array, including `sceneName` and `activeRootGameObjects` settings.
+
+---
+
+## CPFrame (Clone Prefab)
+
+Specially handles the management of small objects instantiated (cloned) from Prefabs, such as drop items (e.g., first aid kits, herbs), bullets, UI template elements (e.g., item ICONs). Characteristic is that they can be directly destroyed (`Destroy`), and it will automatically link with AssetLoader for unloading to ensure correct resource counting.
+
+### Core Methods
+#### LoadWithCloneAsync\<T\> / LoadWithClone\<T\>
+Loads and clones the Prefab.
+* **Params**:
+    * `Transform parent`: Mounted parent node.
+    * `bool worldPositionStays`: Whether to maintain world coordinates.
+    * `Vector3 position`: Initial coordinates.
+    * `Quaternion rotation`: Initial rotation.
+    * `Vector3? scale`: Initial scale.
+
+#### PreloadAsync\<T\> / Preload\<T\>
+Preloads the Prefab into the cache pool.
+* **Params**: `T`: Resource type inheriting from `Object`.
+
+---

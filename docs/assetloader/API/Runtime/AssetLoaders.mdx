@@ -1,0 +1,104 @@
+---
+sidebar_position: 4
+---
+
+# AssetLoaders
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.AssetLoader;
+
+## 核心機制：路徑解析規則
+
+`AssetLoaders` 內建自動過濾機制，會根據 `assetName` 的前綴決定加載路徑：
+- Asset
+  * **加載自 Resources**: 若路徑帶有 <Highlight color="#00d679">res#</Highlight> 前綴（例如：`res#Prefabs/Player`），將自動解析並從 Unity 內置 Resources 加載。
+  * **加載自 Bundle**: 若無前綴，則預設從 YooAsset 資源包中加載 (須注意循址規則)。
+- Scene
+  * **加載自 Build Scene**: 若路徑帶有 <Highlight color="#00d679">build#</Highlight> 前綴（例如：`build#SimpleScene`），將自動解析並從 Unity 內置 Scenes In Build 清單中加載。
+
+---
+
+## Scene Methods (場景加載)
+
+提供場景的非同步與同步加載，支持 `Single` 與 `Additive` 模式。
+
+### LoadSceneAsync / LoadScene
+加載指定場景。
+* **Params**:
+    * `string assetName`: 場景名稱或路徑。
+    * `LoadSceneMode loadSceneMode`: 場景加載模式。
+    * `bool activateOnLoad`: 加載完成後是否自動激活場景。
+    * `Progression progression`: 加載進度回調。
+
+### LoadSingleSceneAsync / LoadAdditiveSceneAsync
+快捷方法，分別以 `Single` (替換當前場景) 或 `Additive` (疊加場景) 模式加載。
+
+### UnloadScene
+卸載場景並釋放關聯資源。
+
+---
+
+## Asset Methods (資源加載與實例化)
+
+處理 Prefab、Texture、AudioClip 等資源的加載與物件生成。
+
+
+
+### PreloadAssetAsync / PreloadAsset
+預載入資源至緩存中，不執行生成（Instantiate），適用於效能優化。
+
+### LoadAssetAsync / LoadAsset
+載入資源並返回資源物件。
+
+### InstantiateAssetAsync / InstantiateAsset
+載入資源並直接進行 `Object.Instantiate` 生成實例。
+* **支持多種 Overloads**: 可指定 `Position`, `Rotation`, `Parent`, `WorldPositionStays` 等參數。
+
+### UnloadAsset
+卸載單個資源緩存。若傳入 `forceUnload = true`，則會強制執行釋放。
+
+---
+
+## RawFile Methods (原生檔案加載)
+
+專門用於加載 **Rawfile** 類型的檔案（如 Config, Json, Bin, Mp4 等），僅支持 Bundle 加載。
+
+### GetRawFilePathAsync / GetRawFilePath
+取得 RawFile 在本地緩存中的物理路徑，可用於後續的文件讀取（FileStream/IO）。
+
+### LoadRawFileAsync / LoadRawFile
+直接加載檔案內容並轉換為指定類型：
+* 支持泛型 `string` 或 `byte[]`。
+
+---
+
+## Group Cacher (群組緩存管理)
+
+針對需要「批次管理、批次釋放」的情境（例如：特定關卡的所有資源），所有的 Load/Preload 方法皆提供帶有 `int groupId` 的版本。
+
+* **HasInCache(int groupId, string assetName)**: 檢查資源是否已存在於特定群組緩存中。
+* **ReleaseResourceAssets(int groupId)**: 釋放該群組內所有的 Resources 資源，不過實際還是依照計數管理。
+* **ReleaseBundleAssets(int groupId)**: 釋放該群組內所有的 Bundle 資源，不過實際還是依照計數管理。
+
+---
+
+<Highlight color="#ff2f00">重要</Highlight> 進行資源釋放前，務必確認該資源已不再被引用。對於 Bundle 資源，建議成對調用 `Unload` & `Destroy` 而非直接銷毀物件，以維持引用計數的正確性。
+
+---

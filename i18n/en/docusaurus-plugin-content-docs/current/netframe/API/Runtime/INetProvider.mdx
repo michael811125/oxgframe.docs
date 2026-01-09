@@ -1,0 +1,139 @@
+---
+sidebar_position: 2
+---
+
+# INetProvider
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.NetFrame;
+
+## Core Design Concept
+
+`INetProvider` defines the standard behavior for low-level network transmission. It plays the role of the "transmission driver layer", encapsulating different communication libraries (such as Telepathy, Mirror, WebSocketSharp, etc.) into a unified interface for the upper-level `NetNode` or `NetManager` to call.
+
+---
+
+## Events
+
+Implementers must handle the following events to notify the upper level of state changes:
+
+* **OnOpen**: Triggered when the connection is successfully opened. `payload` is usually connection information.
+* **OnBinary**: Triggered when binary data is received. Parameter is `byte[]`.
+* **OnMessage**: Triggered when string data is received. Parameter is `string`.
+* **OnError**: Triggered when a communication anomaly occurs.
+* **OnClose**: Triggered when the connection is closed.
+
+---
+
+## Interface Methods
+
+### CreateConnect(NetOption netOption)
+Opens a connection based on the provided configuration.
+* **Params**: 
+    * `NetOption netOption`: Configuration object containing connection target (Host/Port) and various parameters. It must be cast to the corresponding subclass (e.g., `TcpNetOption`) during implementation.
+
+### IsConnected()
+* **Returns**: `bool`, returns whether the current low-level transmission is in a connected state.
+
+### SendBinary(byte[] buffer)
+Sends binary data.
+* **Params**: `byte[] buffer`: Raw byte data to be sent.
+* **Returns**: `bool`, returns true if successfully sent.
+
+### SendMessage(string text)
+Sends string data.
+* **Params**: `string text`: String to be sent.
+* **Note**: Not all protocols support direct string sending (e.g., pure TCP); implementers should throw an exception or perform UTF-8 conversion as appropriate.
+
+### OnUpdate()
+Drives the polling of the low-level transmission.
+* **Purpose**: Usually used to extract packets from the receive queue and trigger events. For asynchronous transmission libraries, this method ensures callbacks occur on the Unity main thread.
+
+### Close()
+Interrupts the connection and cleans up low-level resources.
+
+---
+
+## Implementation Example: TcpNetProvider (Based on Telepathy)
+
+The following demonstrates how to implement a TCP transmission layer using the third-party library Telepathy:
+
+```csharp
+public class TcpNetProvider : INetProvider
+{
+    private Client _client = null;
+    
+    // Max packets processed per tick
+    public int processLimitPerTick;
+
+    // Events defined by the interface
+    public event EventHandler<object> OnOpen;
+    public event EventHandler<byte[]> OnBinary;
+    public event EventHandler<string> OnMessage;
+    public event EventHandler<object> OnError;
+    public event EventHandler<object> OnClose;
+
+    public void CreateConnect(NetOption netOption)
+    {
+        var opt = netOption as TcpNetOption;
+        this._client = new Client(opt.maxBufferSize);
+        this.processLimitPerTick = opt.processLimitPerTick;
+
+        // Bind low-level events
+        this._client.OnConnected += () => this.OnOpen?.Invoke(this, 0);
+        this._client.OnData += (arrSeg) => {
+            byte[] data = new byte[arrSeg.Count];
+            Buffer.BlockCopy(arrSeg.Array, arrSeg.Offset, data, 0, arrSeg.Count);
+            this.OnBinary?.Invoke(this, data);
+        };
+        this._client.OnDisconnected += () => this.OnClose?.Invoke(this, -1);
+
+        this._client.Connect(opt.host, opt.port);
+    }
+
+    public void OnUpdate()
+    {
+        // Drive low-level polling to push data to events
+        this._client?.Tick(this.processLimitPerTick);
+    }
+
+    public bool SendBinary(byte[] buffer)
+    {
+        if (!IsConnected()) return false;
+        return this._client.Send(new ArraySegment<byte>(buffer));
+    }
+
+    public bool SendMessage(string text)
+    {
+        // TCP typically does not support plain text sending; developers must decide whether to encapsulate UTF8 conversion themselves
+        throw new NotSupportedException("TCP not supports SendMessage, use SendBinary.");
+    }
+
+    public bool IsConnected() => this._client?.Connected ?? false;
+
+    public void Close()
+    {
+        this._client?.Disconnect();
+        this._client = null;
+    }
+}
+```
+
+<Highlight color="#ff2f00">Important</Highlight> Since OnUpdate is called every frame, ensure the Tick logic within it is lightweight enough.

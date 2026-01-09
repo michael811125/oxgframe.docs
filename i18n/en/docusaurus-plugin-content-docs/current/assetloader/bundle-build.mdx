@@ -2,7 +2,7 @@
 sidebar_position: 4
 ---
 
-# Asset Bundle Build
+# Resource Construction
 
 export const Highlight = ({children, color}) => (
   <span
@@ -22,29 +22,77 @@ export const Highlight = ({children, color}) => (
 
 ---
 
-## Build Description
+## Construction Instructions
 
-<Highlight color="#0373fc">Attention</Highlight> For more details, refer to [YooAsset Asset Configuration](https://www.yooasset.com/docs/guide-editor/AssetBundleCollector) (Collect)。
+<Highlight color="#0373fc">Attention</Highlight> Please first see [YooAsset Resource Configuration](https://www.yooasset.com/docs/guide-editor/AssetBundleCollector) (Collection).
 
-Through the MenuItem, click YooAsset -> AssetBundle Collector to begin configuring the resources. (Collect)。
+Click YooAsset -> AssetBundle Collector via MenuItem to start configuring resources (Collection).
 
 ![](/img/assetloader/img_5.png)
 
-Diagram Explanation:
+Icon Description:
 
-1. <Highlight color="#00d679">Reminder</Highlight> Display the Packages Window.
-2. <Highlight color="#00d679">Reminder</Highlight> Asset Address Name.
+1. <Highlight color="#00d679">Reminder</Highlight> Displays the Packages window.
+2. <Highlight color="#00d679">Reminder</Highlight> Resource addressing name.
 
-## Start Building
+## Start Construction
 
-<Highlight color="#0373fc">Attention</Highlight> For more details, refer to [YooAsset Asset Building](https://www.yooasset.com/docs/guide-editor/AssetBundleBuilder) (Build)。
+<Highlight color="#0373fc">Attention</Highlight> Additionally, you can first see [YooAsset Resource Construction](https://www.yooasset.com/docs/guide-editor/AssetBundleBuilder) (Packaging).
 
-Through the MenuItem, click YooAsset -> AssetBundle Builder, start selecting the Package and BuildPipeline to build, then choose the encryption method, and finally click Click Build.
+Click YooAsset -> AssetBundle Builder via MenuItem, start selecting the Package and BuildPipeline to be constructed, then select the encryption method, and finally click Click Build.
 
-<Highlight color="#ff2f00">Important</Highlight> Remember not to change the Build Version, use the default date **(because the package needs to be filtered based on the date)**.
+<Highlight color="#ff2f00">Important</Highlight> Remember not to change the Build Version, use the default date as the primary choice **(because packages need to be filtered by date)**.
 
 ![](/img/assetloader/img_3.png)
 
-<Highlight color="#00d679">Reminder</Highlight> **Built-in resources** depend on the Copy Buildin File Option. After YooAsset is built, the resources will be placed under StreamingAssets according to the settings.
+<Highlight color="#00d679">Reminder</Highlight> **Built-in resources** depend on the Copy Buildin File Option setting. After YooAsset construction is complete, they will be placed under StreamingAssets according to the settings.
 
 ![](/img/assetloader/img_4.png)
+
+## BuildTool One-Stop Construction
+
+### Step 1.
+
+Import the BuildTool extension plugin.
+
+![](/img/assetloader/latest/img_27.png)
+
+Open the BuildTool Editor window.
+
+![](/img/assetloader/latest/img_28.png)
+
+### Step 2.
+
+Load data from the YooAsset collector.
+
+![](/img/assetloader/latest/img_29.png)
+
+### Step 3.
+
+Global configuration (configure yourself based on current packaging needs).
+
+![](/img/assetloader/latest/img_30.png)
+
+Choose whether the Package belongs to Built-in resources.
+
+![](/img/assetloader/latest/img_31.png)
+
+Choose whether the Package belongs to App Package or DLC Package. The difference is that DLC Package supports independent DLC Version.
+
+![](/img/assetloader/latest/img_32.png)
+
+<Highlight color="#00d679">Reminder</Highlight> Others including encryption/decryption, compression, etc., are self-selected.
+
+### Step 4.
+
+Convert the configuration to JSON data, used for subsequently outputting JSON configuration files for deployment, and also beneficial for subsequent maintenance.
+
+![](/img/assetloader/latest/img_33.png)
+
+<Highlight color="#00d679">Reminder</Highlight> You can also paste JSON data to reverse-convert it into configuration.
+
+### Step 5.
+
+Start one-stop construction + output deployment package.
+
+![](/img/assetloader/latest/img_34.png)

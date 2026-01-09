@@ -1,0 +1,39 @@
+---
+sidebar_position: 1
+---
+
+# MediaHelper
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## Methods
+
+using OxGFrame.MediaFrame.Editor;
+
+### ExportMediaUrlConfig
+Exports the URL configuration file for media resources (Audio/Video) to the specified path, typically used for built-in `StreamingAssets`. This configuration file allows the client to dynamically determine the source addresses for audio and video.
+
+**Params**
+* `string audioUrlset`: Audio resource server path (Default: `http://127.0.0.1/audio/`)
+* `string videoUrlset`: Video resource server path (Default: `http://127.0.0.1/video/`)
+* `string outputPath`: Configuration file output target path
+
+<Highlight color="#00d679">Reminder</Highlight> The output file will contain explanatory comments (#) and be written in UTF-8 encoding to ensure compatibility across different platforms.
+
+---

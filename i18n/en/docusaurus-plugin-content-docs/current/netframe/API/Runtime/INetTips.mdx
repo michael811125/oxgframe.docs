@@ -1,0 +1,99 @@
+---
+sidebar_position: 3
+---
+
+# INetTips
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.NetFrame;
+
+## Core Design Concept
+
+`INetTips` is a connection state monitoring interface. During the network communication process, when the connection state changes (e.g., starting connection, success, failure, or disconnection), `NetFrame` will automatically trigger the corresponding methods in the implementer. This is very important for implementing **Loading masks** or **disconnection reconnection prompts**.
+
+---
+
+## Interface Methods
+
+### OnConnecting()
+* **Trigger Timing**: When the connection method (e.g., `Connect()`) is called and the connection procedure begins.
+* **Purpose**: Usually used to open the "connecting" UI mask here to prevent duplicate operations by users.
+
+### OnConnected(object payload)
+* **Trigger Timing**: When a network connection is successfully established.
+* **Params**: `payload`: Contains information related to a successful connection.
+* **Purpose**: Close the connection mask and begin subsequent logic such as "login" or "data synchronization".
+
+### OnConnectionError(object payload)
+* **Trigger Timing**: When a connection attempt fails.
+* **Params**: `payload`: Reason for the error or anomaly message.
+* **Purpose**: Pop up an error message window to prompt the user to check the network environment.
+
+### OnDisconnected(object payload)
+* **Trigger Timing**: When an established connection is disconnected (either manually or accidentally).
+* **Params**: `payload`: Connection disconnection status code or reason.
+* **Purpose**: Perform data cleanup or jump back to the login screen.
+
+### OnReconnecting()
+* **Trigger Timing**: When the connection is disconnected and `NetOption` activates the automatic reconnection mechanism.
+* **Purpose**: Display a prompt UI such as "Network unstable, attempting to reconnect...".
+
+---
+
+## Implementation Example
+
+You can define a class and implement `INetTips`, then pass it into the connection manager.
+
+```csharp
+public class NetTipsExample : INetTips
+{
+    public void OnConnecting()
+    {
+        // Open Loading mask
+        Debug.Log("Connecting...");
+    }
+
+    public void OnConnected(object payload)
+    {
+        // Close Loading mask, enter game
+        Debug.Log($"Connection successful: {payload}");
+    }
+
+    public void OnConnectionError(object payload)
+    {
+        // Show connection error prompt
+        Debug.LogError($"Connection failed: {payload}");
+    }
+
+    public void OnDisconnected(object payload)
+    {
+        // Handle disconnection logic
+        Debug.LogWarning($"Connection disconnected: {payload}");
+    }
+
+    public void OnReconnecting()
+    {
+        // Show reconnecting UI
+        Debug.Log("Attempting to reconnect...");
+    }
+}
+```
+
+<Highlight color="#0373fc">Attention</Highlight> The specific content of the payload depends on the underlying transmission protocol you use (TCP/UDP/WebSocket); it is recommended to perform a Type Check before use.

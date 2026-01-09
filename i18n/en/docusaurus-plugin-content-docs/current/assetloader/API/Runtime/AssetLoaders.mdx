@@ -1,0 +1,102 @@
+---
+sidebar_position: 4
+---
+
+# AssetLoaders
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.AssetLoader;
+
+## Core Mechanism: Path Resolution Rules
+
+`AssetLoaders` has a built-in automatic filtering mechanism that determines the loading path based on the prefix of `assetName`:
+- Asset
+  * **Load from Resources**: If the path has the <Highlight color="#00d679">res#</Highlight> prefix (e.g., `res#Prefabs/Player`), it will be automatically parsed and loaded from Unity's built-in Resources.
+  * **Load from Bundle**: If there is no prefix, it defaults to loading from YooAsset resource packages (subject to addressing rules).
+- Scene
+  * **Load from Build Scene**: If the path has the <Highlight color="#00d679">build#</Highlight> prefix (e.g., `build#SimpleScene`), it will be automatically parsed and loaded from Unity's built-in Scenes In Build list.
+
+---
+
+## Scene Methods
+
+Provides asynchronous and synchronous loading of scenes, supporting `Single` and `Additive` modes.
+
+### LoadSceneAsync / LoadScene
+Loads the specified scene.
+* **Params**:
+    * `string assetName`: Scene name or path.
+    * `LoadSceneMode loadSceneMode`: Scene loading mode.
+    * `bool activateOnLoad`: Whether to automatically activate the scene after loading is complete.
+    * `Progression progression`: Loading progress callback.
+
+### LoadSingleSceneAsync / LoadAdditiveSceneAsync
+Shortcuts for loading in `Single` (replaces current scene) or `Additive` (stacks scenes) mode respectively.
+
+### UnloadScene
+Unloads the scene and releases associated resources.
+
+---
+
+## Asset Methods (Resource Loading and Instantiation)
+
+Handles resource loading and object generation for Prefabs, Textures, AudioClips, etc.
+
+### PreloadAssetAsync / PreloadAsset
+Preloads resources into the cache without performing instantiation (Instantiate), suitable for performance optimization.
+
+### LoadAssetAsync / LoadAsset
+Loads the resource and returns the resource object.
+
+### InstantiateAssetAsync / InstantiateAsset
+Loads the resource and directly performs `Object.Instantiate` to create an instance.
+* **Supports multiple Overloads**: Specify parameters such as `Position`, `Rotation`, `Parent`, `WorldPositionStays`, etc.
+
+### UnloadAsset
+Unloads a single resource cache. If `forceUnload = true` is passed, it will force release.
+
+---
+
+## RawFile Methods
+
+Specifically for loading **Rawfile** type files (such as Config, Json, Bin, Mp4, etc.), only supports loading from Bundles.
+
+### GetRawFilePathAsync / GetRawFilePath
+Gets the physical path of the RawFile in the local cache, which can be used for subsequent file reading (FileStream/IO).
+
+### LoadRawFileAsync / LoadRawFile
+Directly loads file content and converts it to a specified type:
+* Supports generic `string` or `byte[]`.
+
+---
+
+## Group Cacher
+
+For scenarios requiring "batch management and batch release" (e.g., all resources of a specific level), all Load/Preload methods provide versions with an `int groupId`.
+
+* **HasInCache(int groupId, string assetName)**: Checks if the resource already exists in a specific group cache.
+* **ReleaseResourceAssets(int groupId)**: Releases all Resources assets in that group, still subject to reference counting.
+* **ReleaseBundleAssets(int groupId)**: Releases all Bundle assets in that group, still subject to reference counting.
+
+---
+
+<Highlight color="#ff2f00">Important</Highlight> Before releasing resources, make sure the resource is no longer referenced. For Bundle resources, it is recommended to call `Unload` & `Destroy` in pairs instead of directly destroying the object to maintain the correctness of the reference count.
+
+---

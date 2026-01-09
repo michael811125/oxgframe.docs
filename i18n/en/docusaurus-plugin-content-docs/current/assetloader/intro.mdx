@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Module Introduction
 
-export const Highlight = ({children, color}) => (
+export const Highlight = ({ children, color }) => (
   <span
     style={{
       backgroundColor: color,
@@ -24,37 +24,36 @@ export const Highlight = ({children, color}) => (
 
 ## Basic Description
 
-The resource loader module supports dynamic asynchronous and synchronous loading (Dynamic Loading) and utilizes reference counting for resource management (supporting both Resources and AssetBundle). If you use the AssetLoaders API directly for loading and instantiation, you must also call Unload when destroying objects—ensuring that Load and Unload are invoked in pairs.
+Resource loader module that supports dynamic Async or Sync loading (Dynamic Loading), using a reference counting management approach for resource control (supports Resources and AssetBundle). If you directly use AssetLoaders API for Load and Instantiate, you need to call Unload when destroying objects (paired calls: Load & Unload).
 
-Integrated YooAsset to implement a resource hot update solution, and additionally implemented YooAsset's encryption interfaces. The file encryption and decryption methods implemented include:
-
-- Offset
-- OffsetXOR
+Integrated with YooAsset to implement resource hot-update solution, with additional implementation of encryption interfaces provided by YooAsset. The file encryption/decryption methods implemented include:
+- Offset (Offset method)
+- OffsetXOR (Offset + XOR)
 - XOR
 - HT2XOR (Head-Tail 2 XOR)
-- HT2XORPlus (Head-Tail 2 XOR Plus)
+- HT2XORPlus (Head-Tail 2 XOR Plus) **Enhanced version**
 - ChaCha20
 - XXTEA
 - AES
 
 For reference only ([Efficiency Reference](https://github.com/michael811125/OxGFrame/wiki/Encryption-and-Decryption-Efficiency-Reference))
-  - Computational Efficiency: Offset > HT2XOR > XOR >= OffsetXOR >= HT2XORPlus > XXTEA > ChaCha20 > AES
-  - Memory Usage: Offset ≈ OffsetXOR > AES ≈ ChaCha20 > XXTEA > HT2XORPlus = HT2XOR = XOR
-  - AB Package Size Increase: Offset ≈ OffsetXOR > AES ≈ ChaCha20 > XXTEA > HT2XORPlus = HT2XOR = XOR
-  - Difficulty to Crack: AES ≈ ChaCha20 > XXTEA > HT2XORPlus > HT2XOR > OffsetXOR > XOR > Offset
+  - Computational efficiency: Offset > HT2XOR > XOR >= OffsetXOR >= HT2XORPlus > XXTEA > ChaCha20 > AES
+  - Memory usage: Offset ≈ OffsetXOR > AES ≈ ChaCha20 > XXTEA > HT2XORPlus = HT2XOR = XOR 
+  - AB package size increase: Offset ≈ OffsetXOR > AES ≈ ChaCha20 > XXTEA > HT2XORPlus = HT2XOR = XOR
+  - Cracking difficulty: AES ≈ ChaCha20 > XXTEA > HT2XORPlus > HT2XOR > OffsetXOR > XOR > Offset
 
-Group Packaging Examples
-  - Minimal Run Package
-  - Standard Run Package
-  - Full Run Package (default index tag is **#all**)
+Group package examples
+  - Minimum runtime package
+  - Standard runtime package
+  - Full runtime package (default index tag is **#all**)
 
 ![](/img/assetloader/img_16.png)
 
-<Highlight color="#ff2f00">Important</Highlight> If synchronous loading is to be used, the resources must be fully downloaded in advance (mainly because when resources are not local, the request for downloading is handled asynchronously). Also, remember that synchronous loading is only suitable for small resources (it is strongly recommended to use asynchronous handling for everything).
+<Highlight color="#ff2f00">Important</Highlight> If you want to use synchronous loading, resources must be pre-downloaded (mainly because when resources are not local, the download request part is handled asynchronously). Also note that synchronous loading is only suitable for small resources (strongly recommend using asynchronous processing for everything).
 
-<Highlight color="#0373fc">Attention</Highlight> Using the prefix **res#** will switch to the Resources loading method. Otherwise, the AssetBundle method will be used.
+<Highlight color="#0373fc">Attention</Highlight> Using the **res#** prefix will switch to Resources loading mode. Otherwise, AssetBundle will be used.
 
-<Highlight color="#00d679">Reminder</Highlight> When using [YooAsset](https://github.com/tuyoogame/YooAsset), if you have any questions, please refer to the [official documentation](https://www.yooasset.com/) for more details.
+<Highlight color="#00d679">Reminder</Highlight> When using [YooAsset](https://github.com/tuyoogame/YooAsset), if you have questions, please refer to the [official documentation](https://www.yooasset.com/) for familiarization.
 
 ---
 
@@ -62,29 +61,29 @@ Group Packaging Examples
 
 ### Check if PlayMode Initialization is Complete
 
-Poll AssetPatcher.IsInitialized() to see if the initialization of Preset Packages is complete. Only after initialization can you start loading Built-in Bundles and perform AssetPatcher.Check() for update checks, or alternatively, download while playing.
+Poll AssetPatcher.IsInitialized() to check if Preset Packages initialization is complete, because only after initialization is complete can you start loading Built-in Bundles and perform AssetPatcher.Check() update checks, or download while playing.
 
-<Highlight color="#00d679">Reminder</Highlight> Distinguish between Built-in and Patch (define the workflow based on the situation).
+<Highlight color="#00d679">Reminder</Highlight> Distinguish between Built-in and Patch (define the operation flow according to your situation).
 
-<Highlight color="#00d679">Reminder</Highlight> After running AssetPatcher.Check() to check for Patch updates, you can then load the updated resources.
-- During the execution of AssetPatcher.Check(), **Preset App Packages and Preset DLC Packages will be downloaded together**.
+<Highlight color="#00d679">Reminder</Highlight> After executing AssetPatcher.Check() to check for Patch updates, you can read the updated resources.
+- When executing the AssetPatcher.Check() check process, **Preset App Packages and Preset DLC Packages will be merged and downloaded together**.  
 
-| **Preset App Packages & Preset DLC Packages**                                                                        |
-| :------------------------------------------------------------------------------------------------------------------- |
-| Preset_App_Pkg_01 (TotalCount = 3, TotalSize = 600 KB)                                                               |
-| Preset_App_Pkg_02 (TotalCount = 6, TotalSize = 1200 KB)                                                              |
-| Preset_DLC_Pkg_01 (TotalCount = 2, TotalSize = 200 KB)                                                               |
-| Preset_DLC_Pkg_02 (TotalCount = 4, TotalSize = 400 KB)                                                               |
-| **Combination**                                                                                                      |
+| **Preset App Packages & Preset DLC Packages** |
+|:-|
+| Preset_App_Pkg_01 (TotalCount = 3, TotalSize = 600 KB) |
+| Preset_App_Pkg_02 (TotalCount = 6, TotalSize = 1200 KB) |
+| Preset_DLC_Pkg_01 (TotalCount = 2, TotalSize = 200 KB) |
+| Preset_DLC_Pkg_02 (TotalCount = 4, TotalSize = 400 KB) |
+| **Combination** |
 | Preset_App_Pkg_01 + Preset_App_Pkg_02 + Preset_DLC_Pkg_01 + Preset_DLC_Pkg_02 (TotalCount = 15, TotalSize = 2400 KB) |
 
 ![](/img/assetloader/img_17.png)
 
-<Highlight color="#ff2f00">Important</Highlight> DLC Packages set through Preset must have a **fixed version number** (e.g., "latest").
+<Highlight color="#ff2f00">Important</Highlight> DLC Packages set through Preset must be **fixed version numbers** (e.g., "latest").
 
-### Check if Disk Space Check Process is Enabled
+### Whether to Enable Disk Space Check Process
 
-![](/img/assetloader/img_18.png)
+![](/img/assetloader/latest/img_18.png)
 
 ![](/img/assetloader/img_19.png)
 
@@ -92,8 +91,8 @@ Poll AssetPatcher.IsInitialized() to see if the initialization of Preset Package
 
 ![](/img/assetloader/img_21.png)
 
-### Check if Updates are Complete
-- Check if AssetPatcher.IsDone() indicates that updates are complete.
+### Check if Update is Complete
+- Check AssetPatcher.IsDone() to determine if the update is complete.
 
-### Summary of Execution Order
-- Poll initial status AssetPatcher.IsInitialized() -> Execute update check AssetPatcher.Check() -> Poll completion status AssetPatcher.IsDone() -> Update complete.
+### Summary of Execution Order Process
+- Poll initial state AssetPatcher.IsInitialized() -> Execute update check AssetPatcher.Check() -> Poll completion state AssetPatcher.IsDone() -> Update complete.

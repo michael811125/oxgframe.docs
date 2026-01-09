@@ -1,0 +1,41 @@
+---
+sidebar_position: 1
+---
+
+# MediaHelper
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## Methods
+
+using OxGFrame.MediaFrame.Editor;
+
+### ExportMediaUrlConfig
+輸出媒體資源（Audio/Video）的 URL 配置文件至指定路徑，通常用於內置的 `StreamingAssets`。此設定檔讓客戶端能動態決定音訊與影片的來源位址。
+
+
+
+**Params**
+* `string audioUrlset`：音訊資源伺服器路徑 (預設為 `http://127.0.0.1/audio/`)
+* `string videoUrlset`：影片資源伺服器路徑 (預設為 `http://127.0.0.1/video/`)
+* `string outputPath`：配置文件輸出目標路徑
+
+<Highlight color="#00d679">提醒</Highlight> 輸出的檔案將包含說明的註解（#），並以 UTF-8 編碼寫入，確保在不同平台上讀取的兼容性。
+
+---

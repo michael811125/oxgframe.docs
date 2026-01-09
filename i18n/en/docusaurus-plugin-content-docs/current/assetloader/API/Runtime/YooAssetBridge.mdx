@@ -1,0 +1,66 @@
+---
+sidebar_position: 2
+---
+
+# YooAssetBridge
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.AssetLoader.Bundle;
+
+## Classes & Methods
+
+`YooAssetBridge` is a bridging tool that uses the reflection (Reflection) mechanism to access protected or private members within `YooAsset`, ensuring the framework can obtain necessary information without modifying the original package source code.
+
+---
+
+### YooAssetSettingsData
+Handles global configuration data for YooAsset.
+
+* **GetPackageManifestPrefix()**
+    * Gets the `PackageManifestPrefix` (manifest prefix name).
+* **GetYooDefaultCacheRoot()**
+    * Gets the default cache file root directory for YooAsset (Sandbox).
+* **GetYooDefaultBuildinRoot()**
+    * Gets the default built-in file root directory for YooAsset (StreamingAssets).
+
+---
+
+### DownloadSystemHelper
+Helper system for downloading and path conversion.
+
+* **ConvertToWWWPath(string path)**
+    * Converts a general path into a format suitable for `UnityWebRequest` or `WWW`.
+    * **Params**: `string path` (Original path)
+
+<Highlight color="#0373fc">Attention</Highlight> This method automatically handles file protocol prefixes (e.g., `file://`) based on the execution platform.
+
+---
+
+### DefaultBuildinFileSystemDefine
+Defines core file names for the built-in file system.
+
+* **BuildinCatalogBinaryFileName()**
+    * Gets the binary file name for the built-in resource catalog list (Catalog Binary File).
+
+---
+
+<Highlight color="#ff2f00">Important</Highlight> Since `YooAssetBridge` relies heavily on reflection, if future `YooAsset` package versions are updated and internal class names or field definitions change, this will be maintained accordingly.
+
+---

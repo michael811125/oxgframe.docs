@@ -48,3 +48,51 @@ export const Highlight = ({children, color}) => (
 <Highlight color="#00d679">提醒</Highlight> **內置資源**取決於 Copy Buildin File Option 選項，當 YooAsset 構建完畢後，將會依照設定放在 StreamingAssets 下。
 
 ![](/img/assetloader/img_4.png)
+
+## BuildTool 一條龍構建
+
+### 步驟 1.
+
+匯入 BuildTool 擴展插件。
+
+![](/img/assetloader/latest/img_27.png)
+
+開啟 BuildTool Editor 視窗。
+
+![](/img/assetloader/latest/img_28.png)
+
+### 步驟 2.
+
+載入 YooAsset 收集器的數據。
+
+![](/img/assetloader/latest/img_29.png)
+
+### 步驟 3.
+
+全域配置 (依照目前打包需求自行配置)。
+
+![](/img/assetloader/latest/img_30.png)
+
+自行選擇該 Package 是否屬於 Built-in 資源。
+
+![](/img/assetloader/latest/img_31.png)
+
+自行選擇該 Package 屬於 App Package 或 DLC Package，差異在於 DLC Package 支持獨立 DLC Version。
+
+![](/img/assetloader/latest/img_32.png)
+
+<Highlight color="#00d679">提醒</Highlight> 其他包含加解密、壓縮等，皆自行選擇。
+
+### 步驟 4.
+
+將配置轉成 JSON 數據，用於後續輸出部署用的 JSON 配置文件，也利於後續的維護。
+
+![](/img/assetloader/latest/img_33.png)
+
+<Highlight color="#00d679">提醒</Highlight> 也可以貼上 JSON 數據，反向轉換成配置。
+
+### 步驟 5.
+
+開始一條龍構建 + 輸出部署包。
+
+![](/img/assetloader/latest/img_34.png)

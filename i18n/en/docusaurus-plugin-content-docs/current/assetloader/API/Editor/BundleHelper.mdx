@@ -1,0 +1,129 @@
+---
+sidebar_position: 1
+---
+
+# BundleHelper
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.AssetLoader.Editor;
+
+## Methods
+
+### ExportAppConfig
+Exports the App basic configuration file to the specified path, typically used for built-in `StreamingAssets`.
+
+**Params**
+* `string productName`: Product name
+* `string appVersion`: Application version
+* `string outputPath`: Output target path
+* `bool activeBuildTarget`: Whether to use the platform currently set in the editor
+* `BuildTarget buildTarget`: If not using editor settings, specify the target platform
+
+---
+
+### ExportConfigsAndAppBundles
+Exports complete resource packages and configuration files (AppConfig & PatchConfig) to the CDN output path.
+
+**Params**
+* `string inputPath`: Source resource input path
+* `string outputPath`: CDN resource output path
+* `string productName`: Product name
+* `SemanticRule semanticRule`: Version semantic rule (affects folder naming logic)
+* `string appVersion`: Application version
+* `string[] exportPackages`: List of package names to export
+* `List<GroupInfo> groupInfos`: Resource grouping information list
+* `string[] packageInfos`: Package related information
+* `bool activeBuildTarget`: Whether to use the platform currently set in the editor
+* `BuildTarget buildTarget`: Specified target platform
+* `bool isClearOutputPath`: Whether to clear the target folder before exporting (default is true)
+
+---
+
+### ExportAppBundles
+Exports only the latest resource packages (Bundles) without updating configuration files.
+
+**Params**
+* `string inputPath`: Resource input path
+* `string outputPath`: Resource output path
+* `string productName`: Product name
+* `SemanticRule semanticRule`: Semantic rule
+* `string appVersion`: Application version
+* `string[] exportPackages`: List of packages to export
+* `bool activeBuildTarget`: Whether to use the platform set in the editor
+* `BuildTarget buildTarget`: Specified target platform
+* `bool isClearOutputPath`: Whether to clear the target folder
+
+---
+
+### ExportIndividualDlcBundles
+Exports independent DLC resource packages.
+
+**Params**
+* `string inputPath`: Resource input path
+* `string outputPath`: Resource output path
+* `string productName`: Product name
+* `List<DlcInfo> dlcInfos`: DLC information list (including name and version)
+* `bool activeBuildTarget`: Whether to use the platform set in the editor
+* `BuildTarget buildTarget`: Specified target platform
+* `bool isClearOutputPath`: Whether to clear the target folder
+
+---
+
+### ExportBundleUrlConfig
+Exports a configuration file containing CDN addresses and store links, supporting encryption.
+
+**Params**
+* `string bundleIp`: Main CDN server IP or domain name
+* `string bundleFallbackIp`: Backup CDN server IP or domain name
+* `string storeLink`: Store (Google Play / App Store) link
+* `string outputPath`: Output path
+* `bool cipher`: Whether to enable encryption (will be encrypted if enabled)
+
+---
+
+### ParsingGroupInfosByArgs
+Parses string format parameters into a list of `GroupInfo` objects.
+
+**Params**
+* `string groupInfoArgs`: String parameters (format: `g1,t1#g2,t1,t2`)
+
+---
+
+### ConvertGroupInfosToArgs
+Converts a list of `GroupInfo` objects back to a string format, useful for command line passing.
+
+**Params**
+* `List<GroupInfo> groupInfos`: Group information list
+
+---
+
+### ParsingDlcInfosByArgs
+Parses string format parameters into a list of `DlcInfo` objects.
+
+**Params**
+* `string dlcInfoArgs`: String parameters (format: `dlc1,1.0.0#dlc2,1.1.0`)
+
+---
+
+### ConvertDlcInfosToArgs
+Converts a list of `DlcInfo` objects back to a string format.
+
+**Params**
+* `List<DlcInfo> dlcInfos`: DLC information list

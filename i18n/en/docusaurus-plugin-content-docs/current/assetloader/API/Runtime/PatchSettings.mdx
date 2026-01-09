@@ -1,0 +1,84 @@
+---
+sidebar_position: 3
+---
+
+# PatchSettings
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.AssetLoader;
+
+## Settings Fields
+
+`PatchSettings` inherits from `ScriptableObject` and is used to store global path and file name settings for hot updates and resource packages. Developers can dynamically call them via `PatchSettings.settings.{fieldName}`.
+
+---
+
+### App Config Settings
+Defines the basic information for the application base configuration file.
+
+* **appCfgName**
+    * Type: `string` (Default: `"appconfig"`)
+    * Description: Defines the file name of the APP configuration file (AppConfig).
+* **appCfgExtension**
+    * Type: `string` (Default: `".json"`)
+    * Description: The file extension of the APP configuration file.
+
+<Highlight color="#0373fc">Attention</Highlight> The file extension must include the dot (e.g., `.conf`, `.json`).
+
+---
+
+### Patch Config Settings
+Defines the basic information for the patch (version update) configuration file.
+
+* **patchCfgName**
+    * Type: `string` (Default: `"patchconfig"`)
+    * Description: Defines the file name of the patch configuration file (PatchConfig).
+* **patchCfgExtension**
+    * Type: `string` (Default: `".json"`)
+    * Description: The file extension of the patch configuration file.
+
+---
+
+### Bundle URL Config Settings
+Defines configurations related to the deployment environment (CDN request endpoint).
+
+* **bundleUrlCfgCipher**
+    * Type: `byte`
+    * Description: The encryption/decryption key for the resource request endpoint configuration file (burlconfig).
+* **bundleUrlCfgName**
+    * Type: `string` (Default: `"burlconfig"`)
+    * Description: The name of the configuration file for resource request endpoints.
+* **bundleUrlCfgExtension**
+    * Type: `string` (Default: `".conf"`)
+    * Description: The file extension for resource request endpoint configuration files.
+
+---
+
+### Folder Settings
+Defines the folder classification logic when outputting resource packages.
+
+* **rootFolderName**
+    * Type: `string` (Default: `"CDN"`)
+    * Description: The root folder name for CDN output resources.
+* **dlcFolderName**
+    * Type: `string` (Default: `"DLC"`)
+    * Description: The subdirectory folder name where DLC resource packages are stored.
+
+---

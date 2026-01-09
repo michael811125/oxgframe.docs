@@ -1,0 +1,45 @@
+---
+sidebar_position: 2
+---
+
+# Batch Conversion
+
+export const Highlight = ({children, color}) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+### AudioFrame
+
+After selecting Audio Clips, click Right-Click -> OxGFrame -> MediaFrame -> Select the type you want to convert.
+
+- Sole (BGM type)
+- SoundEffect (Sound effect type)
+
+![](/img/mediaframe/latest/gif_2.gif)
+
+<Highlight color="#00d679">Reminder</Highlight> After batch converting to AudioBase Prefab, manually batch select and change configurations as needed.
+
+### VideoFrame
+
+After selecting Video Clips, click Right-Click -> OxGFrame -> MediaFrame -> Select the type you want to convert.
+
+- Camera
+- RenderTexture
+
+![](/img/mediaframe/latest/gif_3.gif)
+
+<Highlight color="#00d679">Reminder</Highlight> After batch converting to VideoBase Prefab, manually batch select and change configurations as needed.

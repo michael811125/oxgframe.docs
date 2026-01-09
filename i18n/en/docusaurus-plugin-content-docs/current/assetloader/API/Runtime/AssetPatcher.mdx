@@ -1,0 +1,101 @@
+---
+sidebar_position: 5
+---
+
+# AssetPatcher
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.AssetLoader;
+
+## Patch Status
+
+Used to monitor the progress of the current resource update process.
+
+* **IsInitialized()**: Determines if the resource system has completed initialization.
+* **IsCheck()**: Whether a version check is currently being performed.
+* **IsRepair()**: Whether a repair (re-download) process is currently being performed.
+* **IsDone()**: Whether the update process is fully complete and resource loading can begin.
+
+---
+
+## Patch Operation
+
+Controls the core behavior of the main downloader.
+
+### Check / Repair
+* **Check()**: Starts the patch update process (includes version comparison and file list acquisition).
+* **Repair()**: Starts the resource repair process, which forces a check of the integrity of all files.
+
+### Control Methods
+* **Pause() / Resume()**: Pauses or resumes main downloader tasks.
+* **Cancel()**: Cancels download.
+
+---
+
+## Package Operation (Package Management)
+
+Manages the lifecycle and local cache of each independent Package.
+
+### InitPackage
+Initializes a specified Package. The system automatically determines if the Package is an **App (Main)** or **DLC (Extension)** type and automatically looks for resources from remote or built-in paths.
+
+### UnloadPackageAndClearCacheFiles
+Unloads a specified Package and completely deletes associated resource files from the disk (Sandbox).
+* **Params**:
+    * `string packageName`: Package name.
+    * `bool destroyPackage`: Whether to also release the Package from memory.
+
+### Default Package Settings
+* **SetDefaultPackage**: Sets the initial default resource package.
+* **SwitchDefaultPackage**: Switches the default resource package between registered packages.
+* **GetDefaultPackageName**: Gets the package name currently used as default when loading resources.
+
+---
+
+## Downloader (Downloader Management)
+
+Provides a highly flexible download solution, supporting combined downloading of multiple Packages at the same time.
+
+### GetPackageDownloader
+Gets a downloader for a single Package, supporting precise filtering of content to be updated via **Tags** or **AssetNames**.
+
+### BeginDownloadWithCombinePackages
+Combines update requests for multiple Packages. This is very useful when handling "DLC + Main resource update", allowing them to be displayed in a single progress bar.
+
+**Key Parameters:**
+* `OnDownloadSpeedProgress`: Callback for receiving download speed, remaining time, and total progress.
+* `DownloadError`: Callback when download fails (including file information and error message).
+
+---
+
+## Path & Storage
+
+* **GetLocalSandboxRootPath()**: Gets the local persistent storage root directory (.../yoo).
+* **GetBuiltinRootPath()**: Gets the built-in resource root directory within StreamingAssets.
+* **GoToAppStore()**: Calls the system browser to go to the store link (to update the App itself).
+
+---
+
+## Release
+
+### Release()
+<Highlight color="#ff2f00">Important</Highlight> Call when the game is about to close. This method asynchronously releases resource references for all Packages and clears global configurations related to Bundles, ensuring correct memory recovery.
+
+---

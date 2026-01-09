@@ -1,5 +1,6 @@
 {
-  "label": "Rutnime",
+  "label": "Runtime",
+  "key": "v2-assetloader-runtime",
   "position": 99,
   "link": {
     "type": "generated-index"

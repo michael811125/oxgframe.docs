@@ -1,0 +1,68 @@
+---
+sidebar_position: 1
+---
+
+# HotfixHelper
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.Hotfixer.Editor;
+
+## Methods
+
+### ToRelativeAssetPath
+Converts an absolute path to a path relative to the project's `Assets/` directory.
+
+**Params**
+* `string s`: Full file path
+
+---
+
+### CopyAOTDllsAndHotfixDlls
+Executes the copy operation for both AOT and Hotfix assemblies in one click, collecting all relevant files into the `HotfixCollector` directory.
+
+---
+
+### CopyAOTAssembliesToDestination
+Copies AOT assemblies (DLLs after IL2CPP stripping) to the target directory. This method automatically changes the extension to `.dll.bytes` to facilitate resource loading.
+
+**Params**
+* `string dstDir`: Custom output directory (if null, outputs to the default `HotfixCollector` directory)
+
+<Highlight color="#ff2f00">Important</Highlight> Stripped AOT DLLs are only generated after **HybridCLR -> Generate All**. If the file is prompted as non-existent, please execute [Generate All](https://www.hybridclr.cn/docs/beginner/quickstart#%E6%89%93%E5%8C%85%E8%BF%90%E8%A1%8C) first.
+
+---
+
+### CopyHotfixAssembliesToDestination
+Copies hot-update assemblies (Hotfix DLLs) to the target directory and automatically changes the extension to `.bytes`.
+
+**Params**
+* `string dstDir`: Custom output directory (if null, outputs to the default `HotfixCollector` directory)
+
+---
+
+### ExportHotfixDllConfig
+Generates the configuration file for hot-update DLLs (HotfixDllConfig), supporting JSON or encrypted binary formats.
+
+**Params**
+* `List<string> aotDlls`: List of AOT assemblies that need metadata supplementation
+* `List<string> hotfixDlls`: List of hot-update assemblies
+* `bool cipher`: Whether to enable encryption (outputs as Bytes format if true, otherwise Json)
+
+---

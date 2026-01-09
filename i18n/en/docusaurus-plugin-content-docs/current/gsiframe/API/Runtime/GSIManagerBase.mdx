@@ -1,0 +1,85 @@
+---
+sidebar_position: 1
+---
+
+# GSIManagerBase
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.GSIFrame;
+
+## Core Design Concept
+
+`GSIManagerBase<T>` is a state manager specifically designed for managing `GSIBase` (Game Stage). It is responsible for controlling game flow switching, initialization, updates, and releases. Typically, a game only needs one instance inheriting from this class (e.g., `GameStageManager` or `GSIManager`).
+
+<Highlight color="#00d679">Reminder</Highlight> If there is a hot-update project, it is recommended to distinguish between two GameStageManagers for management (e.g., AotGameStageManager and HotfixGameStageManager).
+
+---
+
+## Default APIs (Static Global Interface)
+
+Developers typically call the following static methods directly via the inherited class without needing to access the instance directly.
+
+### Stage Query and Retrieval
+* **GetCurrentId()**
+    * Gets the ID of the currently executing stage.
+* **GetStage\<U\>() / GetStage\<U\>(int id)**
+    * Searches for and retrieves a specific Stage instance from the cache.
+
+### Stage Registration (Add)
+* **AddStage\<U\>() / AddStage\<U\>(int id)**
+    * Instantiates and registers a new Stage class to the manager. If no ID is specified, the class's `GetHashCode()` is used as the unique identifier by default.
+* **AddStage(int id, GSIBase gameStage)**
+    * Registers an existing instance with a specified ID.
+
+### Stage Switching (Change)
+* **ChangeStage\<U\>(bool force = false) / ChangeStage(int id, bool force = false)**
+    * **General Switching**: Sets `incomingId`, transition switch will occur in the next frame. Switching to the same stage is not allowed.
+    * **Force Switching (force = true)**: Immediately triggers `OnExit` and executes `OnEnter` of the target stage.
+
+### Driving Interface
+<Highlight color="#ff2f00">Important</Highlight> The following methods must be called in the main entry (e.g., `Main.cs` inheriting from `MonoBehaviour`) to drive GSI operation.
+* **DriveStart()**: Call in `Start()` to start GSI operation.
+* **DriveUpdate(float dt)**: Call in `Update()` to drive `OnUpdate` of the current stage.
+
+<Highlight color="#ff2f00">Important</Highlight> Do not call any Default APIs static methods in the Constructor, as this will lead to StackOverflow (infinite loop). Only member methods like AddGameStage can be used for registration initialization in the Constructor.
+
+---
+
+## Public Member Methods (For Use After Inheritance)
+
+If you need more detailed operations within inherited subclasses, you can use the following member methods:
+
+### Stage Management Member Methods
+| Method Name | Description |
+| :--- | :--- |
+| **GetCurrentGameStageId()** | Returns the current `_currentId`. |
+| **GetGameStage\<U\>(int id)** | Returns the instance from the cache dictionary `_dictGameStage`. |
+| **AddGameStage(int id, GSIBase gameStage)** | Executes registration logic and automatically calls `gameStage.SetId(id)`. |
+| **DeleteGameStage(int id)** | Removes a specific stage instance from the cache. |
+
+### Switching and Lifecycle Control
+* **ChangeGameStage(int id)**: Modifies `_incomingId`, waiting for `OnUpdate` to determine and execute `ReleaseGameStage` and `InitGameStage`.
+* **ChangeGameStageForce(int id)**: Immediately executes sequence "Release old stage -> Update ID -> Initialize new stage".
+
+---
+
+<Highlight color="#0373fc">Attention</Highlight> When `ChangeStage` is called, the `OnExit` of the old stage is triggered first, followed by the new stage calling `BeginInit` (asynchronous) to enter the initialization flow.
+
+---

@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # 模塊介紹
 
-export const Highlight = ({children, color}) => (
+export const Highlight = ({ children, color }) => (
   <span
     style={{
       backgroundColor: color,
@@ -32,7 +32,7 @@ export const Highlight = ({children, color}) => (
 
 - NetManager (網路節點管理器)
 - NetNode (網路節點)
-- INetProvider (網路供應者接口)
+- INetProvider (網路供應者)
   - TcpNetProvider (TCP)
   - KcpNetProvider (KCP)
   - WebSocketNetProvider (WebSocket)
@@ -43,7 +43,284 @@ export const Highlight = ({children, color}) => (
 - INetTips (網路狀態提示接口)
 
 <Highlight color="#0373fc">注意</Highlight> 已提供以下 NetProvider (可自行擴展)。
-- TCP
-- KCP
-- WebSocket
+- TCP ([Telepathy TCP](https://github.com/MirrorNetworking/Telepathy))
+  - **注意**：Telepathy 框架已處理分黏包問題，會強制在 **Packet** 前面加入 **4 bytes** 來表示封包長度。
+- KCP ([kcp2k](https://github.com/MirrorNetworking/kcp2k))
+- WebSocket ([UnityWebSocket](https://github.com/psygames/UnityWebSocket))
 
+示例使用 [ioGame](https://github.com/iohao/ioGame) 作為服務端 (高效、方便快速切換連接方式)，客戶端使用 NetFrame - TcpNetProvider, WebSocketNetProvider 作為連線：
+
+| ioGame Server (TCP) | NetFrame - TcpNetProvider Client |
+|:-:|:-:|
+| ![](/img/netframe/gif_1.gif) | ![](/img/netframe/gif_2.gif) |
+| ![](/img/netframe/img_1.png) | ![](/img/netframe/img_2.png) |
+
+| ioGame Server (WebSocket) | NetFrame - WebSocketNetProvider Client |
+|:-:|:-:|
+| ![](/img/netframe/img_3.png) | ![](/img/netframe/img_4.png) |
+
+## 簡單使用
+
+### 自行定義 NetNode ID
+
+```csharp
+public enum NNID
+{
+    WebSocket = 0,
+    TCP = 1,
+    KCP = 2
+}
+```
+
+### 開始初始 NetNode
+
+```csharp
+/// <summary>
+/// Init WebSocket net node
+/// </summary>
+public static void InitWebSocketNetNode()
+{
+    var netTips = new NetTipsExample();
+    NetNode netNode = null;
+
+    #region WebSocket NetNode Example
+    netNode = new NetNode(new WebSocketNetProvider(), netTips);
+    // Set data receive callback
+    netNode.SetResponseBinaryHandler((recvData) =>
+    {
+        Debug.Log("Recv Binary Data (WebSocket)");
+    });
+    // Set connecting callback (Before connection)
+    netNode.SetConnectingHandler(() =>
+    {
+        /**
+         * If there is first verification can do somethings in here
+         */
+
+        Debug.Log("Process Connecting Event (WebSocket)");
+    });
+    // Set connected callback (After connection)
+    netNode.SetConnectedHandler(() =>
+    {
+        /**
+         * Connection established successfully
+         */
+
+        Debug.Log("Process Connected Event (WebSocket)");
+    });
+    // Set heart beat callback
+    netNode.SetHeartBeatTickerTime(10f);
+    netNode.SetHeartBeatAction(() =>
+    {
+        /* Process Heart Beat */
+    });
+    // Set out receive callback
+    netNode.SetOutReceiveTickerTime(60f);
+    netNode.SetOutReceiveAction(() =>
+    {
+        /* Process Out Of Receive */
+    });
+    // Set reconnect callback
+    netNode.SetReconnectTickerTime(5f);
+    netNode.SetReconnectAction(() =>
+    {
+        /* Process Reconnect */
+    });
+
+    // Add net node (register)
+    NetFrames.AddNetNode(netNode, (int)NNID.WebSocket);
+    #endregion
+}
+
+/// <summary>
+/// Init TCP net node
+/// </summary>
+public static void InitTCPNetNode()
+{
+    var netTips = new NetTipsExample();
+    NetNode netNode = null;
+
+    #region TCP NetNode Example
+    netNode = new NetNode(new TcpNetProvider(), netTips);
+    // Set data receive callback
+    netNode.SetResponseBinaryHandler((recvData) =>
+    {
+        Debug.Log("Recv Binary Data (TCP)");
+    });
+    // Set connecting callback (Before connection)
+    netNode.SetConnectingHandler(() =>
+    {
+        /**
+         * If there is first verification can do somethings in here
+         */
+
+        Debug.Log("Process Connecting Event (TCP)");
+    });
+    // Set connected callback (After connection)
+    netNode.SetConnectedHandler(() =>
+    {
+        /**
+         * Connection established successfully
+         */
+
+        Debug.Log("Process Connected Event (TCP)");
+    });
+    // Set heart beat callback
+    netNode.SetHeartBeatTickerTime(10f);
+    netNode.SetHeartBeatAction(() =>
+    {
+        /* Process Heart Beat */
+    });
+    // Set out receive callback
+    netNode.SetOutReceiveTickerTime(60f);
+    netNode.SetOutReceiveAction(() =>
+    {
+        /* Process Out Of Receive */
+    });
+    // Set reconnect callback
+    netNode.SetReconnectTickerTime(5f);
+    netNode.SetReconnectAction(() =>
+    {
+        /* Process Reconnect */
+    });
+
+    // Add net node (register)
+    NetFrames.AddNetNode(netNode, (int)NNID.TCP);
+    #endregion
+}
+
+/// <summary>
+/// Init KCP net node
+/// </summary>
+public static void InitKCPNetNode()
+{
+    var netTips = new NetTipsExample();
+    NetNode netNode = null;
+
+    #region KCP NetNode Example
+    netNode = new NetNode(new KcpNetProvider(), netTips);
+    // Set data receive callback
+    netNode.SetResponseBinaryHandler((recvData) =>
+    {
+        Debug.Log("Recv Binary Data (KCP)");
+    });
+    // Set connecting callback (Before connection)
+    netNode.SetConnectingHandler(() =>
+    {
+        /**
+         * If there is first verification can do somethings in here
+         */
+
+        Debug.Log("Process Connecting Event (KCP)");
+    });
+    // Set connected callback (After connection)
+    netNode.SetConnectedHandler(() =>
+    {
+        /**
+         * Connection established successfully
+         */
+
+        Debug.Log("Process Connected Event (KCP)");
+    });
+    // Set heart beat callback
+    netNode.SetHeartBeatTickerTime(10f);
+    netNode.SetHeartBeatAction(() =>
+    {
+        /* Process Heart Beat */
+    });
+    // Set out receive callback
+    netNode.SetOutReceiveTickerTime(60f);
+    netNode.SetOutReceiveAction(() =>
+    {
+        /* Process Out Of Receive */
+    });
+    // Set reconnect callback
+    netNode.SetReconnectTickerTime(5f);
+    netNode.SetReconnectAction(() =>
+    {
+        /* Process Reconnect */
+    });
+
+    // Add net node (register)
+    NetFrames.AddNetNode(netNode, (int)NNID.KCP);
+    #endregion
+}
+```
+
+### 創建 NetNode 連線
+
+```csharp
+/// <summary>
+/// Create connection
+/// </summary>
+/// <param name="netOption"></param>
+/// <param name="nnid"></param>
+public static void OpenConnection(NetOption netOption, int nnid = 0)
+{
+    // Init net node if not exist
+    switch (nnid)
+    {
+        case (int)NNID.WebSocket:
+            if (NetFrames.GetNetNode((int)NNID.WebSocket) == null)
+                InitWebSocketNetNode();
+            break;
+        case (int)NNID.TCP:
+            if (NetFrames.GetNetNode((int)NNID.TCP) == null)
+                InitTCPNetNode();
+            break;
+        case (int)NNID.KCP:
+            if (NetFrames.GetNetNode((int)NNID.KCP) == null)
+                InitKCPNetNode();
+            break;
+    }
+    // Connect to server
+    NetFrames.Connect(netOption, nnid);
+}
+```
+
+### 關閉 NetNode 連線
+
+```csharp
+/// <summary>
+/// Close connection
+/// </summary>
+/// <param name="nnid"></param>
+public static void CloseConnection(int nnid = 0)
+{
+    // Close connection and remove net node
+    NetFrames.Close(nnid, true);
+}
+```
+
+### 檢查 NetNode 是否已連線
+
+```csharp
+/// <summary>
+/// Return connection status
+/// </summary>
+/// <param name="nnid"></param>
+/// <returns></returns>
+public static bool IsConnected(int nnid = 0)
+{
+    return NetFrames.IsConnected(nnid);
+}
+```
+
+### 發送 NetNode 數據
+
+```csharp
+/// <summary>
+/// Send binary data
+/// </summary>
+/// <param name="buffer"></param>
+/// <param name="nnid"></param>
+/// <returns></returns>
+public static bool SendData(byte[] buffer, int nnid = 0)
+{
+    // Also you can get NetProvider to send data like:
+    // NetFrames.GetNetNode((int)NNID.KCP).GetNetProvider<KcpNetProvider>().SendBinary(buffer);
+    // NetFrames.GetNetNode((int)NNID.KCP).GetNetProvider<KcpNetProvider>().SendBinary(kcp2k.KcpChannel.Unreliable, buffer);
+
+    return NetFrames.Send(buffer, nnid);
+}
+```

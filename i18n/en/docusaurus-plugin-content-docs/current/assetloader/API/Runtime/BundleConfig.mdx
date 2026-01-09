@@ -1,0 +1,90 @@
+---
+sidebar_position: 1
+---
+
+# BundleConfig
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.AssetLoader.Bundle;
+
+## Methods
+
+### GetValueFromUrlCfg
+Gets the specified key-value pair from the `burlconfig.conf` deployment configuration file. Supports automatic detection of encryption status and decryption.
+
+**Params**
+* `string key`: Key name in the configuration file (e.g., `BUNDLE_IP`)
+
+<Highlight color="#0373fc">Attention</Highlight> If the file header matches the encryption mark, it will be decrypted using the Cipher Key set in the project.
+
+---
+
+### GetAppConfigFromStreamingAssets / HostServer
+Gets the application basic configuration (AppConfig).
+* **StreamingAssets**: Read from built-in resources included with the package.
+* **HostServer**: Read from a remote server (supports weak network handling; if it fails, it attempts to fall back to the last successfully cached version).
+
+---
+
+### GetHostServerUrl / GetFallbackHostServerUrl
+Combines the complete remote resource download address based on the Package name.
+* **Host**: Main CDN address.
+* **Fallback**: Backup CDN address.
+
+**Params**
+* `string packageName`: Resource package name
+
+<Highlight color="#00d679">Reminder</Highlight> The path combination logic automatically determines the version folder format (e.g., `v1.0` or `v1.0.0`) based on `SEMANTIC_RULE` (semantic rules).
+
+---
+
+### GetDlcHostServerUrl / GetDlcFallbackHostServerUrl
+Gets the endpoint path for DLC packages located on the remote server.
+
+**Params**
+* `string packageName`: DLC package name
+* `string dlcVersion`: DLC version number
+* `bool withoutPlatform`: Whether to ignore the platform path level (default is false)
+
+---
+
+### GoToAppStore
+Gets the `STORE_LINK` setting and directly calls the system browser to open the main app store link (Google Play / App Store).
+
+---
+
+### Local & Builtin Path Operations
+Provides resource path localization functions:
+
+| Method Name | Description |
+| :--- | :--- |
+| **GetLocalSandboxRootPath** | Gets the root directory path for local persistent resources (Sandbox). |
+| **GetLocalSandboxPackagePath** | Gets the local storage path for a specific Package. |
+| **GetBuiltinRootPath** | Gets the root directory path for built-in resources. |
+| **GetRequestStreamingAssetsPath** | Gets the StreamingAssets path suitable for WebRequest (automatically handles `file://` prefix for iOS/OSX). |
+
+---
+
+### GetHostServerAppConfigPath / PatchConfigPath
+Gets the complete URL path for configuration files (AppConfig / PatchConfig) on the remote server.
+
+<Highlight color="#ff2f00">Important</Highlight> This method prioritizes reading the built-in AppConfig to determine the current product name and platform, then requests the configuration file under the corresponding path from the remote server.
+
+---

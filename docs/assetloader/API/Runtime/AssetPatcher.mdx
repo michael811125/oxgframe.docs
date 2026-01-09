@@ -1,0 +1,101 @@
+---
+sidebar_position: 5
+---
+
+# AssetPatcher
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.AssetLoader;
+
+## Patch Status (更新狀態)
+
+用於監控當前資源更新流程的進度。
+
+* **IsInitialized()**: 判斷資源系統是否已完成初始化。
+* **IsCheck()**: 是否正在執行版本檢查。
+* **IsRepair()**: 是否正在執行修復（重新下載）流程。
+* **IsDone()**: 更新流程是否已全部完成且可開始加載資源。
+
+---
+
+## Patch Operation (更新操作)
+
+控制主下載器的核心行為。
+
+### Check / Repair
+* **Check()**: 開始執行補丁更新流程（包含版本對比與檔案清單獲取）。
+* **Repair()**: 開始執行資源修復流程，會強制檢查所有檔案的完整性。
+
+### Control Methods
+* **Pause() / Resume()**: 暫停或繼續主下載器的任務。
+* **Cancel()**: 取消下載。
+
+---
+
+## Package Operation (資源包管理)
+
+管理各個獨立 Package 的生命週期與本地緩存。
+
+### InitPackage
+初始化指定的 Package，系統會自動判斷該 Package 是 **App (主要)** 還是 **DLC (擴充)** 類型，並自動從遠端或內置路徑尋找資源。
+
+### UnloadPackageAndClearCacheFiles
+卸載指定的 Package，並從硬碟（Sandbox）中徹底刪除相關資源檔案。
+* **Params**:
+    * `string packageName`: Package 名稱。
+    * `bool destroyPackage`: 是否同時將 Package 從內存中釋放。
+
+### Default Package 設置
+* **SetDefaultPackage**: 設置初始預設的資源包。
+* **SwitchDefaultPackage**: 在已註冊的包之間進行切換預設的資源包。
+* **GetDefaultPackageName**: 獲取目前加載資源時預設使用的包名。
+
+---
+
+## Downloader (下載器管理)
+
+提供極為彈性的下載方案，支持合併多個 Package 同時下載。
+
+### GetPackageDownloader
+獲取單一 Package 的下載器，支持透過 **Tags (標籤)** 或 **AssetNames (資源名)** 來精確篩選需要更新的內容。
+
+### BeginDownloadWithCombinePackages
+合併多個 Package 的更新請求。這在處理「DLC + 主資源更新」時非常有用，能統一在一個進度條中顯示。
+
+**主要參數：**
+* `OnDownloadSpeedProgress`: 用於接收下載速度、剩餘時間與總進度的回調。
+* `DownloadError`: 下載失敗時的回調（包含檔案資訊與錯誤訊息）。
+
+---
+
+## Path & Storage (路徑與儲存)
+
+* **GetLocalSandboxRootPath()**: 取得本地持久化儲存根目錄（.../yoo）。
+* **GetBuiltinRootPath()**: 取得 StreamingAssets 內的內置資源根目錄。
+* **GoToAppStore()**: 呼叫系統瀏覽器前往商店連結（更新 App 本體）。
+
+---
+
+## Release (釋放)
+
+### Release()
+<Highlight color="#ff2f00">重要</Highlight> 當遊戲準備關閉時調用。此方法會異步釋放所有 Package 的資源引用，並清空 Bundle 相關的全局配置，確保內存正確回收。
+
+---

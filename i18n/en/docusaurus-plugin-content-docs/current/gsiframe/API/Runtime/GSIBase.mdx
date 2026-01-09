@@ -1,0 +1,92 @@
+---
+sidebar_position: 2
+---
+
+# GSIBase
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.GSIFrame;
+
+## Core Design Concept
+
+`GSIBase` defines a complete lifecycle for a game stage. Through the automated process of `BeginInit`, it ensures that stages execute in the order of "Stop Updating -> Perform Initialization -> Start Updating" when entered, supporting asynchronous processing (UniTask).
+
+---
+
+## Properties and States
+
+* **id**
+    * Type: `int`
+    * Description: Unique identifier for the stage, automatically assigned when registered by `GSIManager`.
+* **runUpdate**
+    * Type: `bool`
+    * Description: Switch that controls whether `OnUpdate` for this stage is executed.
+
+---
+
+## Built-in Flow Control
+
+### Execution Order Description
+
+1. **First Check**: If not yet initialized, execute `OnCreate` (initialized only once).
+2. **Step 1**: Call `StopUpdate()` to pause refreshing.
+3. **Step 2**: Call `OnEnter()` for asynchronous initialization logic of this stage.
+4. **Step 3**: Call `RunUpdate()` to start `OnUpdate` refreshing.
+
+---
+
+## Must Implement Methods (Implementation)
+
+After inheriting from `GSIBase`, the following lifecycle methods must be implemented:
+
+### OnCreate()
+* **Return Value**: `UniTask`
+* **Trigger Timing**: When the stage instance is switched to for the "first" time.
+* **Purpose**: Suitable for one-time resource preloading or object initialization.
+
+### OnEnter()
+* **Return Value**: `UniTask`
+* **Trigger Timing**: Every time the stage is switched to.
+* **Purpose**: Handle logic when entering the stage, such as opening UI windows or playing transition animations.
+
+### OnUpdate(float dt)
+* **Return Value**: `void`
+* **Trigger Timing**: When `runUpdate` is true and the stage is active, refreshes with the game frame rate.
+* **Purpose**: Handle cyclic logic within the stage (such as timers, character control, etc.).
+
+### OnExit()
+* **Return Value**: `void`
+* **Trigger Timing**: Before switching to the next stage.
+* **Purpose**: Clean up temporary data generated in this stage, close related UI, or stop sound effects.
+
+---
+
+## Stage State Operation
+
+Developers can manually control update behavior within the stage using the following methods:
+
+* **RunUpdate()**: Manually start `OnUpdate` execution.
+* **StopUpdate()**: Manually pause `OnUpdate` execution.
+
+---
+
+<Highlight color="#00d679">Reminder</Highlight> Since `OnCreate` and `OnEnter` support `UniTask`, you can conveniently use `await` in these methods to wait for resource loading to complete. The system will automatically start `OnUpdate` after the loading is finished.
+
+---

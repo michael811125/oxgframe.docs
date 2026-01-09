@@ -1,0 +1,131 @@
+---
+sidebar_position: 1
+---
+
+# BundleHelper
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.AssetLoader.Editor;
+
+## Methods
+
+### ExportAppConfig
+输出 App 基础配置文件至指定路径，通常用于内置的 `StreamingAssets`。
+
+**Params**
+* `string productName`：产品名称
+* `string appVersion`：应用程序版本
+* `string outputPath`：输出目标路径
+* `bool activeBuildTarget`：是否使用当前编辑器设定的平台
+* `BuildTarget buildTarget`：若不使用编辑器设定，指定的目标平台
+
+---
+
+### ExportConfigsAndAppBundles
+输出完整的资源包与配置文件（AppConfig & PatchConfig）至 CDN 输出路径。
+
+**Params**
+* `string inputPath`：原始资源输入路径
+* `string outputPath`：CDN 资源输出路径
+* `string productName`：产品名称
+* `SemanticRule semanticRule`：版本语义化规则（影响数据夹命名逻辑）
+* `string appVersion`：应用程序版本
+* `string[] exportPackages`：要输出的 Package 名称清单
+* `List<GroupInfo> groupInfos`：资源分组信息清单
+* `string[] packageInfos`：Package 相关信息
+* `bool activeBuildTarget`：是否使用当前编辑器设定的平台
+* `BuildTarget buildTarget`：指定的目标平台
+* `bool isClearOutputPath`：是否在输出前清空目标数据夹（预设为 true）
+
+---
+
+### ExportAppBundles
+仅输出最新的资源包（Bundles），不更新配置文件。
+
+**Params**
+* `string inputPath`：资源输入路径
+* `string outputPath`：资源输出路径
+* `string productName`：产品名称
+* `SemanticRule semanticRule`：语义化规则
+* `string appVersion`：应用程序版本
+* `string[] exportPackages`：要输出的 Package 清单
+* `bool activeBuildTarget`：是否使用编辑器设定平台
+* `BuildTarget buildTarget`：指定的目标平台
+* `bool isClearOutputPath`：是否清空目标数据夹
+
+---
+
+### ExportIndividualDlcBundles
+输出独立的 DLC 资源包。
+
+**Params**
+* `string inputPath`：资源输入路径
+* `string outputPath`：资源输出路径
+* `string productName`：产品名称
+* `List<DlcInfo> dlcInfos`：DLC 信息清单（包含名称与版本）
+* `bool activeBuildTarget`：是否使用编辑器设定平台
+* `BuildTarget buildTarget`：指定的目标平台
+* `bool isClearOutputPath`：是否清空目标数据夹
+
+---
+
+### ExportBundleUrlConfig
+输出包含 CDN 位址与商店链接的设定档，支持加密功能。
+
+**Params**
+* `string bundleIp`：主要 CDN 服务器 IP 或域名
+* `string bundleFallbackIp`：备用 CDN 服务器 IP 或域名
+* `string storeLink`：商店（Google Play / App Store）链接
+* `string outputPath`：输出路径
+* `bool cipher`：是否启用加密（启用后将进行加密）
+
+---
+
+### ParsingGroupInfosByArgs
+将字符串格式的参数解析为 `GroupInfo` 物件清单。
+
+**Params**
+* `string groupInfoArgs`：字符串参数（格式：`g1,t1#g2,t1,t2`）
+
+---
+
+### ConvertGroupInfosToArgs
+将 `GroupInfo` 物件清单转换回字符串格式，便于命令行传递。
+
+**Params**
+* `List<GroupInfo> groupInfos`：群组信息清单
+
+---
+
+### ParsingDlcInfosByArgs
+将字符串格式的参数解析为 `DlcInfo` 物件清单。
+
+**Params**
+* `string dlcInfoArgs`：字符串参数（格式：`dlc1,1.0.0#dlc2,1.1.0`）
+
+---
+
+### ConvertDlcInfosToArgs
+将 `DlcInfo` 物件清单转换回字符串格式。
+
+**Params**
+* `List<DlcInfo> dlcInfos`：DLC 信息清单
+
+---

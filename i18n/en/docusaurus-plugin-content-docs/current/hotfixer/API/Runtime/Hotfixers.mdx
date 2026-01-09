@@ -1,0 +1,79 @@
+---
+sidebar_position: 1
+---
+
+# Hotfixers
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.Hotfixer;
+
+## Core Mechanism Description
+
+`Hotfixers` is mainly integrated with **[HybridCLR](https://github.com/focus-creative-games/hybridclr)**, responsible for the following at runtime:
+1. **Supplementing AOT Metadata**: Solving problems such as generic instantiation.
+2. **Loading Hotfix DLLs**: Injecting updated logic into the execution thread.
+
+---
+
+## Patch Operation (Update and Check)
+
+Core methods for performing hot-update checks and loading.
+
+### CheckHotfix
+Starts downloading and loading all hot-update related files.
+
+* **Automatic Configuration Mode**
+    * `CheckHotfix(string packageName, Action errorAction = null)`
+    * `CheckHotfix(PackageInfoWithBuild packageInfo, Action errorAction = null)`
+    * <Highlight color="#00d679">Reminder</Highlight> This mode automatically reads the `hotfixdllconfig.conf` configuration file in `StreamingAssets`.
+
+* **Manual Specification Mode**
+    * `CheckHotfix(string packageName, string[] aotAssemblies, string[] hotfixAssemblies)`
+    * Supports manual passing of a list of AOT assemblies and hotfix assemblies that need supplementation.
+
+---
+
+## Status & Cache
+
+* **IsDone()**
+    * Returns whether the hot update has completed loading.
+    * Wait for Hotfixers.IsDone() before entering the main game logic and resource updates.
+* **IsDisabled()**
+    * Checks if the hot-update feature is currently disabled in the environment (usually used for developer mode).
+    * <Highlight color="#ff2f00">Important</Highlight> If HybridCLR is disabled, the Macro [OXGFRAME_HYBRIDCLR_DISABLED](https://github.com/michael811125/OxGFrame/wiki/Macro-Definitions) must be used to effectively eliminate the hot-update flow.
+* **Reset()**
+    * Resets hot-update flags and cache data. If it's the commercial version (supporting HotReload), Reset can be used to re-initialize.
+
+---
+
+## Assembly Info
+
+Provides queries for assemblies loaded at runtime.
+
+### AOT Assemblies (Metadata Assemblies)
+* **GetAOTAssemblyNames()**: Gets AOT assembly names (including `.dll` extension).
+* **GetAotAssemblyNamesWithoutExtensions()**: Gets AOT assembly names (without extension).
+
+### Hotfix Assemblies (Hotfix Assemblies)
+* **GetHotfixAssemblyNames()**: Gets hot-update assembly names (including `.dll` extension).
+* **GetHotfixAssemblyNamesWithoutExtensions()**: Gets hot-update assembly names (without extension).
+* **GetHotfixAssembly(string assemblyName)**: Gets the loaded `Assembly` object by name.
+
+---

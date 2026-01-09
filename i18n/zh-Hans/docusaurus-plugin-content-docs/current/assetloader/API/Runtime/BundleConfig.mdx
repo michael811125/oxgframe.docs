@@ -1,0 +1,90 @@
+---
+sidebar_position: 1
+---
+
+# BundleConfig
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.AssetLoader.Bundle;
+
+## Methods
+
+### GetValueFromUrlCfg
+从 `burlconfig.conf` 部署配置文件中取得指定的键值（Key-Value）。支持自动侦测加密状态并解密。
+
+**Params**
+* `string key`：设定档中的键名（如 `BUNDLE_IP`）
+
+<Highlight color="#0373fc">注意</Highlight> 若文件标头符合加密标记，将会使用项目设定的 Cipher Key 进行解密。
+
+---
+
+### GetAppConfigFromStreamingAssets / HostServer
+获取应用程序基础配置（AppConfig）。
+* **StreamingAssets**: 从随包内置资源读取。
+* **HostServer**: 从远端服务器读取（支持弱联网处理，若失败则尝试回退至上次成功的缓存版本）。
+
+---
+
+### GetHostServerUrl / GetFallbackHostServerUrl
+根据 Package 名称组合出完整的远端资源下载地址。
+* **Host**: 主要 CDN 位址。
+* **Fallback**: 备用 CDN 位址。
+
+**Params**
+* `string packageName`：资源包名称
+
+<Highlight color="#00d679">提醒</Highlight> 路径组合逻辑会自动根据 `SEMANTIC_RULE`（语义化规则）决定版本数据夹格式（如 `v1.0` 或 `v1.0.0`）。
+
+---
+
+### GetDlcHostServerUrl / GetDlcFallbackHostServerUrl
+获取 DLC 包裹位于远端服务器的端点路径。
+
+**Params**
+* `string packageName`：DLC 包名称
+* `string dlcVersion`：DLC 版本号
+* `bool withoutPlatform`：是否忽略平台路径层级（预设为 false）
+
+---
+
+### GoToAppStore
+取得 `STORE_LINK` 设置并直接调用系统浏览器开启主程序商店链接（Google Play / App Store）。
+
+---
+
+### Local & Builtin Path Operations
+提供资源路径的定位功能：
+
+| 方法名称 | 说明 |
+| :--- | :--- |
+| **GetLocalSandboxRootPath** | 取得本地持久化资源（Sandbox）的根目录路径。 |
+| **GetLocalSandboxPackagePath** | 取得特定 Package 在本地的储存路径。 |
+| **GetBuiltinRootPath** | 取得内置资源（Built-in）的根目录路径。 |
+| **GetRequestStreamingAssetsPath** | 取得适用于 WebRequest 的 StreamingAssets 路径（自动处理 iOS/OSX 的 `file://` 前缀）。 |
+
+---
+
+### GetHostServerAppConfigPath / PatchConfigPath
+获取远端服务器上配置文件（AppConfig / PatchConfig）的完整 URL 路径。
+
+<Highlight color="#ff2f00">重要</Highlight> 此方法会优先读取内置的 AppConfig 以确定当前产品名称与平台，再向远端请求对应路径下的配置文件。
+
+---
