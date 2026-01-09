@@ -1,0 +1,95 @@
+---
+sidebar_position: 2
+---
+
+# Loading Configuration
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## Method 1: Code Specification
+
+Directly specify the loading of specific hotfix DLLs through code.
+
+<Highlight color="#0373fc">Attention</Highlight> **Pros**: High efficiency, direct execution. **Cons**: Hard to maintain; after changing hotfix DLLs, AOT needs to be repackaged and recompiled.
+
+```csharp
+Hotfixers.CheckHotfix
+(
+    // Download and load hotfix files from HotfixPackage
+    "HotfixPackage",
+    // Metadata for AOT assemblies
+    new string[]
+    {
+        "mscorlib.dll",
+        "UniTask.dll"
+    },
+    // Hotfix assemblies
+    new string[]
+    {
+        "HotfixerDemo.Hotfix.Runtime.dll"
+    }
+);
+```
+
+---
+
+## Method 2: Configuration File
+
+Automatically load hotfix DLLs after reading the configuration file from StreamingAssets.
+
+<Highlight color="#0373fc">Attention</Highlight> **Pros**: Easy to maintain; hotfix DLLs can be replaced without repackaging and recompiling AOT. **Cons**: Requires requesting and reading files, resulting in a minimal performance loss.
+
+```csharp
+// Auto try to load hotfixdllconfig.conf from StreamingAssets
+Hotfixers.CheckHotfix
+(
+    // Download and load hotfix files from HotfixPackage
+    "HotfixPackage",
+    () =>
+    {
+        Debug.LogWarning("<color=#ff8321>Please generate the hotfixdllconfig.conf file in the StreamingAssets folder using the MenuItem -> OxGFrame/Hotfixer/Hotfix Dll Config Generator.</color>");
+    }
+);
+```
+
+### Generate Configuration File
+
+Open the Hotfix Dll Config Generator.
+
+![](/img/hotfixer/img_8.png)
+
+After filling in the relevant configurations, click the Cipher Process / Plaintext Process button to generate the configuration file (automatically output to the StreamingAssets directory).
+
+![](/img/hotfixer/img_9.png)
+
+Configuration file output and content.
+
+![](/img/hotfixer/img_11.png)
+
+![](/img/hotfixer/img_12.png)
+
+<Highlight color="#00d679">Reminder</Highlight> The `hotfixdllconfig.conf` file name and extension can be customized ([refer to configuration settings](https://oxgframe.ouhiyo.com/docs/getting-started#hotfixsettings)).
+
+### Encoding Conversion
+
+If outputting **Cipher** or **Plaintext**, you can select the file and use Right-Click to perform the conversion directly.
+
+![](/img/hotfixer/img_10.png)
+
+<Highlight color="#ff2f00">Important</Highlight> During development, it is recommended to use Plaintext for easier debugging; for official release, Cipher is strongly recommended.

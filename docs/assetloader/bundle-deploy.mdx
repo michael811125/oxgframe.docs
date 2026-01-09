@@ -4,7 +4,7 @@ sidebar_position: 5
 
 # 資源部署
 
-export const Highlight = ({children, color}) => (
+export const Highlight = ({ children, color }) => (
   <span
     style={{
       backgroundColor: color,
@@ -103,6 +103,42 @@ Cipher (密文類型)：
 Plaintext (明文類型)：
 
 ![](/img/assetloader/img_22.png)
+
+---
+
+## 運行包部署
+
+```csharp
+/// <summary>
+/// 運行包分組
+/// </summary>
+[Serializable]
+public class GroupInfo
+{
+    [NonSerialized]
+    public int totalCount;
+    [NonSerialized]
+    public long totalBytes;
+    public string groupName;
+    public string[] tags;
+}
+```
+
+YooAsset 收集器中的 Tags 標籤，便於區分運行包 (如有多個 Preset Packages 會自動檢測是否包含配置的 Tags 標籤，會自動整併)。
+
+<Highlight color="#ff2f00">重要</Highlight> 該功能僅限於 [Preset Packages](/docs/assetloader/settings/#preset-packages)，自行獨立初始的 Packages 不適用該功能。
+
+![](/img/assetloader/latest/img_35.png)
+
+區分：
+- Minimum_Pack (最小運行包)
+- Standard_Pack (標準運行包)
+
+![](/img/assetloader/latest/img_36.png)
+
+<Highlight color="#0373fc">注意</Highlight> groupName 可以用於語系查表，利於多國語系的配置，如 Key: Minimum_Pack, Value: 最小運行包。
+
+<Highlight color="#ff2f00">重要</Highlight> 只有下一次偵測到 App 版號更新時，需要更新 App 時，才會重置上一次使用者選擇群組運行包的紀錄。
 
 ---
 

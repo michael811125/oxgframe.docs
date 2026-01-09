@@ -4,7 +4,7 @@ sidebar_position: 5
 
 # Asset Bundle Deployment
 
-export const Highlight = ({children, color}) => (
+export const Highlight = ({ children, color }) => (
   <span
     style={{
       backgroundColor: color,
@@ -106,6 +106,42 @@ Plaintext：
 
 ---
 
+## Run-Package Deployment
+
+```csharp
+/// <summary>
+/// Run-Package Grouping
+/// </summary>
+[Serializable]
+public class GroupInfo
+{
+    [NonSerialized]
+    public int totalCount;
+    [NonSerialized]
+    public long totalBytes;
+    public string groupName;
+    public string[] tags;
+}
+```
+
+Tags in the YooAsset collector make it easy to distinguish between run-packages (if there are multiple Preset Packages, it will automatically detect if they contain the configured Tags and merge them).
+
+<Highlight color="#ff2f00">Important</Highlight> This feature is only available for [Preset Packages](/docs/assetloader/settings/#preset-packages); independently initialized Packages do not support this feature.
+
+![](/img/assetloader/latest/img_35.png)
+
+Distinction:
+- Minimum_Pack (Minimum Run-Package)
+- Standard_Pack (Standard Run-Package)
+
+![](/img/assetloader/latest/img_36.png)
+
+<Highlight color="#0373fc">Attention</Highlight> groupName can be used for language localization tables, facilitating multi-language configurations, such as Key: Minimum_Pack, Value: Minimum Run-Package.
+
+<Highlight color="#ff2f00">Important</Highlight> The record of the user's last selected group run-package will only be reset when an App version update is detected and the App needs to be updated.
+
+---
+
 ## Additional Explanation
 
 <Highlight color="#ff2f00">Important</Highlight> If you select the following mode:
@@ -113,7 +149,7 @@ Plaintext：
 - **Offline Mode**
 - **WebGL Mode**
 
-You only need to perform [Builtin Deployment](#builtin-deployment) 即可。
+You only need to perform [Builtin Deployment](#builtin-deployment).
 
 
 

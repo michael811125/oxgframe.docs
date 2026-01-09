@@ -1,0 +1,95 @@
+---
+sidebar_position: 2
+---
+
+# 加載配置
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## 方式一：代碼指定
+
+透過代碼指定的方式，直接指定特定熱更 DLL 加載。
+
+<Highlight color="#0373fc">注意</Highlight> **優點**：效率高，直接執行。 **缺點**：不易維護，更改熱更 DLL 後，需要重新打包編譯 AOT。
+
+```csharp
+Hotfixers.CheckHotfix
+(
+    // Download and load hotfix files from HotfixPackage
+    "HotfixPackage",
+    // Metadata for AOT assemblies
+    new string[]
+    {
+        "mscorlib.dll",
+        "UniTask.dll"
+    },
+    // Hotfix assemblies
+    new string[]
+    {
+        "HotfixerDemo.Hotfix.Runtime.dll"
+    }
+);
+```
+
+---
+
+## 方式二：配置文件
+
+透過配置文件的方式，自動從 StreamingAssets 讀取配置文件後，進行熱更 DLL 加載。
+
+<Highlight color="#0373fc">注意</Highlight> **優點**：容易維護，不需要重新打包編譯 AOT，即可替換熱更 DLL。 **缺點**：需要請求讀取文件，會有極少量的性能損失。
+
+```csharp
+// Auto try to load hotfixdllconfig.conf from StreamingAssets
+Hotfixers.CheckHotfix
+(
+    // Download and load hotfix files from HotfixPackage
+    "HotfixPackage",
+    () =>
+    {
+        Debug.LogWarning("<color=#ff8321>Please generate the hotfixdllconfig.conf file in the StreamingAssets folder using the MenuItem -> OxGFrame/Hotfixer/Hotfix Dll Config Generator.</color>");
+    }
+);
+```
+
+### 生成配置文件
+
+開啟 Hotfix Dll Config Generator。
+
+![](/img/hotfixer/img_8.png)
+
+填寫相關配置後，點擊 Cipher Process / Plaintext Process 按鈕即可生成配置文件 (自動輸出至 StreamingAssets 底下)。
+
+![](/img/hotfixer/img_9.png)
+
+配置文件輸出與內容。
+
+![](/img/hotfixer/img_11.png)
+
+![](/img/hotfixer/img_12.png)
+
+<Highlight color="#00d679">提醒</Highlight> hotfixdllconfig.conf 文件名稱與副檔名都可以自行客製化 ([參考配置設定](/docs/getting-started#hotfixsettings))。
+
+### 編碼轉換
+
+如果輸出**密文**或**明文**，都可以選擇文件直接使用 Right-Click 進行轉換。
+
+![](/img/hotfixer/img_10.png)
+
+<Highlight color="#ff2f00">重要</Highlight> 開發期間建議使用 Plaintext 比較利於除錯，正式發佈則強烈建議使用 Cipher。
