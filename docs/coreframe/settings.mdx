@@ -1,0 +1,33 @@
+---
+sidebar_position: 2
+---
+
+# 全局配置
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## CodeBindingSettings 配置說明
+
+可以自行客製化綁定規則，包含新增 TailName 對應綁定的組件。
+
+![](/img/getting_started/latest/img_7.png)
+
+通過右鍵創建配置文件 (Project 窗體內右鍵 -> Create -> OxGFrame -> Create Settings -> Create Code Binding Settings)。
+
+![](/img/getting_started/latest/img_4.png)

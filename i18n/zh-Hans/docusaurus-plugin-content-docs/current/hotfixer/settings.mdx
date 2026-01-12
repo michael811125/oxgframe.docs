@@ -1,0 +1,33 @@
+---
+sidebar_position: 3
+---
+
+# 全局配置
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## HotfixSettings 配置说明
+
+可以自行定制化文件名称与扩展名称 (在 Resources 目录下)。
+
+![](/img/getting_started/latest/img_6.png)
+
+通过右键创建配置文件 (Project 窗体内右键 -> Create -> OxGFrame -> Create Settings -> Create Hotfix Settings in Resources)。
+
+![](/img/getting_started/latest/img_4.png)

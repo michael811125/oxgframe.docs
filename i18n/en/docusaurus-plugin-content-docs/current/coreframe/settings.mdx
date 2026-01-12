@@ -1,0 +1,33 @@
+---
+sidebar_position: 2
+---
+
+# Global Configuration
+
+export const Highlight = ({ children, color }) => (
+  <span
+    style={{
+      backgroundColor: color,
+      borderRadius: '5px',
+      color: '#fff',
+      padding: '2.5px'
+    }}>
+    {children}
+  </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## CodeBindingSettings Description
+
+You can customize binding rules, including adding components corresponding to the TailName for binding.
+
+![](/img/getting_started/latest/img_7.png)
+
+Create the configuration file via right-click (Right-click in Project window -> Create -> OxGFrame -> Create Settings -> Create Code Binding Settings).
+
+![](/img/getting_started/latest/img_4.png)

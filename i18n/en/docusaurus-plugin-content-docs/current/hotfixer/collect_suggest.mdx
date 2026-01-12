@@ -1,5 +1,5 @@
 ---
-sidebar_position: 3
+sidebar_position: 4
 ---
 
 # Collection Example
@@ -19,6 +19,36 @@ export const Highlight = ({ children, color }) => (
 <Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
 
 ### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## Compile Hotfix DLL
+
+Prerequisites: Remember to perform HybridCLR install -> [Generate/All](https://www.hybridclr.cn/docs/basic/buildpipeline#%E6%89%93%E5%8C%85%E6%B5%81%E7%A8%8B) (AOT Compilation) -> finally, you can complete the compilation of Hotfix DLLs.
+
+<Highlight color="#ff2f00">Important</Highlight> Please follow the [official documentation](https://www.hybridclr.cn/docs/intro) for HybridCLR compilation methods.
+
+### Step 1. (Install HybridCLR)
+
+![](/img/hotfixer/img_15.png)
+
+<Highlight color="#0373fc">Attention</Highlight> Remember to check if the IL2CPP Module is installed!
+
+![](/img/hotfixer/img_14.png)
+
+### Step 2. (Generate/All)
+
+![](/img/hotfixer/img_16.png)
+
+### Step 3. (Compile Hotfix DLL & Copy To HotfixCollector)
+
+![](/img/hotfixer/img_13.png)
+
+After execution, a `HotfixCollector` folder will be automatically created, and the files will be collected into it.
+
+<Highlight color="#00d679">Reminder</Highlight> You can check the Console's debugging messages to confirm if the corresponding DLLs were successfully Compiled & Copied.
+
+![](/img/hotfixer/img_17.png)
 
 ---
 

@@ -1,5 +1,5 @@
 ---
-sidebar_position: 3
+sidebar_position: 4
 ---
 
 # 收集示例
@@ -19,6 +19,36 @@ export const Highlight = ({ children, color }) => (
 <Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
 
 ### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## 編譯 Hotfix DLL
+
+前置作業記得 HybridCLR install (安裝) -> [Generate/All](https://www.hybridclr.cn/docs/basic/buildpipeline#%E6%89%93%E5%8C%85%E6%B5%81%E7%A8%8B) (AOT 編譯) -> 最後才能完成 Hotfix DLL 的編譯。
+
+<Highlight color="#ff2f00">重要</Highlight> HybridCLR 的編譯方式請依照[官方文檔](https://www.hybridclr.cn/docs/intro)進行操作。
+
+### 步驟 1. (安裝 HybridCLR)
+
+![](/img/hotfixer/img_15.png)
+
+<Highlight color="#0373fc">注意</Highlight> 記得要確認是否有安裝 IL2CPP Module！
+
+![](/img/hotfixer/img_14.png)
+
+### 步驟 2. (Generate/All)
+
+![](/img/hotfixer/img_16.png)
+
+### 步驟 3. (編譯 Hotfix DLL & Copy To HotfixCollector)
+
+![](/img/hotfixer/img_13.png)
+
+執行後，將會自動創建 HotfixCollector 文件夾，並收集至 HotfixCollector 文件夾中。
+
+<Highlight color="#00d679">提醒</Highlight> 可以查看 Console 的調適訊息，確認是否有對應的 DLL Compile & Copy 成功。
+
+![](/img/hotfixer/img_17.png)
 
 ---
 

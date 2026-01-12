@@ -60,7 +60,7 @@ using OxGFrame.NetFrame;
 ### SendMessage(string text)
 發送字串數據。
 * **Params**: `string text`: 要發送的字串。
-* **注意**: 並非所有協議都支援直接發送字串（如純 TCP），實作時需視情況拋出異常或進行 UTF-8 轉換。
+* **注意**: 並非所有協議都支持直接發送字串（如純 TCP），實作時需視情況拋出異常或進行 UTF-8 轉換。
 
 ### OnUpdate()
 驅動底層傳輸的輪詢（Polling）。
@@ -122,7 +122,7 @@ public class TcpNetProvider : INetProvider
 
     public bool SendMessage(string text)
     {
-        // TCP 通常不支援純文本發送，需由開發者決定是否自行封裝 UTF8 轉換
+        // TCP 通常不支持純文本發送，需由開發者決定是否自行封裝 UTF8 轉換
         throw new NotSupportedException("TCP not supports SendMessage, use SendBinary.");
     }
 
