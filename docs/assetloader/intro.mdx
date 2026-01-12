@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # 模塊介紹
 
-export const Highlight = ({children, color}) => (
+export const Highlight = ({ children, color }) => (
   <span
     style={{
       backgroundColor: color,
@@ -62,6 +62,7 @@ export const Highlight = ({children, color}) => (
 ### 檢查 PlayMode 是否初始完成
 
 輪詢 AssetPatcher.IsInitialized() 是否完成 Preset Packages 的初始，因為初始完成後，才能開始進行 Built-in Bundle 的加載與 AssetPatcher.Check() 更新檢查，又或者邊玩邊下載。
+- 參考 [PlayMode](/docs/assetloader/settings#playmode) 的說明。
 
 <Highlight color="#00d679">提醒</Highlight> 區分 Built-in 跟 Patch (視情況自行訂定運作流程)。
 

@@ -62,6 +62,7 @@ export const Highlight = ({ children, color }) => (
 ### 检查 PlayMode 是否初始完成
 
 轮询 AssetPatcher.IsInitialized() 是否完成 Preset Packages 的初始，因为初始完成后，才能开始进行 Built-in Bundle 的加载与 AssetPatcher.Check() 更新检查，又或者边玩边下载。
+- 参考 [PlayMode](/docs/assetloader/settings#playmode) 的说明。
 
 <Highlight color="#00d679">提醒</Highlight> 区分 Built-in 和 Patch (视情况自行订立运作流程)。
 
