@@ -4,7 +4,7 @@ sidebar_position: 2
 
 # 加载方式
 
-export const Highlight = ({children, color}) => (
+export const Highlight = ({ children, color }) => (
   <span
     style={{
       backgroundColor: color,
@@ -79,7 +79,7 @@ AppPackageInfoWithBuild packageInfo = new AppPackageInfoWithBuild()
 
 bool isInitialized = await AssetPatcher.InitAppPackage(packageInfo, true);
 if (isInitialized)
-    await AssetLoaders.LoadAssetAsync<GameObject>("packageName", "assetName");
+    await AssetLoaders.LoadAssetAsync<GameObject>("OtherPackage", "assetName");
 ```
 
 DLC Package
@@ -96,7 +96,7 @@ DlcPackageInfoWithBuild packageInfo = new DlcPackageInfoWithBuild()
 
 bool isInitialized = await AssetPatcher.InitDlcPackage(packageInfo, true);
 if (isInitialized)
-    await AssetLoaders.LoadAssetAsync<GameObject>("packageName", "assetName");
+    await AssetLoaders.LoadAssetAsync<GameObject>("DlcPackage", "assetName");
 ```
 
 <Highlight color="#0373fc">注意</Highlight> 区分 App Packages 和 DLC Packages，注意路径不同。
@@ -108,7 +108,7 @@ if (isInitialized)
   - 路径不含平台 (.../CDN/\<ProductName\>/DLC/\<PackageName\>/\<DlcVersion\>)，**属于所有平台的共用资源**。
   - 支持特定版本 DLC package 的下载与 DLC package 卸载功能，需手动进行 AssetPatcher.InitDlcPackage，并且指定特定 dlcVersion，对于 dlcVersion 也可以单一固定 dlcVersion (ex: "latest")，变成只要 DLC 有更新就可以使用固定路径进行更新。
 
-<Highlight color="#0373fc">注意</Highlight> 另外，Play Mode 的说明如下。
+<Highlight color="#0373fc">注意</Highlight> 另外，[Play Mode](/docs/assetloader/settings#playmode) 的说明如下。
 - Editor Simulate Mode (开发模式)。
 - Offline Mode (离线模式)。
 - Host Mode (联机模式)。

@@ -4,7 +4,7 @@ sidebar_position: 2
 
 # Loading Method
 
-export const Highlight = ({children, color}) => (
+export const Highlight = ({ children, color }) => (
   <span
     style={{
       backgroundColor: color,
@@ -79,7 +79,7 @@ AppPackageInfoWithBuild packageInfo = new AppPackageInfoWithBuild()
 
 bool isInitialized = await AssetPatcher.InitAppPackage(packageInfo, true);
 if (isInitialized)
-    await AssetLoaders.LoadAssetAsync<GameObject>("packageName", "assetName");
+    await AssetLoaders.LoadAssetAsync<GameObject>("OtherPackage", "assetName");
 ```
 
 DLC Package
@@ -96,7 +96,7 @@ DlcPackageInfoWithBuild packageInfo = new DlcPackageInfoWithBuild()
 
 bool isInitialized = await AssetPatcher.InitDlcPackage(packageInfo, true);
 if (isInitialized)
-    await AssetLoaders.LoadAssetAsync<GameObject>("packageName", "assetName");
+    await AssetLoaders.LoadAssetAsync<GameObject>("DlcPackage", "assetName");
 ```
 
 <Highlight color="#0373fc">Attention</Highlight> Distinguish between App Packages and DLC Packages, noting the different paths.
@@ -108,13 +108,13 @@ if (isInitialized)
   - The path does not include the platform (.../CDN/\<ProductName\>/DLC/\<PackageName\>/\<DlcVersion\>), **which is a shared resource for all platforms**.
   - Supports downloading specific versions of DLC packages and DLC package uninstallation. You must manually call AssetPatcher.InitDlcPackage and specify a specific dlcVersion. The dlcVersion can also be set to a fixed version (e.g., "latest"), so whenever the DLC is updated, you can use a fixed path for the update.
 
-<Highlight color="#0373fc">Attention</Highlight> Additionally, the Play Mode descriptions are as follows:
+<Highlight color="#0373fc">Attention</Highlight> Additionally, the [Play Mode](/docs/assetloader/settings#playmode) descriptions are as follows:
 - Editor Simulate Mode (Development Mode).
-- Offline Mode.
-- Host Mode.
-- Weak Host Mode.
-- WebGL Mode.
-- WebGL Remote Mode.
+- Offline Mode (Local Mode).
+- Host Mode (Online Mode).
+- Weak Host Mode (Lite Online Mode).
+- WebGL Mode (Requesting from StreamingAssets).
+- WebGL Remote Mode (Requesting from StreamingAssets and other CDNs).
 
 <Highlight color="#ff2f00">Important</Highlight> [Build Macro Definitions](https://github.com/michael811125/OxGFrame/wiki/Macro-Definitions)
 
