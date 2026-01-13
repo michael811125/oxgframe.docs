@@ -22,6 +22,8 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+using OxGFrame.NetFrame;
+
 ## Updater Controls
 
 `NetFrames` uses an independent `RTUpdater` ([Real-time Updater](https://github.com/michael811125/OxGKit/blob/master/Assets/OxGKit/TimeSystem/Scripts/Runtime/Core/Updater/RTUpdater.cs)) to drive the polling logic of all network nodes. The independent updater ensures that network communication still operates correctly even when the MonoBehaviour's TimeScale is 0.
