@@ -1,0 +1,124 @@
+---
+sidebar_position: 1
+---
+
+# NetFrames
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+## Updater Controls
+
+`NetFrames` uses an independent `RTUpdater` ([Real-time Updater](https://github.com/michael811125/OxGKit/blob/master/Assets/OxGKit/TimeSystem/Scripts/Runtime/Core/Updater/RTUpdater.cs)) to drive the polling logic of all network nodes. The independent updater ensures that network communication still operates correctly even when the MonoBehaviour's TimeScale is 0.
+
+<Highlight color="#00d679">Reminder</Highlight> This is crucial for implementing features like "handling network disconnection or synchronization while the game is paused".
+
+### SetUpdaterTimeScale
+Controls the operation rate of the `NetManager` updater.
+* **Params**: `float timeScale`: Scale factor.
+
+### Start Methods
+* **StartUpdater()**: Starts the network loop on the main thread.
+* **StartUpdaterOnThread()**: Starts the network loop on an **independent thread**, suitable for scenarios requiring extremely high performance or avoiding main thread blocking.
+
+### Stop / Status
+* **StopUpdater()**: Stops the network loop (all nodes will pause their polling logic).
+* **IsUpdaterRunning()**: Returns whether the updater is currently running.
+
+### Reset Methods
+* **ResetUpdater()**: Resets and restarts the updater on the main thread.
+* **ResetUpdater(bool useThreadedUpdater)**: Resets and restarts with a specified thread mode.
+    * **Params**: `bool useThreadedUpdater`: If true, enables threaded mode.
+* **ResetUpdaterOnThread()**: Resets and restarts the updater on an **independent thread**.
+
+<Highlight color="#ff2f00">Important</Highlight> When `StartUpdaterOnThread` is chosen, all network callbacks (e.g., `OnBinary`) will be triggered in a non-main thread. If you need to operate Unity components, please ensure thread safety and use [UMT](https://github.com/michael811125/OxGKit/blob/master/Assets/OxGKit/Utilities/Scripts/Runtime/UnityMainThread/UMT.cs) to dispatch to the main thread.
+
+---
+
+## Node Management
+
+The network system is organized in units of `NetNode` (network node), where each node can have its own independent transmission protocol and configuration.
+
+### AddNetNode
+Adds a network node to the manager.
+* **Params**: 
+    * `NetNode netNode`: The node instance to add.
+    * `int nnId`: Unique identifier for the node (default is 0).
+
+### RemoveNetNode
+Removes a specified node from the manager.
+* **Params**: `int nnId`: Node ID.
+
+### GetNetNode
+Retrieves a registered network node.
+* **Params**: `int nnId`: Node ID.
+* **Returns**: `NetNode`: The node instance, or null if it doesn't exist.
+
+### Count
+* **Returns**: `int`: Total number of currently registered network nodes.
+
+---
+
+## Connection & Communication
+
+Core interfaces for performing network operations on specific nodes.
+
+### Connect
+Opens a connection for a specified network node.
+* **Params**: 
+    * `NetOption netOption`: Connection configuration (includes host address, port, retry count, etc.).
+    * `int nnId`: Target node ID.
+
+### IsConnected
+Checks the connection status of a node.
+* **Params**: `int nnId`: Node ID.
+* **Returns**: `bool`: Returns true if the node is connected.
+
+### Send (Binary)
+Sends binary packets.
+* **Params**: 
+    * `byte[] buffer`: Raw data stream.
+    * `int nnId`: Target node ID.
+* **Returns**: `bool`: Returns true if sent successfully.
+
+### Send (String)
+Sends string packets (depending on the underlying Provider implementation).
+* **Params**: 
+    * `string text`: String message.
+    * `int nnId`: Target node ID.
+* **Returns**: `bool`: Returns true if sent successfully.
+
+---
+
+## Termination
+
+### Close
+Disconnects the network connection of a specified node.
+* **Params**: 
+    * `int nnId`: Node ID.
+    * `bool removeNetNode`: Whether to remove the node from the manager after disconnection.
+
+### CloseAll
+Closes all active network node connections.
+* **Params**: `bool removeNetNode`: Whether to clear all registered nodes at the same time.
+
+---
+
+<Highlight color="#0373fc">Attention</Highlight> In most single-connection application scenarios, simply using the default `nnId = 0` is sufficient. If there are requirements for multiple server connections (e.g., Login Server and Game Server), please assign independent Node IDs (NNID) for each node.
+
+---

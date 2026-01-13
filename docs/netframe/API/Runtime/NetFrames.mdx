@@ -1,0 +1,126 @@
+---
+sidebar_position: 1
+---
+
+# NetFrames
+
+export const Highlight = ({ children, color }) => (
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
+);
+
+<Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
+
+### [Coding Style wiki](https://github.com/michael811125/OxGFrame/wiki/Coding-Style)
+
+---
+
+using OxGFrame.NetFrame;
+
+## Updater Controls
+
+`NetFrames` 使用一個獨立的 `RTUpdater` ([Real-time Updater](https://github.com/michael811125/OxGKit/blob/master/Assets/OxGKit/TimeSystem/Scripts/Runtime/Core/Updater/RTUpdater.cs)) 來驅動所有網絡節點的輪詢邏輯。獨立的刷新器，也確保了即便在 MonoBehaviour 的 TimeScale 為 0 的情況下，網絡通訊依然能正常運作。
+
+<Highlight color="#00d679">提醒</Highlight> 這對於實作「遊戲暫停時，仍能處理網絡斷線或同步」的功能至關重要。
+
+### SetUpdaterTimeScale
+控制 `NetManager` 更新器的運作速率。
+* **Params**: `float timeScale`: 縮放倍率。
+
+### Start 方法
+* **StartUpdater()**: 於主執行緒啟動網絡循環。
+* **StartUpdaterOnThread()**: 於**獨立執行緒**啟動網絡循環，適用於需要極高性能或避免主執行緒阻塞的情境。
+
+### Stop / Status
+* **StopUpdater()**: 停止網絡循環（所有節點將暫停刷新邏輯）。
+* **IsUpdaterRunning()**: 返回更新器當前是否正在運行。
+
+### Reset 方法
+* **ResetUpdater()**: 重置並於主執行緒重啟更新器。
+* **ResetUpdater(bool useThreadedUpdater)**: 重置並指定執行緒模式重啟。
+    * **Params**: `bool useThreadedUpdater`: 若為 true 則開啟執行緒模式。
+* **ResetUpdaterOnThread()**: 重置並於**獨立執行緒**重啟更新器。
+
+<Highlight color="#ff2f00">重要</Highlight> 當選擇 `StartUpdaterOnThread` 時，所有的網絡回調（如 `OnBinary`）會在非主執行緒觸發，若需操作 Unity 組件請務必注意執行緒安全與使用 [UMT](https://github.com/michael811125/OxGKit/blob/master/Assets/OxGKit/Utilities/Scripts/Runtime/UnityMainThread/UMT.cs) 傳入主執行緒。
+
+---
+
+## Node Management
+
+網絡系統以 `NetNode` (網絡節點) 為單位進行組織，每個節點可以擁有獨立的傳輸協議與配置。
+
+### AddNetNode
+將一個網絡節點加入管理器。
+* **Params**: 
+    * `NetNode netNode`: 要加入的節點實例。
+    * `int nnId`: 節點的唯一辨識碼 (預設為 0)。
+
+### RemoveNetNode
+從管理器中移除指定節點。
+* **Params**: `int nnId`: 節點 ID。
+
+### GetNetNode
+獲取已註冊的網絡節點。
+* **Params**: `int nnId`: 節點 ID。
+* **Returns**: `NetNode`: 節點實例，若不存在則返回 null。
+
+### Count
+* **Returns**: `int`: 當前已註冊的網絡節點總數。
+
+---
+
+## Connection & Communication
+
+針對特定節點執行網絡操作的核心接口。
+
+### Connect
+開啟指定網絡節點的連線。
+* **Params**: 
+    * `NetOption netOption`: 連線配置 (包含主機位址、端口、重連次數等...)。
+    * `int nnId`: 目標節點 ID。
+
+### IsConnected
+檢查節點的連線狀態。
+* **Params**: `int nnId`: 節點 ID。
+* **Returns**: `bool`: 若節點已連線返回 true。
+
+### Send (Binary)
+發送二進制封包。
+* **Params**: 
+    * `byte[] buffer`: 原始資料流。
+    * `int nnId`: 目標節點 ID。
+* **Returns**: `bool`: 發送成功返回 true。
+
+### Send (String)
+發送字串封包（視底層 Provider 實作而定）。
+* **Params**: 
+    * `string text`: 字串訊息。
+    * `int nnId`: 目標節點 ID。
+* **Returns**: `bool`: 發送成功返回 true。
+
+---
+
+## Termination
+
+### Close
+中斷指定節點的網絡連線。
+* **Params**: 
+    * `int nnId`: 節點 ID。
+    * `bool removeNetNode`: 是否在中斷後將節點從管理器中移除。
+
+### CloseAll
+關閉所有活躍中的網絡節點連線。
+* **Params**: `bool removeNetNode`: 是否同時清空所有註冊節點。
+
+---
+
+<Highlight color="#0373fc">注意</Highlight> 在大多數單一連線的應用情境下，直接使用預設的 `nnId = 0` 即可。若有多個伺服器連線需求（如：Login Server 與 Game Server），請為各節點分配獨立的 Node ID (NNID)。
+
+---
