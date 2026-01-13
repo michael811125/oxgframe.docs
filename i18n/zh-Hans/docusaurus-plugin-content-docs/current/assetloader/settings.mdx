@@ -52,7 +52,7 @@ export const Highlight = ({ children, color }) => (
 
 ## PatchLauncher 配置说明
 
-PatchLauncher 为运行配置，必须拖曳于场景中作为唯一运行配置。
+PatchLauncher 为运行配置，必须拖拽于场景中作为唯一运行配置。
 
 ![](/img/assetloader/img_33.png)
 
@@ -63,57 +63,13 @@ Bundle 资源热更模式。
 - Offline Mode (离线模式)
 - Host Mode (联机模式)
 - Weak Host Mode (弱联机模式)，首次启动必须联机，以完成初始配置记录与资源下载。
-  - <Highlight color="#0373fc">注意</Highlight>：不建议边玩边下载，因为当失去网络连接时，会验证上一次资源版本的清单内容完整性。
+  - <Highlight color="#0373fc">注意</Highlight>：不建议边玩边下载，因为当失去联网时，会验证上一次资源版本的清单内容完整性。
   - 另外，如果突然失去联网又进行 Repair 时，当验证到资源不完整，则会发送 PatchVersionUpdateFailed 事件 (因为必须重新从获取资源版本的流程开始运行, 只要网络恢复, 则可以正确获取到远端版本进行更新)。
 - WebGL Mode (WebGL 模式)，仅请求自身 StreamingAssets 中的资源。
 - WebGL Remote Mode (WebGL 联机模式)，可以请求远端 CDN 的资源，不仅限于自身 StreamingAssets。
 - Custom Mode (自定义模式)，小游戏专用。
 
-[打包专用 Marco](https://github.com/michael811125/OxGFrame/wiki/Macro-Definitions) (发布时，强制切换该模式)：
-- OXGFRAME_OFFLINE_MODE (离线模式)
-- OXGFRAME_HOST_MODE (联机模式)
-- OXGFRAME_WEAK_HOST_MODE (弱联机模式)
-- OXGFRAME_WEBGL_MODE (WebGL 模式)
-- OXGFRAME_WEBGL_REMOTE_MODE (WebGL 联机模式)
-- OXGFRAME_CUSTOM_MODE (自定义模式)
-
-![](/img/assetloader/img_28.png)
-
-```csharp
-public static class PlayModeParametersDefine
-{
-    /// <summary>
-    /// [Boolean] 初始默认包裹
-    /// </summary>
-    public const string INITIALIZE_PRESET_PACKAGES = "INITIALIZE_PRESET_PACKAGES";
-    /// <summary>
-    /// [Boolean] 获取远端 App 版号文件
-    /// </summary>
-    public const string FETCH_APP_CONFIG_FROM_SERVER = "FETCH_APP_CONFIG_FROM_SERVER";
-    /// <summary>
-    /// [Boolean] 版号 PATCH 检查规则
-    /// </summary>
-    public const string SEMANTIC_RULE_PATCH = "SEMANTIC_RULE_PATCH";
-    /// <summary>
-    /// [Boolean] 是否自动检查与设置请求端点 (Host Server, Fallback Host Server)
-    /// </summary>
-    public const string AUTO_CONFIGURE_SERVER_ENDPOINTS = "AUTO_CONFIGURE_SERVER_ENDPOINTS";
-    /// <summary>
-    /// [Boolean] 是否创建 PresetPackages 下载器
-    /// </summary>
-    public const string CREATE_PRESET_PACKAGES_DOWNLOADER = "CREATE_PRESET_PACKAGES_DOWNLOADER";
-    /// <summary>
-    /// [Boolean] 是否检查硬盘空间 (当创建 PresetPackages 下载器时, 会进行检查)
-    /// </summary>
-    public const string ENABLE_DISK_SPACE_CHECK_FOR_PRESET_PACKAGES_DOWNLOADER = "ENABLE_DISK_SPACE_CHECK_FOR_PRESET_PACKAGES_DOWNLOADER";
-    /// <summary>
-    /// [Boolean] 是否检查本地最后版本 (用于弱联网环境)
-    /// </summary>
-    public const string ENABLE_LAST_LOCAL_VERSIONS_CHECK_IN_WEAK_NETWORK = "ENABLE_LAST_LOCAL_VERSIONS_CHECK_IN_WEAK_NETWORK";
-}
-```
-
-#### CustomMode
+### Custom Mode
 
 CustomMode，支持自定义 YooAsset 包裹运行模式 <Highlight color="#ff2f00">**(流程繁琐，须注意初始步骤)**</Highlight>。
   - 用于：[微信小游戏](https://www.yooasset.com/docs/MiniGame#%E5%BE%AE%E4%BF%A1%E5%B0%8F%E6%B8%B8%E6%88%8F)、[抖音小游戏](https://www.yooasset.com/docs/MiniGame#%E6%8A%96%E9%9F%B3%E5%B0%8F%E6%B8%B8%E6%88%8F)、[支付宝小游戏](https://www.yooasset.com/docs/MiniGame#%E6%94%AF%E4%BB%98%E5%AE%9D%E5%B0%8F%E6%B8%B8%E6%88%8F)、[TapTap 小游戏](https://www.yooasset.com/docs/MiniGame#taptap%E5%B0%8F%E6%B8%B8%E6%88%8F)、[CustomPlayModeParameters (自定义运行模式)](https://www.yooasset.com/docs/guide-runtime/ResourceInit#%E8%87%AA%E5%AE%9A%E4%B9%89%E8%BF%90%E8%A1%8C%E6%A8%A1%E5%BC%8F--customplaymode)、等等...。
@@ -124,7 +80,7 @@ CustomMode，支持自定义 YooAsset 包裹运行模式 <Highlight color="#ff2f
     2. 不管有没有 Preset Packages 需求，都**必须手动调用 async AssetPatcher.InitializePresetPackages()**。
       - 轮询 AssetPatcher.isInitialized() 判断标记是否返回 true。 
 
-#### CustomMode 实作范例
+#### CustomMode 实现示例
 
 ##### CustomMode - Hotfix 初始化流程
 ```csharp
@@ -215,7 +171,7 @@ var createParametersC = packageC.initializeParameters as WebPlayModeParameters;
  * 省略...建议参考其他模式初始参数
  */
 
-// 设置默认包裹
+// 设置预设包裹
 AssetPatcher.SetPresetPackages
 (
     new List<AppPackageInfoWithBuild>()
@@ -229,7 +185,7 @@ AssetPatcher.SetPresetPackages
     }
 );
 
-// 初始默认包裹
+// 初始预设包裹
 await AssetPatcher.InitializePresetPackages();
 ```
 
@@ -287,6 +243,7 @@ createParametersB.FileSystemParameterList.Add(new FileSystemParameters("C", ""))
  var bundleDecryptionServicesC = AssetPatcher.GetBundleDecryptionServices();
  var manifestDecryptionServicesC = AssetPatcher.GetManifestDecryptionServices();
  packageC.initializeParameters = new CustomPlayModeParameters();
+ packageC.initializeParameters = new CustomPlayModeParameters();
  var createParametersC = packageC.initializeParameters as CustomPlayModeParameters;
 
 /**
@@ -314,8 +271,6 @@ await AssetPatcher.InitializePresetPackages();
 ```
 
 ##### CustomMode - Per Package 初始化流程
-
-WebPlayModeParameters
 ```csharp
 // Per-Package to init (APP)
 var packageNameD = "MyCustomPackageD";
@@ -407,6 +362,44 @@ createParametersE.FileSystemParameterList.Add(new FileSystemParameters("C", ""))
 await AssetPatcher.InitPackage(packageE, true);
 ```
 
+### PlayModeParameters
+
+![](/img/assetloader/img_28.png)
+
+```csharp
+public static class PlayModeParametersDefine
+{
+    /// <summary>
+    /// [Boolean] 初始预设包裹
+    /// </summary>
+    public const string INITIALIZE_PRESET_PACKAGES = "INITIALIZE_PRESET_PACKAGES";
+    /// <summary>
+    /// [Boolean] 获取远端 App 版号文件
+    /// </summary>
+    public const string FETCH_APP_CONFIG_FROM_SERVER = "FETCH_APP_CONFIG_FROM_SERVER";
+    /// <summary>
+    /// [Boolean] 版号 PATCH 检查规则
+    /// </summary>
+    public const string SEMANTIC_RULE_PATCH = "SEMANTIC_RULE_PATCH";
+    /// <summary>
+    /// [Boolean] 是否自动检查与设置请求端点 (Host Server, Fallback Host Server)
+    /// </summary>
+    public const string AUTO_CONFIGURE_SERVER_ENDPOINTS = "AUTO_CONFIGURE_SERVER_ENDPOINTS";
+    /// <summary>
+    /// [Boolean] 是否创建 PresetPackages 下载器
+    /// </summary>
+    public const string CREATE_PRESET_PACKAGES_DOWNLOADER = "CREATE_PRESET_PACKAGES_DOWNLOADER";
+    /// <summary>
+    /// [Boolean] 是否检查硬盘空间 (当创建 PresetPackages 下载器时, 会进行检查)
+    /// </summary>
+    public const string ENABLE_DISK_SPACE_CHECK_FOR_PRESET_PACKAGES_DOWNLOADER = "ENABLE_DISK_SPACE_CHECK_FOR_PRESET_PACKAGES_DOWNLOADER";
+    /// <summary>
+    /// [Boolean] 是否检查本地最后版本 (用于弱联网环境)
+    /// </summary>
+    public const string ENABLE_LAST_LOCAL_VERSIONS_CHECK_IN_WEAK_NETWORK = "ENABLE_LAST_LOCAL_VERSIONS_CHECK_IN_WEAK_NETWORK";
+}
+```
+
 ### ParameterEntry 
 
 ParameterEntry 列表配置于 PatchLauncher，可以针对不同模式额外新增 YooAsset FileSystem 的参数配置，但必须表明类型 (参考：[FileSystemParametersDefine](https://www.yooasset.com/docs/api/YooAsset/FileSystemParametersDefine) + [文件系统](https://www.yooasset.com/docs/guide-runtime/FileSystem#%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E5%88%9D%E5%A7%8B%E5%8C%96%E5%8F%82%E6%95%B0))。
@@ -455,7 +448,7 @@ private static readonly Dictionary<string, Type> _supportedTypes = new Dictionar
 
 ### Preset Packages
 
-默认包裹配置 App Packages & DLC Packages，将由 AssetPatcher.Check 主更新阶段进行更新。
+预设包裹配置 App Packages & DLC Packages，将由 AssetPatcher.Check 主更新阶段进行更新。
 
 ![](/img/assetloader/img_29.png)
 
@@ -474,3 +467,15 @@ private static readonly Dictionary<string, Type> _supportedTypes = new Dictionar
 设定格式可以参考 Tooltip 提示说明。
 
 ![](/img/assetloader/img_32.png)
+
+---
+
+## PlayMode Macro
+
+[打包专用 Macro](https://github.com/michael811125/OxGFrame/wiki/Macro-Definitions) (发布时，强制切换该模式)：
+- OXGFRAME_OFFLINE_MODE (离线模式)
+- OXGFRAME_HOST_MODE (联机模式)
+- OXGFRAME_WEAK_HOST_MODE (弱联机模式)
+- OXGFRAME_WEBGL_MODE (WebGL 模式)
+- OXGFRAME_WEBGL_REMOTE_MODE (WebGL 联机模式)
+- OXGFRAME_CUSTOM_MODE (自定义模式)

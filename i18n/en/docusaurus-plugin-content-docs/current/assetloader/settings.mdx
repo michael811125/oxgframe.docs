@@ -50,7 +50,7 @@ Create the configuration file via right-click (Right-click in Project window -> 
 
 ---
 
-## PatchLauncher Configuration Instructions
+## PatchLauncher Description
 
 PatchLauncher is the runtime configuration and must be dragged into the scene as the sole runtime configuration.
 
@@ -69,13 +69,301 @@ Bundle resource hot-update mode.
 - WebGL Remote Mode (WebGL Online Mode). Can request resources from remote CDN, not limited to its own StreamingAssets.
 - Custom Mode (Custom Mode). Dedicated for mini-games.
 
-[Packaging Macro](https://github.com/michael811125/OxGFrame/wiki/Macro-Definitions) (Forced to switch to this mode during release):
-- OXGFRAME_OFFLINE_MODE (Offline Mode)
-- OXGFRAME_HOST_MODE (Online Mode)
-- OXGFRAME_WEAK_HOST_MODE (Weak Online Mode)
-- OXGFRAME_WEBGL_MODE (WebGL Mode)
-- OXGFRAME_WEBGL_REMOTE_MODE (WebGL Online Mode)
-- OXGFRAME_CUSTOM_MODE (Custom Mode)
+### Custom Mode
+
+CustomMode supports custom YooAsset package running modes <Highlight color="#ff2f00">**(The process is complex, pay attention to the initial steps)**</Highlight>.
+  - Used for: [WeChat Mini Game](https://www.yooasset.com/docs/MiniGame#%E5%BE%AE%E4%BF%A1%E5%B0%8F%E6%B8%B8%E6%88%8F), [Douyin Mini Game](https://www.yooasset.com/docs/MiniGame#%E6%8A%96%E9%9F%B3%E5%B0%8F%E6%B8%B8%E6%88%8F), [Alipay Mini Game](https://www.yooasset.com/docs/MiniGame#%E6%94%AF%E4%BB%98%E5%AE%9D%E5%B0%8F%E6%B8%B8%E6%88%8F), [TapTap Mini Game](https://www.yooasset.com/docs/MiniGame#taptap%E5%B0%8F%E6%B8%B8%E6%88%8F), [CustomPlayModeParameters](https://www.yooasset.com/docs/guide-runtime/ResourceInit#%E8%87%AA%E5%AE%9A%E4%B9%89%E8%BF%90%E8%A1%8C%E6%A8%A1%E5%BC%8F--customplaymode), etc.
+  - **Note: When using CustomMode, all YooAsset package initializations need to be implemented yourself.**
+  - CustomMode Initialization Process Overview:
+    1. Check if there are Preset Packages requirements. 
+    2. If so, you can customize and set AssetPatcher.SetPresetPackages(List\<AppPackageInfoWithBuild\> appPackages, List\<DlcPackageInfoWithBuild\> dlcPackages).
+    3. Regardless of whether there are Preset Packages requirements, you **must manually call async AssetPatcher.InitializePresetPackages()**.
+      - Poll AssetPatcher.isInitialized() to judge if the flag returns true. 
+
+#### CustomMode Implementation Example
+
+##### CustomMode - Hotfix Initialization Process
+```csharp
+var hotfixPackageName = "HotfixPackage";
+var hotfixPackage = new AppPackageInfoWithBuild();
+hotfixPackage.buildMode = BundleConfig.BuildMode.ScriptableBuildPipeline;
+hotfixPackage.packageName = hotfixPackageName;
+hotfixPackage.hostServer = await BundleConfig.GetHostServerUrl(hotfixPackageName);
+hotfixPackage.fallbackHostServer = await BundleConfig.GetFallbackHostServerUrl(hotfixPackageName);
+var remoteServices = new HostServers(hotfixPackage.hostServer, hotfixPackage.fallbackHostServer);
+var bundleDecryptionServices = AssetPatcher.GetBundleDecryptionServices();
+var manifestDecryptionServices = AssetPatcher.GetManifestDecryptionServices();
+hotfixPackage.initializeParameters = new WebPlayModeParameters();
+var createParameters = hotfixPackage.initializeParameters as WebPlayModeParameters;
+
+/**
+ * Omitted... suggest referring to other modes for initial parameters
+ */
+
+Hotfixers.CheckHotfix
+(
+    // Download and load hotfix files from HotfixPackage
+    hotfixPackage,
+    // Metadata for AOT assemblies
+    new string[]
+    {
+        "mscorlib.dll"
+    },
+    // Hotfix assemblies
+    new string[]
+    {
+        "HotfixerDemo.Hotfix.Runtime.dll"
+    }
+);
+```
+
+##### CustomMode - Preset Packages Initialization Process
+
+WebPlayModeParameters
+```csharp
+var packageNameA = "MyCustomPackageA";
+var packageA = new AppPackageInfoWithBuild();
+packageA.buildMode = BundleConfig.BuildMode.ScriptableBuildPipeline;
+packageA.packageName = packageNameA;
+packageA.hostServer = await BundleConfig.GetHostServerUrl(packageNameA);
+packageA.fallbackHostServer = await BundleConfig.GetFallbackHostServerUrl(packageNameA);
+var remoteServicesA = new HostServers(packageA.hostServer, packageA.fallbackHostServer);
+var bundleDecryptionServicesA = AssetPatcher.GetBundleDecryptionServices();
+var manifestDecryptionServicesA = AssetPatcher.GetManifestDecryptionServices();
+packageA.initializeParameters = new WebPlayModeParameters();
+var createParametersA = packageA.initializeParameters as WebPlayModeParameters;
+
+/**
+ * Omitted... suggest referring to other modes for initial parameters
+ */
+
+var packageNameB = "MyCustomPackageB";
+var packageB = new AppPackageInfoWithBuild();
+packageB.buildMode = BundleConfig.BuildMode.ScriptableBuildPipeline;
+packageB.packageName = packageNameB;
+packageB.hostServer = await BundleConfig.GetHostServerUrl(packageNameB);
+packageB.fallbackHostServer = await BundleConfig.GetFallbackHostServerUrl(packageNameB);
+var remoteServicesB = new HostServers(packageB.hostServer, packageB.fallbackHostServer);
+var bundleDecryptionServicesB = AssetPatcher.GetBundleDecryptionServices();
+var manifestDecryptionServicesB = AssetPatcher.GetManifestDecryptionServices();
+packageB.initializeParameters = new WebPlayModeParameters();
+var createParametersB = packageB.initializeParameters as WebPlayModeParameters;
+
+/**
+ * Omitted... suggest referring to other modes for initial parameters
+ */
+
+var packageNameC = "MyCustomPackageC";
+var packageC = new DlcPackageInfoWithBuild();
+packageC.buildMode = BundleConfig.BuildMode.ScriptableBuildPipeline;
+packageC.packageName = packageNameC;
+packageC.withoutPlatform = false;
+packageC.dlcVersion = "latest";
+packageC.hostServer = await BundleConfig.GetDlcHostServerUrl(packageNameC, packageC.dlcVersion, packageC.withoutPlatform);
+packageC.fallbackHostServer = await BundleConfig.GetDlcFallbackHostServerUrl(packageNameC, packageC.dlcVersion, packageC.withoutPlatform);
+var remoteServicesC = new HostServers(packageC.hostServer, packageC.fallbackHostServer);
+var bundleDecryptionServicesC = AssetPatcher.GetBundleDecryptionServices();
+var manifestDecryptionServicesC = AssetPatcher.GetManifestDecryptionServices();
+packageC.initializeParameters = new WebPlayModeParameters();
+var createParametersC = packageC.initializeParameters as WebPlayModeParameters;
+
+/**
+ * Omitted... suggest referring to other modes for initial parameters
+ */
+
+// Set Preset Packages
+AssetPatcher.SetPresetPackages
+(
+    new List<AppPackageInfoWithBuild>()
+    {
+        packageA,
+        packageB,
+    },
+    new List<DlcPackageInfoWithBuild>()
+    {
+        packageC
+    }
+);
+
+// Initialize Preset Packages
+await AssetPatcher.InitializePresetPackages();
+```
+
+CustomPlayModeParameters
+```csharp
+var packageNameA = "MyCustomPackageA";
+var packageA = new AppPackageInfoWithBuild();
+packageA.buildMode = BundleConfig.BuildMode.ScriptableBuildPipeline;
+packageA.packageName = packageNameA;
+packageA.hostServer = await BundleConfig.GetHostServerUrl(packageNameA);
+packageA.fallbackHostServer = await BundleConfig.GetFallbackHostServerUrl(packageNameA);
+var remoteServicesA = new HostServers(packageA.hostServer, packageA.fallbackHostServer);
+var bundleDecryptionServicesA = AssetPatcher.GetBundleDecryptionServices();
+var manifestDecryptionServicesA = AssetPatcher.GetManifestDecryptionServices();
+packageA.initializeParameters = new CustomPlayModeParameters();
+var createParametersA = packageA.initializeParameters as CustomPlayModeParameters;
+
+/**
+ * Omitted... suggest referring to other modes for initial parameters
+ */
+
+createParametersA.FileSystemParameterList.Add(new FileSystemParameters("A", ""));
+createParametersA.FileSystemParameterList.Add(new FileSystemParameters("B", ""));
+createParametersA.FileSystemParameterList.Add(new FileSystemParameters("C", ""));
+
+var packageNameB = "MyCustomPackageB";
+var packageB = new AppPackageInfoWithBuild();
+packageB.buildMode = BundleConfig.BuildMode.ScriptableBuildPipeline;
+packageB.packageName = packageNameB;
+packageB.hostServer = await BundleConfig.GetHostServerUrl(packageNameB);
+packageB.fallbackHostServer = await BundleConfig.GetFallbackHostServerUrl(packageNameB);
+var remoteServicesB = new HostServers(packageB.hostServer, packageB.fallbackHostServer);
+var bundleDecryptionServicesB = AssetPatcher.GetBundleDecryptionServices();
+var manifestDecryptionServicesB = AssetPatcher.GetManifestDecryptionServices();
+packageB.initializeParameters = new CustomPlayModeParameters();
+var createParametersB = packageB.initializeParameters as CustomPlayModeParameters;
+
+/**
+ * Omitted... suggest referring to other modes for initial parameters
+ */
+
+createParametersB.FileSystemParameterList.Add(new FileSystemParameters("A", ""));
+createParametersB.FileSystemParameterList.Add(new FileSystemParameters("B", ""));
+createParametersB.FileSystemParameterList.Add(new FileSystemParameters("C", ""));
+
+ var packageNameC = "MyCustomPackageC";
+ var packageC = new DlcPackageInfoWithBuild();
+ packageC.buildMode = BundleConfig.BuildMode.ScriptableBuildPipeline;
+ packageC.packageName = packageNameC;
+ packageC.withoutPlatform = false;
+ packageC.dlcVersion = "latest";
+ packageC.hostServer = await BundleConfig.GetDlcHostServerUrl(packageNameC, packageC.dlcVersion, packageC.withoutPlatform);
+ packageC.fallbackHostServer = await BundleConfig.GetDlcFallbackHostServerUrl(packageNameC, packageC.dlcVersion, packageC.withoutPlatform);
+ var remoteServicesC = new HostServers(packageC.hostServer, packageC.fallbackHostServer);
+ var bundleDecryptionServicesC = AssetPatcher.GetBundleDecryptionServices();
+ var manifestDecryptionServicesC = AssetPatcher.GetManifestDecryptionServices();
+ packageC.initializeParameters = new CustomPlayModeParameters();
+ var createParametersC = packageC.initializeParameters as CustomPlayModeParameters;
+
+/**
+ * Omitted... suggest referring to other modes for initial parameters
+ */
+
+createParametersC.FileSystemParameterList.Add(new FileSystemParameters("A", ""));
+createParametersC.FileSystemParameterList.Add(new FileSystemParameters("B", ""));
+createParametersC.FileSystemParameterList.Add(new FileSystemParameters("C", ""));
+
+AssetPatcher.SetPresetPackages
+(
+    new List<AppPackageInfoWithBuild>()
+    {
+        packageA,
+        packageB,
+    },
+    new List<DlcPackageInfoWithBuild>()
+    {
+        packageC
+    }
+);
+
+await AssetPatcher.InitializePresetPackages();
+```
+
+##### CustomMode - Per Package Initialization Process
+
+WebPlayModeParameters
+```csharp
+// Per-Package to init (APP)
+var packageNameD = "MyCustomPackageD";
+var packageD = new AppPackageInfoWithBuild();
+packageD.buildMode = BundleConfig.BuildMode.ScriptableBuildPipeline;
+packageD.packageName = packageNameD;
+packageD.hostServer = await BundleConfig.GetHostServerUrl(packageNameD);
+packageD.fallbackHostServer = await BundleConfig.GetFallbackHostServerUrl(packageNameD);
+var remoteServicesD = new HostServers(packageD.hostServer, packageD.fallbackHostServer);
+var bundleDecryptionServicesD = AssetPatcher.GetBundleDecryptionServices();
+var manifestDecryptionServicesD = AssetPatcher.GetManifestDecryptionServices();
+packageD.initializeParameters = new WebPlayModeParameters();
+var createParametersD = packageD.initializeParameters as WebPlayModeParameters;
+
+/**
+ * Omitted... suggest referring to other modes for initial parameters
+ */
+
+await AssetPatcher.InitPackage(packageD, true);
+
+// Per-Package to init (DLC)
+var packageNameE = "MyCustomPackageE";
+var packageE = new DlcPackageInfoWithBuild();
+packageE.buildMode = BundleConfig.BuildMode.ScriptableBuildPipeline;
+packageE.packageName = packageNameE;
+packageE.withoutPlatform = false;
+packageE.dlcVersion = "latest";
+packageE.hostServer = await BundleConfig.GetDlcHostServerUrl(packageNameE, packageE.dlcVersion, packageE.withoutPlatform);
+packageE.fallbackHostServer = await BundleConfig.GetDlcFallbackHostServerUrl(packageNameE, packageE.dlcVersion, packageE.withoutPlatform);
+var remoteServicesE = new HostServers(packageE.hostServer, packageE.fallbackHostServer);
+var bundleDecryptionServicesE = AssetPatcher.GetBundleDecryptionServices();
+var manifestDecryptionServicesE = AssetPatcher.GetManifestDecryptionServices();
+packageE.initializeParameters = new WebPlayModeParameters();
+var createParametersE = packageE.initializeParameters as WebPlayModeParameters;
+
+/**
+ * Omitted... suggest referring to other modes for initial parameters
+ */
+
+await AssetPatcher.InitPackage(packageE, true);
+```
+
+CustomPlayModeParameters
+```csharp
+// Per-Package to init (APP)
+var packageNameD = "MyCustomPackageD";
+var packageD = new AppPackageInfoWithBuild();
+packageD.buildMode = BundleConfig.BuildMode.ScriptableBuildPipeline;
+packageD.packageName = packageNameD;
+packageD.hostServer = await BundleConfig.GetHostServerUrl(packageNameD);
+packageD.fallbackHostServer = await BundleConfig.GetFallbackHostServerUrl(packageNameD);
+var remoteServicesD = new HostServers(packageD.hostServer, packageD.fallbackHostServer);
+var bundleDecryptionServicesD = AssetPatcher.GetBundleDecryptionServices();
+var manifestDecryptionServicesD = AssetPatcher.GetManifestDecryptionServices();
+packageD.initializeParameters = new CustomPlayModeParameters();
+var createParametersD = packageD.initializeParameters as CustomPlayModeParameters;
+
+/**
+ * Omitted... suggest referring to other modes for initial parameters
+ */
+
+createParametersD.FileSystemParameterList.Add(new FileSystemParameters("A", ""));
+createParametersD.FileSystemParameterList.Add(new FileSystemParameters("B", ""));
+createParametersD.FileSystemParameterList.Add(new FileSystemParameters("C", ""));
+await AssetPatcher.InitPackage(packageD, true);
+
+// Per-Package to init (DLC)
+var packageNameE = "MyCustomPackageE";
+var packageE = new DlcPackageInfoWithBuild();
+packageE.buildMode = BundleConfig.BuildMode.ScriptableBuildPipeline;
+packageE.packageName = packageNameE;
+packageE.withoutPlatform = false;
+packageE.dlcVersion = "latest";
+packageE.hostServer = await BundleConfig.GetDlcHostServerUrl(packageNameE, packageE.dlcVersion, packageE.withoutPlatform);
+packageE.fallbackHostServer = await BundleConfig.GetDlcFallbackHostServerUrl(packageNameE, packageE.dlcVersion, packageE.withoutPlatform);
+var remoteServicesE = new HostServers(packageE.hostServer, packageE.fallbackHostServer);
+var bundleDecryptionServicesE = AssetPatcher.GetBundleDecryptionServices();
+var manifestDecryptionServicesE = AssetPatcher.GetManifestDecryptionServices();
+packageE.initializeParameters = new CustomPlayModeParameters();
+var createParametersE = packageE.initializeParameters as CustomPlayModeParameters;
+
+/**
+ * Omitted... suggest referring to other modes for initial parameters
+ */
+
+createParametersE.FileSystemParameterList.Add(new FileSystemParameters("A", ""));
+createParametersE.FileSystemParameterList.Add(new FileSystemParameters("B", ""));
+createParametersE.FileSystemParameterList.Add(new FileSystemParameters("C", ""));
+await AssetPatcher.InitPackage(packageE, true);
+```
+
+### PlayModeParameters
 
 ![](/img/assetloader/img_28.png)
 
@@ -113,26 +401,47 @@ public static class PlayModeParametersDefine
 }
 ```
 
-#### CustomMode
-
-CustomMode supports custom YooAsset package running modes <Highlight color="#ff2f00">**(The process is complex, pay attention to initial steps)**</Highlight>.
-  - Used for: [WeChat Mini Game](https://www.yooasset.com/docs/MiniGame#%E5%BE%AE%E4%BF%A1%E5%B0%8F%E6%B8%B8%E6%88%8F), [Douyin Mini Game](https://www.yooasset.com/docs/MiniGame#%E6%8A%96%E9%9F%B3%E5%B0%8F%E6%B8%B8%E6%88%8F), [Alipay Mini Game](https://www.yooasset.com/docs/MiniGame#%E6%94%AF%E4%BB%98%E5%AE%9D%E5%B0%8F%E6%B8%B8%E6%88%8F), [TapTap Mini Game](https://www.yooasset.com/docs/MiniGame#taptap%E5%B0%8F%E6%B8%B8%E6%88%8F), [CustomPlayModeParameters](https://www.yooasset.com/docs/guide-runtime/ResourceInit#%E8%87%AA%E5%AE%9A%E4%B9%89%E8%BF%90%E8%A1%8C%E6%A8%A1%E5%BC%8F--customplaymode), etc.
-  - **Note: When using CustomMode, all YooAsset package initializations need to be implemented yourself.**
-  - CustomMode Initialization Process Overview:
-    1. Check if there are Preset Packages requirements. 
-    1. If so, you can customize and set AssetPatcher.SetPresetPackages(List\<AppPackageInfoWithBuild\> appPackages, List\<DlcPackageInfoWithBuild\> dlcPackages).
-    2. Regardless of whether there are Preset Packages requirements, you **must manually call async AssetPatcher.InitializePresetPackages()**.
-      - Poll AssetPatcher.isInitialized() to judge if the flag returns true. 
-
-#### CustomMode Implementation Example
-
-(Omitted coding section for brevity as it is already code)
-
 ### ParameterEntry 
 
 ParameterEntry list is configured in PatchLauncher, which can additionally add YooAsset FileSystem parameter configurations for different modes, but must specify the type (Reference: [FileSystemParametersDefine](https://www.yooasset.com/docs/api/YooAsset/FileSystemParametersDefine) + [File System](https://www.yooasset.com/docs/guide-runtime/FileSystem#%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E5%88%9D%E5%A7%8B%E5%8C%96%E5%8F%82%E6%95%B0)).
 
-(Omitted coding section)
+```csharp
+/// <summary>
+/// Supported Types Mapping Table
+/// </summary>
+private static readonly Dictionary<string, Type> _supportedTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
+{
+    // Boolean
+    { "bool", typeof(bool) },
+    { "boolean", typeof(bool) },
+    
+    // Integer types
+    { "int", typeof(int) },
+    { "int32", typeof(int) },
+    { "uint", typeof(uint) },
+    { "uint32", typeof(uint) },
+    { "byte", typeof(byte) },
+    { "sbyte", typeof(sbyte) },
+    { "short", typeof(short) },
+    { "int16", typeof(short) },
+    { "ushort", typeof(ushort) },
+    { "uint16", typeof(ushort) },
+    { "long", typeof(long) },
+    { "int64", typeof(long) },
+    { "ulong", typeof(ulong) },
+    { "uint64", typeof(ulong) },
+    
+    // Floating point types
+    { "float", typeof(float) },
+    { "single", typeof(float) },
+    { "double", typeof(double) },
+    { "decimal", typeof(decimal) },
+    
+    // Other common types
+    { "string", typeof(string) },
+    { "char", typeof(char) }
+};
+```
 
 ![](/img/assetloader/img_26.png)
 
@@ -146,7 +455,7 @@ Preset package configurations for App Packages & DLC Packages, which will be upd
 
 ### Process Options, Download Options, Load Options
 
-Runtime configurations of YooAsset and some framework configurations.
+Related YooAsset runtime configurations and some framework configurations.
 
 ![](/img/assetloader/img_30.png)
 
@@ -159,3 +468,15 @@ Decryption configuration at runtime, must be set according to the instructions.
 Setting format can refer to Tooltip hints.
 
 ![](/img/assetloader/img_32.png)
+
+---
+
+## PlayMode Macro
+
+[Building Macro](https://github.com/michael811125/OxGFrame/wiki/Macro-Definitions) (Forced to switch to this mode during release):
+- OXGFRAME_OFFLINE_MODE (Offline Mode)
+- OXGFRAME_HOST_MODE (Online Mode)
+- OXGFRAME_WEAK_HOST_MODE (Weak Online Mode)
+- OXGFRAME_WEBGL_MODE (WebGL Mode)
+- OXGFRAME_WEBGL_REMOTE_MODE (WebGL Online Mode)
+- OXGFRAME_CUSTOM_MODE (Custom Mode)
