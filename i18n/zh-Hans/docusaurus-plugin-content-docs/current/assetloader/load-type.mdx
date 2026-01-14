@@ -77,6 +77,7 @@ AppPackageInfoWithBuild packageInfo = new AppPackageInfoWithBuild()
     packageName = "OtherPackage"
 };
 
+// updatePackage = true (Will update the Manifest)
 bool isInitialized = await AssetPatcher.InitAppPackage(packageInfo, true);
 if (isInitialized)
     await AssetLoaders.LoadAssetAsync<GameObject>("OtherPackage", "assetName");
@@ -94,6 +95,7 @@ DlcPackageInfoWithBuild packageInfo = new DlcPackageInfoWithBuild()
     withoutPlatform = false
 };
 
+// updatePackage = true (Will update the Manifest)
 bool isInitialized = await AssetPatcher.InitDlcPackage(packageInfo, true);
 if (isInitialized)
     await AssetLoaders.LoadAssetAsync<GameObject>("DlcPackage", "assetName");
@@ -102,11 +104,36 @@ if (isInitialized)
 <Highlight color="#0373fc">注意</Highlight> 区分 App Packages 和 DLC Packages，注意路径不同。
 - App Packages
   - 路径随着主程序版号 (.../CDN/\<ProductName\>/\<Platform\>/\<AppVersion\>/\<PackageName\>)。
-  - 手动进行 AssetPatcher.InitAppPackage 的初始 (如果 autoUpdate = false，则需要自行另外调用 AssetPatcher.UpdatePackage 进行 Manifest 的更新)。
+  - 手动进行 AssetPatcher.InitAppPackage 的初始 (如果 updatePackage = false，则需要自行另外调用 AssetPatcher.UpdatePackage 进行 Manifest 的更新)。
 - DLC Packages
   - 路径包含平台 (.../CDN/\<ProductName\>/\<Platform\>/DLC/\<PackageName\>/\<DlcVersion\>)。
   - 路径不含平台 (.../CDN/\<ProductName\>/DLC/\<PackageName\>/\<DlcVersion\>)，**属于所有平台的共用资源**。
   - 支持特定版本 DLC package 的下载与 DLC package 卸载功能，需手动进行 AssetPatcher.InitDlcPackage，并且指定特定 dlcVersion，对于 dlcVersion 也可以单一固定 dlcVersion (ex: "latest")，变成只要 DLC 有更新就可以使用固定路径进行更新。
+
+```csharp
+/// <summary>
+/// Init app package (If PlayMode is HostMode will request from default host path)
+/// </summary>
+/// <param name="packageInfo"></param>
+/// <param name="updatePackage"></param>
+/// <returns></returns>
+public static async UniTask<bool> InitAppPackage(AppPackageInfoWithBuild packageInfo, bool updatePackage = false)
+
+/// <summary>
+/// Init dlc package (If PlayMode is HostMode will request from default host dlc path)
+/// </summary>
+/// <param name="packageInfo"></param>
+/// <param name="updatePackage"></param>
+/// <returns></returns>
+public static async UniTask<bool> InitDlcPackage(DlcPackageInfoWithBuild packageInfo, bool updatePackage = false)
+
+/// <summary>
+/// Update package version and manifest by package name
+/// </summary>
+/// <param name="packageName"></param>
+/// <returns></returns>
+public static async UniTask<bool> UpdatePackage(string packageName)
+```
 
 <Highlight color="#0373fc">注意</Highlight> 另外，[PlayMode](/docs/assetloader/settings#playmode) 的说明如下。
 - Editor Simulate Mode (开发模式)。
