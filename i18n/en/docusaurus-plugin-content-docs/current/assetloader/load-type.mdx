@@ -49,7 +49,7 @@ You must first configure it through the YooAsset Collector.
 
 ### Step 2.
 
-When developing with AssetBundle, you also need to configure **PatchLauncher** for Runtime. This is required because when using AssetBundle loading, relevant initialization configurations are needed.
+Additionally, when developing with AssetBundles, PatchLauncher is required for Runtime configuration. This is primarily to initialize the relevant settings needed for AssetBundle loading.
 
 ![](/img/assetloader/img_6.png)
 
@@ -67,7 +67,7 @@ Configure the default Packages, which will be initialized at Runtime.
 
 <Highlight color="#ff2f00">Important</Highlight> The default Packages will be managed and checked by the **main downloader**, so Packages not included in the defaults must be initialized manually through the API, as described below.
 
-App Package
+Manually Initialize App Package
 ```csharp
 // [Load asset and download from specific package (Export App Bundles for CDN)]
 
@@ -82,7 +82,7 @@ if (isInitialized)
     await AssetLoaders.LoadAssetAsync<GameObject>("OtherPackage", "assetName");
 ```
 
-DLC Package
+Manually Initialize DLC Package
 ```csharp
 // [Load asset and download from specific package (Export Individual DLC Bundles for CDN)]
 
@@ -121,12 +121,22 @@ if (isInitialized)
 
 ### Step 4.
 
-Once the preliminary setup is complete and the main configuration process is initialized -> AssetPatcher.IsInitialized(), you can begin loading as follows.
+After completing the prerequisites, poll the initialization state AssetPatcher.IsInitialized() == true. You can then start loading built-in assets, as follows.
 
 Load the object with the addressable name "Cube" from the DefaultPackage.
 ```csharp
-AssetLoaders.LoadAssetAsync<GameObject>("DefaultPackage", "Cube");
+private IEnumerator Start()
+{
+    // Wait Until IsInitialized
+    while (!AssetPatcher.IsInitialized())
+        yield return null;
+
+    // Load asset with assign a package (from Built-in)
+    AssetLoaders.LoadAssetAsync<GameObject>("DefaultPackage", "Cube");
+}
 ```
+
+<Highlight color="#ff2f00">Important</Highlight> For detailed update procedures, it is recommended to refer to [BundleDemo](/docs/samples/#framework-module-samples) (import via Package Manager).
 
 > <Highlight color="#0373fc">Attention</Highlight> Additionally, the sequence of the process is as follows:
 > - Poll the initialization state `AssetPatcher.IsInitialized() == true` -> then you can <Highlight color="#ff2f00">load built-in resources</Highlight> and <Highlight color="#ff2f00">perform update checks</Highlight>.

@@ -49,7 +49,7 @@ AssetLoaders.LoadAssetAsync<GameObject>("res#MyPrefabs/Cube");
 
 ### 步骤 2.
 
-另外使用 AssestBundle 进行开发时，也需要 **PatchLauncher** 进行 Runtime 配置，主要是使用 AssetBundle 加载时，需要初始相关配置。
+另外使用 AssestBundle 进行开发时，也需要 **PatchLauncher** 进行 Runtime 配置，主要是使用 AssetBundle 加载时，需要初始相关设置。
 
 ![](/img/assetloader/img_6.png)
 
@@ -67,7 +67,7 @@ AssetLoaders.LoadAssetAsync<GameObject>("res#MyPrefabs/Cube");
 
 <Highlight color="#ff2f00">重要</Highlight> 默认 Packages 将由**主下载器**进行管理与检查，所以不包含在默认中的 Packages，必须自行通过 API 初始，说明如下。
 
-App Package
+手动初始 App Package
 ```csharp
 // [Load asset and download from specific package (Export App Bundles for CDN)]
 
@@ -82,7 +82,7 @@ if (isInitialized)
     await AssetLoaders.LoadAssetAsync<GameObject>("OtherPackage", "assetName");
 ```
 
-DLC Package
+手动初始 DLC Package
 ```csharp
 // [Load asset and download from specific package (Export Individual DLC Bundles for CDN)]
 
@@ -121,12 +121,22 @@ if (isInitialized)
 
 ### 步骤 4.
 
-前置作业完成后，并且确保主配置流程已初始 -> AssetPatcher.IsInitialized()，就可以开始加载了，如以下。
+前置作业完成后，轮询初始状态 AssetPatcher.IsInitialized() == true，就可以开始加载内置资源了，如以下。
 
 从 DefaultPackage 中加载寻址名称为 Cube 的对象。
 ```csharp
-AssetLoaders.LoadAssetAsync<GameObject>("DefaultPackage", "Cube");
+private IEnumerator Start()
+{
+    // Wait Until IsInitialized
+    while (!AssetPatcher.IsInitialized())
+        yield return null;
+
+    // Load asset with assign a package (from Built-in)
+    AssetLoaders.LoadAssetAsync<GameObject>("DefaultPackage", "Cube");
+}
 ```
+
+<Highlight color="#ff2f00">重要</Highlight> 详细更新流程，建议参考 [BundleDemo](/docs/samples/#框架模块示例) (从 Package Manager 中汇入)。
 
 > <Highlight color="#0373fc">注意</Highlight> 额外补充，流程先后顺序，说明如下。
 > - 轮询初始状态 AssetPatcher.IsInitialized() == true -> 即可<Highlight color="#ff2f00">加载内置资源</Highlight>与<Highlight color="#ff2f00">执行检查更新</Highlight>。
