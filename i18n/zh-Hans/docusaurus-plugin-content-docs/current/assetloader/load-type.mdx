@@ -59,13 +59,15 @@ AssetLoaders.LoadAssetAsync<GameObject>("res#MyPrefabs/Cube");
 
 ### 步骤 3.
 
-配置默认 Packages，将会在 Runtime 时进行初始。
-- 默认 App Packages。
-- 默认 DLC Packages。
+配置 Preset Packages，将会在 Runtime 时进行初始。
+- Preset App Packages。
+  - <Highlight color="#00d679">提醒</Highlight> 第一个元素将是「预设包裹 (Default Package)」。
+  - ![](/img/assetloader/latest/img_37.png)
+- Preset DLC Packages。
 
 ![](/img/assetloader/latest/img_8.png)
 
-<Highlight color="#ff2f00">重要</Highlight> 默认 Packages 将由**主下载器**进行管理与检查，所以不包含在默认中的 Packages，必须自行通过 API 初始，说明如下。
+<Highlight color="#ff2f00">重要</Highlight> Preset Packages 将由**主下载器**进行管理与检查，所以不包含在 Preset 中的 Packages，必须自行通过 API 初始，说明如下。
 
 手动初始 App Package
 ```csharp
@@ -110,6 +112,7 @@ if (isInitialized)
   - 路径不含平台 (.../CDN/\<ProductName\>/DLC/\<PackageName\>/\<DlcVersion\>)，**属于所有平台的共用资源**。
   - 支持特定版本 DLC package 的下载与 DLC package 卸载功能，需手动进行 AssetPatcher.InitDlcPackage，并且指定特定 dlcVersion，对于 dlcVersion 也可以单一固定 dlcVersion (ex: "latest")，变成只要 DLC 有更新就可以使用固定路径进行更新。
 
+API 参考：
 ```csharp
 /// <summary>
 /// Init app package (If PlayMode is HostMode will request from default host path)
