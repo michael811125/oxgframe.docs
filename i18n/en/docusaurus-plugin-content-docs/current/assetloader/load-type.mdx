@@ -59,13 +59,15 @@ Additionally, when developing with AssetBundles, PatchLauncher is required for R
 
 ### Step 3.
 
-Configure the default Packages, which will be initialized at Runtime.
-- Default App Packages.
-- Default DLC Packages.
+Configure the Preset Packages, which will be initialized at Runtime.
+- Preset App Packages。
+  - <Highlight color="#00d679">Reminder</Highlight> The first element will be the Default Package.
+  - ![](/img/assetloader/latest/img_37.png)
+- Preset DLC Packages.
 
 ![](/img/assetloader/latest/img_8.png)
 
-<Highlight color="#ff2f00">Important</Highlight> The default Packages will be managed and checked by the **main downloader**, so Packages not included in the defaults must be initialized manually through the API, as described below.
+<Highlight color="#ff2f00">Important</Highlight> The Preset Packages will be managed and checked by the **main downloader**, so Packages not included in the Presets must be initialized manually through the API, as described below.
 
 Manually Initialize App Package
 ```csharp
@@ -110,6 +112,7 @@ if (isInitialized)
   - The path does not include the platform (.../CDN/\<ProductName\>/DLC/\<PackageName\>/\<DlcVersion\>), **which is a shared resource for all platforms**.
   - Supports downloading specific versions of DLC packages and DLC package uninstallation. You must manually call AssetPatcher.InitDlcPackage and specify a specific dlcVersion. The dlcVersion can also be set to a fixed version (e.g., "latest"), so whenever the DLC is updated, you can use a fixed path for the update.
 
+API reference:
 ```csharp
 /// <summary>
 /// Init app package (If PlayMode is HostMode will request from default host path)
