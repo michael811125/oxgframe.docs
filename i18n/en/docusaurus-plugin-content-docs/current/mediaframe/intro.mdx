@@ -66,9 +66,9 @@ Supports adjustment of timeline and playback speed.
 
 ## Other Instructions
 
-#### Media [murlconfig] (Media URL Config) Format
+#### Media [MediaConfig] (Media URL Config) Format
 
-If audio and video sources are stored on **Cloud services**, you can request files using URL. The format is as follows **(If URL is not specified through murlconfig.txt, you can also enter the full resource URL in the Prefab, but the disadvantage is that for future URL changes, maintenance will be very troublesome)**:
+If audio and video sources are stored on **Cloud services**, you can request files using URL. The format is as follows **(If URL is not specified through MediaConfig.txt, you can also enter the full resource URL in the Prefab, but the disadvantage is that for future URL changes, maintenance will be very troublesome)**:
 
 ```
 # audio_urlset = Audio Source Url Path
@@ -78,11 +78,11 @@ audio_urlset http://127.0.0.1/audio/
 video_urlset http://127.0.0.1/video/
 ```
 
-**\>\> How to establish murlconfig.txt \<\<**
-- Click OxGFrame -> MediaFrame -> Media Url Config Generator via MenuItem to start creating murlconfig.txt (StreamingAssets/murlconfig.txt).
+**\>\> How to establish MediaConfig.txt \<\<**
+- Click OxGFrame -> MediaFrame -> Media Url Config Generator via MenuItem to start creating MediaConfig.txt (StreamingAssets/MediaConfig.txt).
 
-**\>\> How to load murlconfig.txt \<\<**
-1. If Url Cfg Request Type = Assign is selected, then specify murlconfig.txt in the prefab.
-2. If Url Cfg Request Type = Streaming Assets is selected, the murlconfig.txt file will be requested from StreamingAssets.
+**\>\> How to load MediaConfig.txt \<\<**
+1. If Url Cfg Request Type = Assign is selected, then specify MediaConfig.txt in the prefab.
+2. If Url Cfg Request Type = Streaming Assets is selected, the MediaConfig.txt file will be requested from StreamingAssets.
 
 <Highlight color="#00d679">Reminder</Highlight> **Additional Description**: If requesting audio or video resources through URL, it is recommended to use it on the WebGL platform because WebGL does not support pre-specifying AudioClip or VideoClip (Assign method) to the Prefab in AssetBundle. Therefore, the URL method is provided for requesting audio/video files.

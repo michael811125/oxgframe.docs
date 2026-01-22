@@ -40,7 +40,7 @@ using OxGFrame.Hotfixer.Editor;
 ---
 
 ### CopyAOTAssembliesToDestination
-複製 AOT 程式集（經由 IL2CPP 裁剪後的 DLL）至目標目錄。此方法會自動將副檔名更改為 `.dll.bytes` 以利於資源載入。
+複製 AOT 程式集（經由 IL2CPP 裁剪後的 DLL）至目標目錄。此方法會自動將擴展名更改為 `.dll.bytes` 以利於資源載入。
 
 
 
@@ -52,7 +52,7 @@ using OxGFrame.Hotfixer.Editor;
 ---
 
 ### CopyHotfixAssembliesToDestination
-複製熱更新程式集（Hotfix DLLs）至目標目錄，並自動將副檔名更改為 `.bytes`。
+複製熱更新程式集（Hotfix DLLs）至目標目錄，並自動將擴展名更改為 `.bytes`。
 
 **Params**
 * `string dstDir`：自定義輸出路徑（若為 null，則輸出至預設的 `HotfixCollector` 目錄）
@@ -60,7 +60,7 @@ using OxGFrame.Hotfixer.Editor;
 ---
 
 ### ExportHotfixDllConfig
-產生熱更新 DLL 的配置文件（HotfixDllConfig），支持 JSON 或加密後的二進制格式。
+產生熱更新 DLL 的配置文件（HotfixConfig），支持 JSON 或加密後的二進制格式。
 
 **Params**
 * `List<string> aotDlls`：需要補充元數據（Metadata）的 AOT 程式集清單

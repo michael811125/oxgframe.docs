@@ -42,7 +42,7 @@ Starts downloading and loading all hot-update related files.
 * **Automatic Configuration Mode**
     * `CheckHotfix(string packageName, Action errorAction = null)`
     * `CheckHotfix(PackageInfoWithBuild packageInfo, Action errorAction = null)`
-    * <Highlight color="#00d679">Reminder</Highlight> This mode automatically reads the `hotfixdllconfig.conf` configuration file in `StreamingAssets`.
+    * <Highlight color="#00d679">Reminder</Highlight> This mode automatically reads the `HotfixManifest.dat` configuration file in `StreamingAssets`.
 
 * **Manual Specification Mode**
     * `CheckHotfix(string packageName, string[] aotAssemblies, string[] hotfixAssemblies)`
