@@ -34,13 +34,13 @@ using OxGFrame.AssetLoader;
 Defines the basic information for the application base configuration file.
 
 * **appCfgName**
-    * Type: `string` (Default: `"appconfig"`)
-    * Description: Defines the file name of the APP configuration file (AppConfig).
+    * Type: `string` (Default: `"AppInfo"`)
+    * Description: Defines the file name of the APP configuration file.
 * **appCfgExtension**
     * Type: `string` (Default: `".json"`)
     * Description: The file extension of the APP configuration file.
 
-<Highlight color="#0373fc">Attention</Highlight> The file extension must include the dot (e.g., `.conf`, `.json`).
+<Highlight color="#0373fc">Attention</Highlight> The file extension must include the dot (e.g., `.dat`, `.json`).
 
 ---
 
@@ -48,8 +48,8 @@ Defines the basic information for the application base configuration file.
 Defines the basic information for the patch (version update) configuration file.
 
 * **patchCfgName**
-    * Type: `string` (Default: `"patchconfig"`)
-    * Description: Defines the file name of the patch configuration file (PatchConfig).
+    * Type: `string` (Default: `"PatchInfo"`)
+    * Description: Defines the file name of the patch configuration file.
 * **patchCfgExtension**
     * Type: `string` (Default: `".json"`)
     * Description: The file extension of the patch configuration file.
@@ -61,12 +61,12 @@ Defines configurations related to the deployment environment (CDN request endpoi
 
 * **bundleUrlCfgCipher**
     * Type: `byte`
-    * Description: The encryption/decryption key for the resource request endpoint configuration file (burlconfig).
+    * Description: The encryption/decryption key for the resource request endpoint configuration file.
 * **bundleUrlCfgName**
-    * Type: `string` (Default: `"burlconfig"`)
+    * Type: `string` (Default: `"CdnConfig"`)
     * Description: The name of the configuration file for resource request endpoints.
 * **bundleUrlCfgExtension**
-    * Type: `string` (Default: `".conf"`)
+    * Type: `string` (Default: `".dat"`)
     * Description: The file extension for resource request endpoint configuration files.
 
 ---

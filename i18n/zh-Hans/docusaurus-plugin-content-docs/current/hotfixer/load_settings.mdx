@@ -56,14 +56,14 @@ Hotfixers.CheckHotfix
 <Highlight color="#0373fc">注意</Highlight> **优点**：容易维护，不需要重新打包编译 AOT，即可替换热更 DLL。 **缺点**：需要请求读取文件，会有极少量的性能损失。
 
 ```csharp
-// Auto try to load hotfixdllconfig.conf from StreamingAssets
+// Auto try to load HotfixManifest.dat from StreamingAssets
 Hotfixers.CheckHotfix
 (
     // Download and load hotfix files from HotfixPackage
     "HotfixPackage",
     () =>
     {
-        Debug.LogWarning("<color=#ff8321>Please generate the hotfixdllconfig.conf file in the StreamingAssets folder using the MenuItem -> OxGFrame/Hotfixer/Hotfix Dll Config Generator.</color>");
+        Debug.LogWarning("<color=#ff8321>Please generate the HotfixManifest.dat file in the StreamingAssets folder using the MenuItem -> OxGFrame/Hotfixer/Hotfix Dll Config Generator.</color>");
     }
 );
 ```
@@ -84,7 +84,7 @@ Hotfixers.CheckHotfix
 
 ![](/img/hotfixer/img_12.png)
 
-<Highlight color="#00d679">提醒</Highlight> hotfixdllconfig.conf 文件名称与扩展名都可以自行客製化 ([参考配置设定](https://oxgframe.ouhiyo.com/docs/getting-started#hotfixsettings))。
+<Highlight color="#00d679">提醒</Highlight> HotfixManifest.dat 文件名称与扩展名都可以自行客製化 ([参考配置设定](https://oxgframe.ouhiyo.com/docs/getting-started#hotfixsettings))。
 
 ### 编码转换
 

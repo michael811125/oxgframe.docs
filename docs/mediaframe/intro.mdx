@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # 模塊介紹
 
-export const Highlight = ({children, color}) => (
+export const Highlight = ({ children, color }) => (
   <span
     style={{
       backgroundColor: color,
@@ -66,9 +66,9 @@ export const Highlight = ({children, color}) => (
 
 ## 其他說明
 
-#### Media [murlconfig] (Media URL Config) 格式
+#### Media [MediaConfig] (Media URL Config) 格式
 
-如果音訊跟影片來源存放於**雲服務**上，可以使用 URL 的方式進行檔案請求，格式如下 **(如果不透過 murlconfig.txt 指定 URL 的話，也可以輸入完整資源 URL 至 Prefab 中，不過缺點就是對於未來更動 URL，要進行更改維護就會非常麻煩)**
+如果音訊跟影片來源存放於**雲服務**上，可以使用 URL 的方式進行檔案請求，格式如下 **(如果不透過 MediaConfig.txt 指定 URL 的話，也可以輸入完整資源 URL 至 Prefab 中，不過缺點就是對於未來更動 URL，要進行更改維護就會非常麻煩)**
 
 ```
 # audio_urlset = Audio Source Url Path
@@ -78,11 +78,11 @@ audio_urlset http://127.0.0.1/audio/
 video_urlset http://127.0.0.1/video/
 ```
 
-**\>\> 建立 murlconfig.txt 方式 \<\<**
-- 通過 MenuItem 點選 OxGFrame -> MediaFrame -> Media Url Config Generator，開始創建 murlconfig.txt (StreamingAssets/murlconfig.txt)。
+**\>\> 建立 MediaConfig.txt 方式 \<\<**
+- 通過 MenuItem 點選 OxGFrame -> MediaFrame -> Media Url Config Generator，開始創建 MediaConfig.txt (StreamingAssets/MediaConfig.txt)。
 
-**\>\> 加載 murlconfig.txt 方式 \<\<**
-1. 如果選擇 Url Cfg Request Type = Assign，則指定 murlconfig.txt 至 prefab 中。
-2. 如果選擇 Url Cfg Request Type = Streaming Assets，將會從 StreamingAssets 進行請求 murlconfig.txt 文件。
+**\>\> 加載 MediaConfig.txt 方式 \<\<**
+1. 如果選擇 Url Cfg Request Type = Assign，則指定 MediaConfig.txt 至 prefab 中。
+2. 如果選擇 Url Cfg Request Type = Streaming Assets，將會從 StreamingAssets 進行請求 MediaConfig.txt 文件。
 
 <Highlight color="#00d679">提醒</Highlight> **額外說明**：如果透過 URL 方式請求音訊或影片資源，建議於 WebGL 平台上使用，因為 WebGL 不支持 AssetBundle 事先指定 AudioClip 或 VideoClip (Assign 方式) 至 Prefab 中，所以提供 URL 的方式進行影音檔請求。

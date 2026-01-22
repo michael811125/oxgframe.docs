@@ -34,13 +34,13 @@ using OxGFrame.AssetLoader;
 定义应用程序基础配置文件的基本信息。
 
 * **appCfgName**
-    * 类型：`string` (预设: `"appconfig"`)
-    * 说明：定义 APP 配置文件（AppConfig）的文件名称。
+    * 类型：`string` (预设: `"AppInfo"`)
+    * 说明：定义 APP 配置文件的名称。
 * **appCfgExtension**
     * 类型：`string` (预设: `".json"`)
     * 说明：APP 配置文件的扩展名。
 
-<Highlight color="#0373fc">注意</Highlight> 扩展名必须包含点号（例如：`.conf`, `.json`）。
+<Highlight color="#0373fc">注意</Highlight> 扩展名必须包含点号（例如：`.dat`, `.json`）。
 
 ---
 
@@ -48,8 +48,8 @@ using OxGFrame.AssetLoader;
 定义补丁（版本更新）配置文件的基本信息。
 
 * **patchCfgName**
-    * 类型：`string` (预设: `"patchconfig"`)
-    * 说明：定义补丁配置文件（PatchConfig）的文件名称。
+    * 类型：`string` (预设: `"PatchInfo"`)
+    * 说明：定义补丁配置文件的名称。
 * **patchCfgExtension**
     * 类型：`string` (预设: `".json"`)
     * 说明：补丁配置文件的扩展名。
@@ -61,12 +61,12 @@ using OxGFrame.AssetLoader;
 
 * **bundleUrlCfgCipher**
     * 类型：`byte`
-    * 说明：资源请求端点配置文件（burlconfig）的加解密密钥。
+    * 说明：资源请求端点配置文件的加解密密钥。
 * **bundleUrlCfgName**
-    * 类型：`string` (预设: `"burlconfig"`)
+    * 类型：`string` (预设: `"CdnConfig"`)
     * 说明：资源请求端点的配置文件名称。
 * **bundleUrlCfgExtension**
-    * 类型：`string` (预设: `".conf"`)
+    * 类型：`string` (预设: `".dat"`)
     * 说明：资源请求端点配置文件的扩展名。
 
 ---

@@ -42,7 +42,7 @@ using OxGFrame.Hotfixer;
 * **自动配置模式**
     * `CheckHotfix(string packageName, Action errorAction = null)`
     * `CheckHotfix(PackageInfoWithBuild packageInfo, Action errorAction = null)`
-    * <Highlight color="#00d679">提醒</Highlight> 此模式会自动读取 `StreamingAssets` 中的 `hotfixdllconfig.conf` 配置文件。
+    * <Highlight color="#00d679">提醒</Highlight> 此模式会自动读取 `StreamingAssets` 中的 `HotfixManifest.dat` 配置文件。
 
 * **手动指定模式**
     * `CheckHotfix(string packageName, string[] aotAssemblies, string[] hotfixAssemblies)`
