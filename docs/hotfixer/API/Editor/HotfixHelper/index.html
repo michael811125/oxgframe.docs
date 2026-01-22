@@ -10,7 +10,7 @@
 
 
 <link rel="search" type="application/opensearchdescription+xml" title="OxGFrame" href="/opensearch.xml"><link rel="stylesheet" href="/assets/css/styles.beda1ac6.css">
-<script src="/assets/js/runtime~main.eda1c99e.js" defer="defer"></script>
+<script src="/assets/js/runtime~main.3cdefc86.js" defer="defer"></script>
 <script src="/assets/js/main.ff0f82a8.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -37,7 +37,7 @@
 <p>一鍵執行 AOT 與 Hotfix 程式集的複製操作，將所有相關檔案收集至 <code>HotfixCollector</code> 目錄中。</p>
 <hr>
 <h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="copyaotassembliestodestination">CopyAOTAssembliesToDestination<a href="#copyaotassembliestodestination" class="hash-link" aria-label="CopyAOTAssembliesToDestination的直接連結" title="CopyAOTAssembliesToDestination的直接連結" translate="no">​</a></h3>
-<p>複製 AOT 程式集（經由 IL2CPP 裁剪後的 DLL）至目標目錄。此方法會自動將副檔名更改為 <code>.dll.bytes</code> 以利於資源載入。</p>
+<p>複製 AOT 程式集（經由 IL2CPP 裁剪後的 DLL）至目標目錄。此方法會自動將擴展名更改為 <code>.dll.bytes</code> 以利於資源載入。</p>
 <p><strong>Params</strong></p>
 <ul>
 <li class=""><code>string dstDir</code>：自定義輸出路徑（若為 null，則輸出至預設的 <code>HotfixCollector</code> 目錄）</li>
@@ -45,14 +45,14 @@
 <p><span style="background-color:#ff2f00;border-radius:5px;color:#fff;padding:2.5px">重要</span> 裁剪後的 AOT DLL 僅在 <strong>HybridCLR -&gt; Generate All</strong> 之後才會產生。如果提示檔案不存在，請先執行 <a href="https://www.hybridclr.cn/docs/beginner/quickstart#%E6%89%93%E5%8C%85%E8%BF%90%E8%A1%8C" target="_blank" rel="noopener noreferrer" class="">Generate All</a>。</p>
 <hr>
 <h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="copyhotfixassembliestodestination">CopyHotfixAssembliesToDestination<a href="#copyhotfixassembliestodestination" class="hash-link" aria-label="CopyHotfixAssembliesToDestination的直接連結" title="CopyHotfixAssembliesToDestination的直接連結" translate="no">​</a></h3>
-<p>複製熱更新程式集（Hotfix DLLs）至目標目錄，並自動將副檔名更改為 <code>.bytes</code>。</p>
+<p>複製熱更新程式集（Hotfix DLLs）至目標目錄，並自動將擴展名更改為 <code>.bytes</code>。</p>
 <p><strong>Params</strong></p>
 <ul>
 <li class=""><code>string dstDir</code>：自定義輸出路徑（若為 null，則輸出至預設  的 <code>HotfixCollector</code> 目錄）</li>
 </ul>
 <hr>
 <h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="exporthotfixdllconfig">ExportHotfixDllConfig<a href="#exporthotfixdllconfig" class="hash-link" aria-label="ExportHotfixDllConfig的直接連結" title="ExportHotfixDllConfig的直接連結" translate="no">​</a></h3>
-<p>產生熱更新 DLL 的配置文件（HotfixDllConfig），支持 JSON 或加密後的二進制格式。</p>
+<p>產生熱更新 DLL 的配置文件（HotfixConfig），支持 JSON 或加密後的二進制格式。</p>
 <p><strong>Params</strong></p>
 <ul>
 <li class=""><code>List&lt;string&gt; aotDlls</code>：需要補充元數據（Metadata）的 AOT 程式集清單</li>
