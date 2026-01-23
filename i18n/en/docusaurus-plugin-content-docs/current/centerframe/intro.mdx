@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Module Introduction
 
-export const Highlight = ({children, color}) => (
+export const Highlight = ({ children, color }) => (
   <span
     style={{
       backgroundColor: color,
@@ -22,13 +22,13 @@ export const Highlight = ({children, color}) => (
 
 ---
 
-## Basic Introduction
+## Basic Description
 
-The event delegation center allows you to implement your own TClass registration type, and then have a custom management class inherit from CenterBase&lt;TCenter, TClass&gt; to implement simple event dispatching. The following are provided by default.
+Event delegation center. You can implement the TClass registration type yourself, and then have a custom management class inherit from CenterBase&lt;TCenter, TClass&gt; to implement simple event dispatching. The following are provided by default.
 
 ---
 
-## How to Use
+## Application Description
 
 ### Default API
 
@@ -40,11 +40,11 @@ public static void Add<UClass>(int id) where UClass : TClass, new()
 public static void Add(int id, TClass @class)
 
 public static void Delete<UClass>() where UClass : TClass
-		
+
 public static void Delete(int id)
-	
+
 public static void DeleteAll()
-	
+
 public static UClass Find<UClass>() where UClass : TClass
 
 public static UClass Find<UClass>(int id) where UClass : TClass
@@ -52,14 +52,25 @@ public static UClass Find<UClass>(int id) where UClass : TClass
 
 ### EventCenter
 
-Centralized Event Integration Module allows you to define the format of each Event for dispatch (you can also list event IDs for planning to fill out in a form with registered IDs, and then retrieve event IDs from the table for dispatch).
-- TClass: EventBase, the base class for a single Event, which can be created by right-clicking **(Right-click in the Project window -> Create -> OxGFrame -> Center Frame -> Event Center -> Template Event.cs)**.
-- TCenter: EventCenter, used for inheritance management, mainly for the registration phase, created by right-clicking **(Right-click in the Project window -> Create -> OxGFrame -> Center Frame -> Event Center -> Template EventCenter.cs)**.
-  - Use the Default API for Find calls.
+Centralized Event integration module. You can customize the format of each Event for dispatching (you can also list event IDs for designers to fill in registered IDs in a table, allowing event ID retrieval and dispatching from the table).
+- TClass: EventBase, the base class for a single Event. Created via right-click **(Right-click in Project window -> Create -> OxGFrame -> Center Frame -> Event Center -> Template Event.cs)**.
+- TCenter: EventCenter, used for the inheritance management layer, primarily for the registration phase. Created via right-click **(Right-click in Project window -> Create -> OxGFrame -> Center Frame -> Event Center -> Template EventCenter.cs)**.
+  - Use Default API for Find calls.
 
 ### APICenter
 
-Centralized API integration module that allows customization of each API's format for short-lived HTTP API requests. It effectively manages various API formats using Acax (similar to Ajax for API requests).
-- TClass: APIBase, the base class for a single API, created via right-click **(Right-click in Project window -> Create -> OxGFrame -> Center Frame -> API Center -> Template API.cs)**.
-- TCenter: APICenter, used for inheritance management, mainly for the registration phase, created via right-click **(Right-click in Project window -> Create -> OxGFrame -> Center Frame -> API Center -> Template APICenter.cs)**.
+Centralized API integration module. You can customize the format of each API to make Http API short connection requests. It effectively centralizes the management of various API formats using Acax (similar to Ajax for requesting APIs).
+- TClass: APIBase, the base class for a single API. Created via right-click **(Right-click in Project window -> Create -> OxGFrame -> Center Frame -> API Center -> Template API.cs)**.
+- TCenter: APICenter, used for the inheritance management layer, primarily for the registration phase. Created via right-click **(Right-click in Project window -> Create -> OxGFrame -> Center Frame -> API Center -> Template APICenter.cs)**.
   - Use Default API for Find calls.
+
+## Acax (Asynchronous C# and XML)
+
+Acax provides short connections dedicated to requesting API data. The default provisions are as follows:
+
+- Http.Acax (UnityWebRequest - using UnityEngine.Networking), supports main thread only.
+  - Recommended platforms: WebGL, WIN, OSX, Android, iOS.
+- HttpNativeClient.Acax (HttpClient - using System.Net.Http New), supports other threads.
+  - Recommended platforms: WIN, OSX, Android, iOS.
+- HttpNativeWebRequest.Acax (HttpWebRequest - using System.Net Old), supports other threads.
+  - Recommended platforms: WIN, OSX, Android, iOS.
