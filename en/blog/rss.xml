@@ -4,7 +4,7 @@
         <title>OxGFrame Blog</title>
         <link>https://your-docusaurus-site.example.com/en/blog</link>
         <description>OxGFrame Blog</description>
-        <lastBuildDate>Thu, 22 Jan 2026 09:02:04 GMT</lastBuildDate>
+        <lastBuildDate>Fri, 23 Jan 2026 08:48:44 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <language>en</language>
@@ -12,7 +12,7 @@
             <title><![CDATA[Welcome]]></title>
             <link>https://your-docusaurus-site.example.com/en/blog/welcome</link>
             <guid>https://your-docusaurus-site.example.com/en/blog/welcome</guid>
-            <pubDate>Thu, 22 Jan 2026 09:02:04 GMT</pubDate>
+            <pubDate>Fri, 23 Jan 2026 08:48:44 GMT</pubDate>
             <description><![CDATA[Welcome to the OxGFrame Unity Development Framework.]]></description>
             <content:encoded><![CDATA[<p>Welcome to the OxGFrame Unity Development Framework.</p>
 <p><strong>If your project uses OxGFrame, feel free to contact the author. We'd be delighted to showcase your work.</strong></p>
