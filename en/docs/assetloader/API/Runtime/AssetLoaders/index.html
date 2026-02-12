@@ -10,7 +10,7 @@
 
 
 <link rel="search" type="application/opensearchdescription+xml" title="OxGFrame" href="/en/opensearch.xml"><link rel="stylesheet" href="/en/assets/css/styles.beda1ac6.css">
-<script src="/en/assets/js/runtime~main.3ba2a2bb.js" defer="defer"></script>
+<script src="/en/assets/js/runtime~main.547fb32e.js" defer="defer"></script>
 <script src="/en/assets/js/main.6d56aa87.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -88,8 +88,7 @@
 <p>For scenarios requiring &quot;batch management and batch release&quot; (e.g., all resources of a specific level), all Load/Preload methods provide versions with an <code>int groupId</code>.</p>
 <ul>
 <li class=""><strong>HasInCache(int groupId, string assetName)</strong>: Checks if the resource already exists in a specific group cache.</li>
-<li class=""><strong>ReleaseResourceAssets(int groupId)</strong>: Releases all Resources assets in that group, still subject to reference counting.</li>
-<li class=""><strong>ReleaseBundleAssets(int groupId)</strong>: Releases all Bundle assets in that group, still subject to reference counting.</li>
+<li class=""><strong>UnloadAssets(int groupId, LoadType loadType = LoadType.Any)</strong>: Releases all Resources &amp; Bundle assets in that group, still subject to reference counting.</li>
 </ul>
 <hr>
 <p><span style="background-color:#ff2f00;border-radius:5px;color:#fff;padding:2.5px">Important</span> Before releasing resources, make sure the resource is no longer referenced. For Bundle resources, it is recommended to call <code>Unload</code> &amp; <code>Destroy</code> in pairs instead of directly destroying the object to maintain the correctness of the reference count.</p>

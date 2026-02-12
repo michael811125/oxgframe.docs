@@ -10,7 +10,7 @@
 
 
 <link rel="search" type="application/opensearchdescription+xml" title="OxGFrame" href="/zh-Hans/opensearch.xml"><link rel="stylesheet" href="/zh-Hans/assets/css/styles.beda1ac6.css">
-<script src="/zh-Hans/assets/js/runtime~main.aeb8aedc.js" defer="defer"></script>
+<script src="/zh-Hans/assets/js/runtime~main.9f76c64b.js" defer="defer"></script>
 <script src="/zh-Hans/assets/js/main.449a4d65.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -88,8 +88,7 @@
 <p>针对需要「批量管理、批量释放」的情境（例如：特定关卡的所有资源），所有的 Load/Preload 方法皆提供带有 <code>int groupId</code> 的版本。</p>
 <ul>
 <li class=""><strong>HasInCache(int groupId, string assetName)</strong>: 检查资源是否已存在于特定 群组缓存中。</li>
-<li class=""><strong>ReleaseResourceAssets(int groupId)</strong>: 释放该群组内所有的 Resources 资源，不过实际还是依照计数管理。</li>
-<li class=""><strong>ReleaseBundleAssets(int groupId)</strong>: 释放该群组内所有的 Bundle 资源，不过实际还是依照计数管理。</li>
+<li class=""><strong>UnloadAssets(int groupId, LoadType loadType = LoadType.Any)</strong>: 释放该群组内所有的 Resources &amp; Bundle 资源，不过实际还是依照计数管理。</li>
 </ul>
 <hr>
 <p><span style="background-color:#ff2f00;border-radius:5px;color:#fff;padding:2.5px">重要</span> 进行资源释放前，务必确认该资源已不再被引用。对于 Bundle 资源，建议成对调用 <code>Unload</code> &amp; <code>Destroy</code> 而非直接销毁物件，以维持引用计数的正确性。</p>
