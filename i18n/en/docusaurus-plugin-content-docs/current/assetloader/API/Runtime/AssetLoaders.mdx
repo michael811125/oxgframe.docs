@@ -92,8 +92,7 @@ Directly loads file content and converts it to a specified type:
 For scenarios requiring "batch management and batch release" (e.g., all resources of a specific level), all Load/Preload methods provide versions with an `int groupId`.
 
 * **HasInCache(int groupId, string assetName)**: Checks if the resource already exists in a specific group cache.
-* **ReleaseResourceAssets(int groupId)**: Releases all Resources assets in that group, still subject to reference counting.
-* **ReleaseBundleAssets(int groupId)**: Releases all Bundle assets in that group, still subject to reference counting.
+* **UnloadAssets(int groupId, LoadType loadType = LoadType.Any)**: Releases all Resources & Bundle assets in that group, still subject to reference counting.
 
 ---
 
