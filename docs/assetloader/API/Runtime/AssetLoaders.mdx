@@ -94,8 +94,7 @@ using OxGFrame.AssetLoader;
 針對需要「批次管理、批次釋放」的情境（例如：特定關卡的所有資源），所有的 Load/Preload 方法皆提供帶有 `int groupId` 的版本。
 
 * **HasInCache(int groupId, string assetName)**: 檢查資源是否已存在於特定群組緩存中。
-* **ReleaseResourceAssets(int groupId)**: 釋放該群組內所有的 Resources 資源，不過實際還是依照計數管理。
-* **ReleaseBundleAssets(int groupId)**: 釋放該群組內所有的 Bundle 資源，不過實際還是依照計數管理。
+* **UnloadAssets(int groupId, LoadType loadType = LoadType.Any)**: 釋放該群組內所有的 Resources & Bundle 資源，不過實際還是依照計數管理。
 
 ---
 
