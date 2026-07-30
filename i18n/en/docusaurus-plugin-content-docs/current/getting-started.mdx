@@ -188,7 +188,7 @@ OxGFrame supports development assisted by **AI coding agents** (Claude Code, Ope
 **Import & install:**
 
 1. Import it via **Package Manager → OxGFrame → Samples → AI Agent Skills**. The files are copied to `Assets/Samples/OxGFrame/<version>/AI Agent Skills/`.
-2. Copy (or symlink) the `oxgframe-unity-skill` folder to wherever your agent discovers skills:
+2. Copy (or symlink) the `oxgframe-unity-skill` folder to wherever your agent discovers skills — **only skills placed in the agent's skills directory are auto-discovered and auto-triggered when a task is relevant** (references load on demand; no per-conversation reminder needed). If it stays under `Assets/Samples/`, the agent will not know it exists, and that path contains the version number, so it changes after upgrades. Committing the skills directory to version control makes it work for the whole team automatically:
 
 | Agent | Location |
 | :--- | :--- |

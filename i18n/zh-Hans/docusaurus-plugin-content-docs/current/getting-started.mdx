@@ -188,7 +188,7 @@ OxGFrame 支持使用 **AI 编码代理**（Claude Code、OpenAI Codex CLI、Cur
 **导入与安装：**
 
 1. 通过 **Package Manager → OxGFrame → Samples → AI Agent Skills** 导入，文件会复制到 `Assets/Samples/OxGFrame/<version>/AI Agent Skills/`。
-2. 将 `oxgframe-unity-skill` 文件夹复制（或建立符号链接）到你的 AI 代理读取技能的位置：
+2. 将 `oxgframe-unity-skill` 文件夹复制（或建立符号链接）到你的 AI 代理读取技能的位置——**放入 skills 目录，代理才会自动发现技能，并在任务相关时自动触发**（按需加载 references，无需每次对话提醒）；若仅留在 `Assets/Samples/` 内，代理不会知道它的存在，且该路径含版本号、升级后即失效。建议将 skills 目录一并提交到版本控制，全团队即可自动生效：
 
 | 代理 | 位置 |
 | :--- | :--- |
