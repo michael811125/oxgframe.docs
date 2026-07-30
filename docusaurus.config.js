@@ -51,13 +51,16 @@ const config = {
     locales: ['zh-Hans', 'zh-Hant', 'en'],
     localeConfigs: {
       'zh-Hans': {
-        htmlLang: 'zh-cn', // 簡體中文
+        label: '簡體中文',
+        htmlLang: 'zh-cn',
       },
       'zh-Hant': {
-        htmlLang: 'zh-tw', // 繁體中文
+        label: '繁體中文',
+        htmlLang: 'zh-tw',
       },
       en: {
-        htmlLang: 'en-us', // 英文
+        label: 'English',
+        htmlLang: 'en-us',
       },
     },
   },
