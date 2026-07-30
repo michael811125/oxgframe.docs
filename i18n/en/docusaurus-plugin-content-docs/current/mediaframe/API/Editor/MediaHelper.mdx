@@ -1,19 +1,20 @@
 ---
 sidebar_position: 1
+description: MediaHelper is the editor helper of MediaFrame, used to export the media URL config file (MediaConfig.txt).
 ---
 
 # MediaHelper
 
 export const Highlight = ({ children, color }) => (
-  <span
-    style={{
-      backgroundColor: color,
-      borderRadius: '5px',
-      color: '#fff',
-      padding: '2.5px'
-    }}>
-    {children}
-  </span>
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
 );
 
 <Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
@@ -22,18 +23,69 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
-## Methods
+`MediaHelper` is the **MediaFrame** editor helper, used to export the media (Audio / Video) URL config file so the client can resolve audio and video source addresses dynamically.
 
+|  |  |
+| :--- | :--- |
+| **Namespace** | `OxGFrame.MediaFrame.Editor` |
+| **Type** | `public static class` |
+| **Source** | [MediaHelper.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/MediaFrame/Scripts/Editor/MediaHelper.cs) |
+
+```csharp
 using OxGFrame.MediaFrame.Editor;
+```
 
-### ExportMediaUrlConfig
-Exports the URL configuration file for media resources (Audio/Video) to the specified path, typically used for built-in `StreamingAssets`. This configuration file allows the client to dynamically determine the source addresses for audio and video.
+<Highlight color="#0373fc">Attention</Highlight> This class is for the **Unity Editor** environment only.
 
-**Params**
-* `string audioUrlset`: Audio resource server path (Default: `http://127.0.0.1/audio/`)
-* `string videoUrlset`: Video resource server path (Default: `http://127.0.0.1/video/`)
-* `string outputPath`: Configuration file output target path
+### Method Overview {#overview}
 
-<Highlight color="#00d679">Reminder</Highlight> The output file will contain explanatory comments (#) and be written in UTF-8 encoding to ensure compatibility across different platforms.
+| Method | Description |
+| :--- | :--- |
+| [ExportMediaUrlConfig](#exportmediaurlconfig) | Exports the media URL config file (`MediaConfig.txt`) to the given path. |
+
+---
+
+### ExportMediaUrlConfig {#exportmediaurlconfig}
+
+```csharp
+public static void ExportMediaUrlConfig(string audioUrlset, string videoUrlset, string outputPath)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| audioUrlset | `string` | Audio asset server URL. If empty, the default `http://127.0.0.1/audio/` is used. |
+| videoUrlset | `string` | Video asset server URL. If empty, the default `http://127.0.0.1/video/` is used. |
+| outputPath | `string` | Output directory path for the config file (the file name is fixed as `MediaConfig.txt`). |
+
+**Description**
+
+Exports the audio and video source server URLs into a `MediaConfig.txt` config file at the given path — typically the built-in `StreamingAssets` — so the client can resolve audio and video source addresses dynamically when playing in URL mode.
+
+The output contains explanatory comments starting with `#` and is written in **UTF-8** encoding to ensure cross-platform compatibility:
+
+```text
+# audio_urlset = Audio Source Url Path
+# video_urlset = Video Source Url Path
+
+audio_urlset http://127.0.0.1/audio/
+video_urlset http://127.0.0.1/video/
+```
+
+<Highlight color="#00d679">Reminder</Highlight> You can also generate the file with the editor window tool via the menu **OxGFrame → MediaFrame → Media Url Config Generator (MediaConfig.txt)**.
+
+**Example**
+
+```csharp
+using OxGFrame.MediaFrame.Editor;
+using UnityEngine;
+
+MediaHelper.ExportMediaUrlConfig(
+    "https://cdn.example.com/audio/",
+    "https://cdn.example.com/video/",
+    Application.streamingAssetsPath
+);
+```
 
 ---

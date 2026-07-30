@@ -1,5 +1,6 @@
 ---
 sidebar_position: 1
+description: CoreFrames 是 CoreFrame 模块的统一调用入口，提供 UIFrame、SRFrame、USFrame 与 CPFrame 的显示、关闭、预加载与场景管理等接口。
 ---
 
 # CoreFrames
@@ -22,106 +23,2435 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`CoreFrames` 是 **CoreFrame** 模块的统一调用入口（Facade），以嵌套静态类提供 `UIFrame`（UI 窗口）、`SRFrame`（场景资源）、`USFrame`（Unity 场景）与 `CPFrame`（克隆 Prefab）四组接口，涵盖界面对象与场景的**预加载、显示、关闭、隐藏、加载与卸载**，底层与 AssetLoader 联动引用计数管理。
+
+|  |  |
+| :--- | :--- |
+| **命名空间** | `OxGFrame.CoreFrame` |
+| **类型** | `public static class` |
+| **源码** | [CoreFrames.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/CoreFrame/Scripts/Runtime/Core/CoreFrames.cs) |
+
+```csharp
 using OxGFrame.CoreFrame;
+```
 
-## 核心机制：自动路径解析
+<Highlight color="#00d679">提醒</Highlight> 各子系统的管理器（`UIManager`、`SRManager` 等）会在首次调用时自动创建并常驻（`DontDestroyOnLoad`），无需事先在场景中创建。
 
-`CoreFrames` 内置解析器，会根据传入的名称前缀决定资源来源：
+<Highlight color="#0373fc">注意</Highlight> `UIFrame` 需要场景中存在与 UI Prefab 上 `UISettings.canvasName` 同名的 `Canvas` 对象，相关设置请参考 [CoreFrame 介绍](../../intro.mdx)。
 
-| 前缀 | 适用框架 | 说明 | 示例 |
+## 快速上手 {#quick-start}
+
+```csharp
+// 显示 UI（可同时传递数据给 UI 的 OnShow）
+var ui = await CoreFrames.UIFrame.Show("PlayerUI");
+
+// 关闭 UI
+CoreFrames.UIFrame.Close("PlayerUI");
+
+// 显示场景资源（SR）
+await CoreFrames.SRFrame.Show("BattleField");
+
+// 加载 Single 场景（无前缀 = Bundle 场景，使用 Address 名称）
+await CoreFrames.USFrame.LoadSingleSceneAsync("MainScene");
+
+// 从 Build Settings 加载场景（build# 前缀）
+await CoreFrames.USFrame.LoadSingleSceneAsync("build#MainScene");
+
+// 克隆 Prefab（CP），不再使用时直接 Destroy 即可
+var cp = await CoreFrames.CPFrame.LoadWithCloneAsync<CPBase>("BulletCP");
+```
+
+## 通用规则 {#general-rules}
+
+### 名称前缀解析 {#asset-name-prefix}
+
+`CoreFrames` 内置解析器，依传入名称的前缀决定资源来源：
+
+| 前缀 | 适用子系统 | 说明 | 示例 |
 | :--- | :--- | :--- | :--- |
-| **res#** | UI, SR, CP | 从 Unity 原生 **Resources** 加载资源。 | `res#Prefabs/PlayerUI` |
-| **build#** | US | 从 **Scenes In Build** 清单内的场景清单加载场景。 | `build#MainScene` |
-| **无前缀** | 全部 | 预设从 **Asset Bundle (YooAsset)** 加载资源。 | `PlayerUI` |
+| **res#** | UIFrame、SRFrame、CPFrame | 从 Unity 原生 **Resources** 加载资源（依 Resources 相对路径）。 | `res#Prefabs/PlayerUI` |
+| **build#** | USFrame | 从 **Build Settings** 的 Scenes In Build 列表加载场景。 | `build#MainScene` |
+| **无前缀** | 全部 | 默认从 **Asset Bundle (YooAsset)** 加载资源（直接使用可寻址名称 Address）。 | `PlayerUI` |
 
----
+### 资源包 (Package) {#package}
 
-## UIFrame (User Interface)
+各加载方法皆提供 `packageName` 重载：
 
-管理所有 UI 窗口。支持 `Group` 多群组 UI 窗口管理 (如大厅群组 UIs、战斗群组 UIs 等...)、`Stack` 堆叠管理。
+- **未指定** `packageName`：自动使用默认 Package（`AssetPatcher.GetDefaultPackageName()`）。
+- **指定** `packageName`：从指定的 Package 加载资源，适用于多 Package 分包管理。
 
-### 全域常量
+### 群组 (groupId) {#group-id}
+
+`UIFrame` 与 `SRFrame` 支持**多群组管理**：通过 `Show` 打开的实例会记录 `groupId`（如大厅群组 UIs、战斗群组 UIs），批量操作（`CloseAll`、`HideAll`、`RevealAll`、`CheckHasAnyHiding`）依 `groupId` 筛选作用范围。框架内部常量定义如下：
 
 | 常量 | 值 | 说明 |
 | :--- | :--- | :--- |
-| **DEFAULT_GROUP_ID** | 0 | 预设使用的群组 ID。 |
-| **DO_ALL_GROUPS** | -1 | 执行操作时（如 `CloseAll`），将对象范围设为所有群组。 |
+| **DEFAULT_GROUP_ID** | `0` | 未指定 `groupId` 的重载，默认使用的群组 ID。 |
+| **DO_ALL_GROUPS** | `-1` | 将 `groupId` 传入 `-1` 时，作用范围扩及**所有群组**（等同调用 `...ForAllGroups` 系列方法）。 |
 
-### 状态设定
-* **ignoreTimeScale**: `bool`，UI 是否忽略 TimeScale 影响。
-* **enabledUpdate / enabledFixedUpdate / enabledLateUpdate**: 控制 UI 系统的轮询开关。
+### 进度回调 (Progression) {#progression}
 
-### 核心方法
-#### Show / Show\<T\>
-载入并显示 UI。
-* **Params**:
-    * `int groupId`: 群组 ID (预设 0)。
-    * `string packageName`: 资源包名称。
-    * `string assetName`: 资源名称。
-    * `object data`: 传递给 `UIBase.OnShow` 的参数。
-    * `string awaitingUIAssetName`: 开启前显示的过渡 UI 名称。
-    * `float awaitingUIExtraDuration`: 过渡 UI 的额外停留时间 (秒)。
-    * `uint priority`: 加载优先级。
+各加载方法的 `progression` 参数类型为 `OxGFrame.AssetLoader.Progression`：
 
-#### Close / CloseAll / CloseStackByStack
-* **Close**: 关闭指定 UI。
-* **CloseAll**: 关闭群组内 UI。`withoutAssetNames` 可设定排除名单。
-* **CloseStackByStack**: 关闭特定 Canvas 内的顶层 UI (LIFO)。
+```csharp
+public delegate void Progression(float progress, float currentCount, float totalCount);
+```
 
-#### SendRefreshData / SendRefreshDataToAll
-向开启中的 UI 发送数据更新通知，常用于**多语系切换**刷新、**接收服务端数据**显示刷新 (如储值后，需要刷新金额显示) 等。
-* **Params**: `RefreshInfo`: 包含目标 UI 名称与要更新的 `object data`。
+- `progress`：总进度（0 ~ 1）。
+- `currentCount` / `totalCount`：当前完成数量与总数量。
+
+### 关闭、隐藏与销毁 {#close-hide-destroy}
+
+- **Close** 走正规关闭流程（`OnPreClose` → `OnClose`）；**Hide** 仅禁用对象并标记隐藏（触发 `OnHide`），之后可由 **Reveal** 恢复显示（触发 `OnReveal`）。已 Close 的对象无法 Reveal。
+- Close 时是否**销毁实例**取决于：调用端传入 `forceDestroy`，或 Prefab 上勾选 `allowInstantiate`（多实例）／`onCloseAndDestroy`（关闭即销毁）。实例销毁时将自动联动 AssetLoader 卸载资源（引用计数）。
+- Prefab 上勾选 **Exclude From Close All**（`whenCloseAllToSkip`）／**Exclude From Hide All**（`whenHideAllToSkip`）的对象，会被 `CloseAll` / `HideAll` 跳过；改用 `...AndExcluded` 系列方法可连同这些对象一并处理。
+
+---
+## CoreFrames.UIFrame {#uiframe}
+
+UI 窗口的统一操作接口。管理所有 UI 窗口，支持 `Group` 多群组管理（如大厅群组 UIs、战斗群组 UIs）、`Stack` 堆栈管理（同节点内自动控制显示排序）、反切（`reverseChanges`）与逐层关闭（`allowCloseStackByStack`）。UI 实例依 Prefab 上 `UISettings` 的 `canvasName` 与 `nodeType`，自动挂载至对应 `Canvas` 下的节点。
+
+### 属性 {#ui-properties}
+
+| 属性 | 类型 | 默认值 | 说明 |
+| :--- | :--- | :--- | :--- |
+| ignoreTimeScale | `bool` | `false` | UI 系统的轮询计时是否忽略 `Time.timeScale` 影响（改用未缩放时间）。 |
+| enableUpdate | `bool` | `true` | 是否驱动 UI 的 `OnUpdate` 轮询。 |
+| enableFixedUpdate | `bool` | `true` | 是否驱动 UI 的 `OnFixedUpdate` 轮询。 |
+| enableLateUpdate | `bool` | `true` | 是否驱动 UI 的 `OnLateUpdate` 轮询。 |
+
+<Highlight color="#00d679">提醒</Highlight> 旧名称 `enabledUpdate` / `enabledFixedUpdate` / `enabledLateUpdate` 仍以 `[Obsolete]` 转发保留，建议改用新名称。
+
+### 方法总览 {#ui-overview}
+
+#### 初始化与 Canvas 环境
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [InitInstance](#ui-initinstance) | 初始化 `UIManager` 单例实例。 |
+| [SetupAndCheckUICanvas](#ui-setupandcheckuicanvas) | 依名称查找 Canvas 对象，设置并检查 UICanvas 环境。 |
+| [GetUICanvas](#ui-getuicanvas) | 依名称获取 `UICanvas` 组件。 |
+
+#### 状态查询
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [CheckIsShowing](#ui-checkisshowing) | 检查指定 UI 是否为显示状态。 |
+| [CheckIsHiding](#ui-checkishiding) | 检查指定 UI 是否为隐藏（Hide）状态。 |
+| [CheckHasAnyHiding](#ui-checkhasanyhiding) | 检查群组内是否有任一 UI 处于隐藏状态。 |
+| [CheckHasAnyHidingForAllGroups](#ui-checkhasanyhidingforallgroups) | 检查所有群组是否有任一 UI 处于隐藏状态。 |
+| [GetStackByStackCount](#ui-getstackbystackcount) | 获取逐层关闭堆栈的当前数量。 |
+
+#### 组件获取
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [GetComponent\<T\>](#ui-getcomponent) | 获取指定 UI 的实例组件（堆栈最上层）。 |
+| [GetComponents\<T\>](#ui-getcomponents) | 获取指定 UI 的所有实例组件。 |
+
+#### 数据刷新
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [SendRefreshData](#ui-sendrefreshdata) | 向指定 UI 发送数据刷新通知。 |
+| [SendRefreshDataToAll](#ui-sendrefreshdatatoall) | 向所有 UI 广播数据刷新通知。 |
+
+#### 预加载与显示
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [Preload](#ui-preload) | 预加载 UI 资源至缓存。 |
+| [Show](#ui-show) | 加载并显示 UI，返回 `UIBase` 实例（支持泛型）。 |
+
+#### 关闭
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [Close](#ui-close) | 关闭指定 UI。 |
+| [CloseAll](#ui-closeall) | 关闭群组内的所有 UI。 |
+| [CloseAllForAllGroups](#ui-closeallforallgroups) | 关闭所有群组的所有 UI。 |
+| [CloseAllAndExcluded](#ui-closeallandexcluded) | 关闭群组内所有 UI（连同勾选排除的一并关闭）。 |
+| [CloseAllAndExcludedForAllGroups](#ui-closeallandexcludedforallgroups) | 关闭所有群组的所有 UI（连同勾选排除的一并关闭）。 |
+| [CloseStackByStack](#ui-closestackbystack) | 逐层关闭指定 Canvas 内最上层的 UI（LIFO）。 |
+
+#### 隐藏与显现
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [Reveal](#ui-reveal) | 将 Hide 的 UI 重新显现。 |
+| [RevealAll](#ui-revealall) | 显现群组内所有隐藏中的 UI。 |
+| [RevealAllForAllGroups](#ui-revealallforallgroups) | 显现所有群组隐藏中的 UI。 |
+| [Hide](#ui-hide) | 隐藏指定 UI（保留实例与状态）。 |
+| [HideAll](#ui-hideall) | 隐藏群组内的所有 UI。 |
+| [HideAllForAllGroups](#ui-hideallforallgroups) | 隐藏所有群组的所有 UI。 |
+| [HideAllAndExcluded](#ui-hideallandexcluded) | 隐藏群组内所有 UI（连同勾选排除的一并隐藏）。 |
+| [HideAllAndExcludedForAllGroups](#ui-hideallandexcludedforallgroups) | 隐藏所有群组的所有 UI（连同勾选排除的一并隐藏）。 |
 
 ---
 
-## SRFrame (Scene Resource)
+### InitInstance {#ui-initinstance}
 
-用于管理场景中的 3D 资源（如 NPC、建筑、特效物件、场中需求的管理组件、AudioListener 等），其操作逻辑与 UIFrame 相似。
+```csharp
+public static void InitInstance()
+```
 
-### 主要操作
-* **Show / Hide / Reveal**: 控制资源的加载显示、暂时隐藏与再次显现。
-* **Preload**: 异步预载资源至缓存池中，优化运行效能。
-    * **Params**: `uint priority`: 优先级 (0 最低)。
-* **CheckHasAnyHiding**: 检查群组内是否有任何处于隐藏状态的资源。
+**说明**
 
----
-
-## USFrame (Unity Scene)
-
-增强型场景管理系统，支持多场景并发加载与同步，封装了 Unity 原生 `SceneManager` 的功能，并扩充了对 Bundle 场景的支持。
-
-### 场景加载方法
-#### LoadSingleSceneAsync / LoadAdditiveSceneAsync
-* **Params**:
-    * `string sceneName`: 场景名称 (支持 `build#` 前缀)。
-    * `LocalPhysicsMode localPhysicsMode`: 设置该场景的独立物理模式。
-    * `bool activateOnLoad`: 加载完后是否自动激活。
-    * `Progression progression`: 加载进度回调。
-
-#### LoadMainAndSubScenesAsync
-<Highlight color="#0373fc">推荐使用</Highlight> 一次性加载一个主场景与多个子场景 (自动整并处理)。
-* **Params**:
-    * `string singleSceneName`: 主场景名称。
-    * `AdditiveSceneInfo[] additiveSceneInfos`: 子场景信息数组，包含 `sceneName` 与 `activeRootGameObjects` 设定。
+主动初始化 `UIManager` 单例实例。管理器对象会自动创建并常驻（`DontDestroyOnLoad`），建议在游戏启动阶段调用一次，确保管理器提前就绪。
 
 ---
 
-## CPFrame (Clone Prefab)
+### SetupAndCheckUICanvas {#ui-setupandcheckuicanvas}
 
-专门处理从 Prefab 实例化（Clone）出来的小型物件管理，如掉落物 (如急救包、药草等...)、子弹、UI 模板元件 (如物品 ICON 等...)，特性是直接销毁 (`Destroy`) 即可，会自动连动 AssetLoader 进行卸载，以确保资源计数正确。
+```csharp
+public static bool SetupAndCheckUICanvas(string canvasName)
+```
 
-### 核心方法
-#### LoadWithCloneAsync\<T\> / LoadWithClone\<T\>
-载入并克隆 Prefab。
-* **Params**:
-    * `Transform parent`: 挂载的父节点。
-    * `bool worldPositionStays`: 是否维持世界坐标。
-    * `Vector3 position`: 初始坐标。
-    * `Quaternion rotation`: 初始旋转。
-    * `Vector3? scale`: 初始缩放。
+**参数**
 
-#### PreloadAsync\<T\> / Preload\<T\>
-将 Prefab 预先载入至缓存池。
-* **Params**: `T`: 继承自 `Object` 的资源类型。
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| canvasName | `string` | Canvas 名称（需与场景中的 `Canvas` 对象同名）。 |
+
+**返回值**
+
+`bool` — 设置成功（或已设置过）返回 `true`；场景中未找到同名 Canvas 时输出错误日志并返回 `false`。
+
+**说明**
+
+依名称查找场景中的 `Canvas` 对象，设置并检查 `UICanvas` 环境（自动创建 `UIRoot`、各 `NodeType` 节点与 Mask / Freeze 容器）。
+
+<Highlight color="#00d679">提醒</Highlight> `Show` 时会自动执行此流程；切换场景后可手动调用，提前创建 UI 环境。
+
+---
+
+### GetUICanvas {#ui-getuicanvas}
+
+```csharp
+public static UICanvas GetUICanvas(string canvasName)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| canvasName | `string` | Canvas 名称。 |
+
+**返回值**
+
+`UICanvas` — 名称匹配的 `UICanvas` 组件；尚未设置环境或未找到时返回 `null`。
+
+**说明**
+
+依名称获取已设置的 `UICanvas`，可进一步访问其 `uiRoot`、各 UI 节点与 Mask / Freeze 管理器。
+
+---
+
+### CheckIsShowing {#ui-checkisshowing}
+
+```csharp
+public static bool CheckIsShowing(string assetName)
+public static bool CheckIsShowing(UIBase uiBase)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | UI 资源名称。 |
+| uiBase | `UIBase` | UI 实例组件。 |
+
+**返回值**
+
+`bool` — 显示中返回 `true`；未找到或未显示返回 `false`。
+
+**说明**
+
+检查指定 UI 是否为显示状态。依名称查询时，以该 UI 堆栈**最上层实例**的显示状态为准。
+
+---
+
+### CheckIsHiding {#ui-checkishiding}
+
+```csharp
+public static bool CheckIsHiding(string assetName)
+public static bool CheckIsHiding(UIBase uiBase)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | UI 资源名称。 |
+| uiBase | `UIBase` | UI 实例组件。 |
+
+**返回值**
+
+`bool` — 处于隐藏（Hide）状态返回 `true`；未找到或非隐藏状态返回 `false`。
+
+**说明**
+
+检查指定 UI 是否处于 [Hide](#ui-hide) 造成的隐藏状态（`isHidden` 标记）。经 [Close](#ui-close) 关闭的 UI 不属于隐藏状态。
+
+---
+
+### CheckHasAnyHiding {#ui-checkhasanyhiding}
+
+```csharp
+public static bool CheckHasAnyHiding()
+public static bool CheckHasAnyHiding(int groupId)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组 ID。<br/>**默认值**：`0`（无参数重载） |
+
+**返回值**
+
+`bool` — 群组内存在任一隐藏中的 UI 时返回 `true`。
+
+**说明**
+
+检查群组内是否有任一 UI 处于隐藏状态。
+
+---
+
+### CheckHasAnyHidingForAllGroups {#ui-checkhasanyhidingforallgroups}
+
+```csharp
+public static bool CheckHasAnyHidingForAllGroups()
+```
+
+**返回值**
+
+`bool` — 任一群组存在隐藏中的 UI 时返回 `true`。
+
+**说明**
+
+行为同 [CheckHasAnyHiding](#ui-checkhasanyhiding)，但检查范围为**所有群组**。
+
+---
+
+### GetStackByStackCount {#ui-getstackbystackcount}
+
+```csharp
+public static int GetStackByStackCount(string canvasName)
+public static int GetStackByStackCount(int groupId, string canvasName)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组 ID。<br/>**默认值**：`0`（未指定的重载） |
+| canvasName | `string` | Canvas 名称。 |
+
+**返回值**
+
+`int` — 该群组 + Canvas 的逐层关闭堆栈当前数量；未找到时返回 `0`。
+
+**说明**
+
+获取逐层关闭堆栈的数量。仅计入启用 `allowCloseStackByStack` 的 UI（经 `Show` 打开时推入堆栈），搭配 [CloseStackByStack](#ui-closestackbystack) 使用。
+
+---
+
+### GetComponent\<T\> {#ui-getcomponent}
+
+```csharp
+public static T GetComponent<T>(string assetName) where T : UIBase
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | UI 资源名称。 |
+
+**返回值**
+
+`T` — 该 UI 堆栈最上层的实例组件；未找到时返回 `null`。
+
+**说明**
+
+获取指定 UI 的实例组件，可转为子类进行高级操作。
+
+**示例**
+
+```csharp
+var playerUI = CoreFrames.UIFrame.GetComponent<PlayerUI>("PlayerUI");
+if (playerUI != null)
+{
+    // 对实例进行高级操作
+}
+```
+
+---
+
+### GetComponents\<T\> {#ui-getcomponents}
+
+```csharp
+public static T[] GetComponents<T>(string assetName) where T : UIBase
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | UI 资源名称。 |
+
+**返回值**
+
+`T[]` — 该 UI 的所有实例组件数组；未找到时返回空数组。
+
+**说明**
+
+获取指定 UI 的**所有**实例组件。当 UI 勾选 `allowInstantiate`（多实例）同时存在多个实例时，可通过此方法批量获取。
+
+---
+
+### SendRefreshData {#ui-sendrefreshdata}
+
+```csharp
+public static void SendRefreshData(RefreshInfo refreshInfo)
+public static void SendRefreshData(RefreshInfo[] refreshInfos)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| refreshInfo | `RefreshInfo` | 刷新信息结构体，包含目标 UI 资源名称与要传递的数据：`new RefreshInfo(assetName, data)`。 |
+| refreshInfos | `RefreshInfo[]` | 刷新信息数组（批量通知多个 UI）。 |
+
+**说明**
+
+向指定 UI 的**所有实例**发送刷新通知，触发其 `OnReceiveAndRefresh(data)`（显示中或隐藏中的实例皆会收到）。常用于**多语系切换**刷新、**接收服务端数据**后的显示刷新（如充值后刷新金额显示）等。
+
+**示例**
+
+```csharp
+// 通知 PlayerUI 刷新金额显示
+CoreFrames.UIFrame.SendRefreshData(new RefreshInfo("PlayerUI", newCoinAmount));
+```
+
+---
+
+### SendRefreshDataToAll {#ui-sendrefreshdatatoall}
+
+```csharp
+public static void SendRefreshDataToAll()
+public static void SendRefreshDataToAll(object data)
+public static void SendRefreshDataToAll(RefreshInfo[] specificRefreshInfos)
+public static void SendRefreshDataToAll(object data, RefreshInfo[] specificRefreshInfos)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| data | `object` | 广播给所有 UI 的共用数据。<br/>**默认值**：`null`（仅通知、不带数据） |
+| specificRefreshInfos | `RefreshInfo[]` | 特定名单。名单内的 UI 改用各自 `RefreshInfo` 中的数据，其余 UI 使用共用 `data`。 |
+
+**说明**
+
+向**所有** UI 广播刷新通知，触发各实例的 `OnReceiveAndRefresh`。常用于多语系切换时全 UI 刷新。
+
+**示例**
+
+```csharp
+// 切换语系后，通知所有 UI 刷新文本
+CoreFrames.UIFrame.SendRefreshDataToAll();
+```
+
+---
+
+### Preload {#ui-preload}
+
+```csharp
+public static async UniTask Preload(string assetName, uint priority = 0, Progression progression = null)
+public static async UniTask Preload(string packageName, string assetName, uint priority = 0, Progression progression = null)
+public static async UniTask Preload(string[] assetNames, uint priority = 0, Progression progression = null)
+public static async UniTask Preload(string packageName, string[] assetNames, uint priority = 0, Progression progression = null)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | UI 资源名称（Bundle 资源使用 Address 名称；支持 `res#` 前缀）。 |
+| assetNames | `string[]` | UI 资源名称数组（批量预加载）。 |
+| priority | `uint` | 资源加载优先级。<br/>**默认值**：`0` |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+
+**返回值**
+
+`UniTask` — 可等待的异步操作。
+
+**说明**
+
+预先将 UI 资源加载至缓存（不显示）。之后调用 [Show](#ui-show) 时可直接取用，避免打开当下产生加载延迟。
+
+**示例**
+
+```csharp
+// 批量预加载常用 UI
+await CoreFrames.UIFrame.Preload(new string[] { "PlayerUI", "SettingsUI" });
+```
+
+---
+
+### Show {#ui-show}
+
+```csharp
+public static async UniTask<UIBase> Show(string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f)
+public static async UniTask<UIBase> Show(string packageName, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f)
+public static async UniTask<UIBase> Show(int groupId, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f)
+public static async UniTask<UIBase> Show(int groupId, string packageName, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f)
+public static async UniTask<T> Show<T>(string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f) where T : UIBase
+public static async UniTask<T> Show<T>(string packageName, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f) where T : UIBase
+public static async UniTask<T> Show<T>(int groupId, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f) where T : UIBase
+public static async UniTask<T> Show<T>(int groupId, string packageName, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f) where T : UIBase
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组 ID。<br/>**默认值**：`0`（未指定的重载） |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | UI 资源名称（Bundle 资源使用 Address 名称；支持 `res#` 前缀）。 |
+| data | `object` | 传递给 UI `OnShow(obj)` 的数据。<br/>**默认值**：`null` |
+| awaitingUIAssetName | `string` | 过渡 UI 资源名称。打开主 UI 前先行显示（如 Loading 遮罩），主 UI 打开完成后自动关闭。<br/>**默认值**：`null`（不使用过渡 UI） |
+| priority | `uint` | 资源加载优先级。<br/>**默认值**：`0` |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+| parent | `Transform` | 挂载的父节点。<br/>**默认值**：`null`（依 `uiSettings.nodeType` 自动挂载至 UICanvas 下的对应节点） |
+| awaitingUIExtraDuration | `float` | 过渡 UI 的额外停留秒数。<br/>**默认值**：`0f` |
+
+**返回值**
+
+`UniTask<UIBase>` — 打开的 UI 实例组件（泛型重载返回 `UniTask<T>`）；加载失败（未找到资源）时输出错误日志并返回 `null`。
+
+**说明**
+
+加载并显示 UI，同时记录 `groupId` 供批量操作筛选。打开流程会依序触发 `OnPreShow` → `OnShow`。
+
+<Highlight color="#0373fc">注意</Highlight>
+
+- 同名 UI **已在显示中**且未勾选 `allowInstantiate` 时，不会重复打开，输出警告并直接返回现有实例。
+- 启用 `reverseChanges`（反切）的 UI 打开时，会自动隐藏同 Canvas 反切堆栈中的前一个 UI；该 UI 关闭时自动恢复前一个 UI 的显示。
+
+**示例**
+
+```csharp
+// 打开 UI 并传递数据
+var ui = await CoreFrames.UIFrame.Show("PlayerUI", new PlayerData(100));
+
+// 泛型打开，直接获取子类
+var playerUI = await CoreFrames.UIFrame.Show<PlayerUI>("PlayerUI");
+
+// 指定群组与 Package 打开
+await CoreFrames.UIFrame.Show(1, "OtherPackage", "BattleUI");
+
+// 打开前先显示过渡 UI（额外停留 0.5 秒）
+await CoreFrames.UIFrame.Show("LobbyUI", null, "LoadingUI", awaitingUIExtraDuration: 0.5f);
+```
+
+---
+
+### Close {#ui-close}
+
+```csharp
+public static void Close(string assetName, bool disableOnPreClose = false, bool forceDestroy = false)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | UI 资源名称。 |
+| disableOnPreClose | `bool` | 是否跳过 `OnPreClose` 回调。<br/>**默认值**：`false` |
+| forceDestroy | `bool` | 是否强制销毁实例。未强制时，依 Prefab 上 `allowInstantiate` / `onCloseAndDestroy` 设置决定。<br/>**默认值**：`false` |
+
+**说明**
+
+关闭指定 UI（多实例时关闭堆栈**最上层**的实例）。UI 不在显示状态且未传入 `forceDestroy` 时不动作。实例销毁时将联动卸载资源（参考[关闭、隐藏与销毁](#close-hide-destroy)）。
+
+**示例**
+
+```csharp
+// 一般关闭（依 Prefab 设置决定是否销毁）
+CoreFrames.UIFrame.Close("PlayerUI");
+
+// 强制销毁 + 跳过 OnPreClose
+CoreFrames.UIFrame.Close("PlayerUI", true, true);
+```
+
+---
+
+### CloseAll {#ui-closeall}
+
+```csharp
+public static void CloseAll(bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+public static void CloseAll(int groupId, bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组 ID。<br/>**默认值**：`0`（未指定的重载） |
+| disableOnPreClose | `bool` | 是否跳过 `OnPreClose` 回调。<br/>**默认值**：`false` |
+| forceDestroy | `bool` | 是否强制销毁实例。<br/>**默认值**：`false` |
+| withoutAssetNames | `params string[]` | 排除名单。名单内的 UI 不执行关闭。 |
+
+**说明**
+
+关闭群组内的**所有 UI**（含每个 UI 的整个堆栈实例）。
+
+<Highlight color="#0373fc">注意</Highlight>
+
+- 勾选 **Exclude From Close All**（`whenCloseAllToSkip`）的 UI 会被跳过，需改用 [CloseAllAndExcluded](#ui-closeallandexcluded)。
+- 未显示中的 UI 会被跳过（除非传入 `forceDestroy` 或该 UI 勾选 `allowInstantiate`）。
+
+**示例**
+
+```csharp
+// 关闭默认群组所有 UI，但保留 MainMenuUI
+CoreFrames.UIFrame.CloseAll(false, false, "MainMenuUI");
+```
+
+---
+
+### CloseAllForAllGroups {#ui-closeallforallgroups}
+
+```csharp
+public static void CloseAllForAllGroups(bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| disableOnPreClose | `bool` | 是否跳过 `OnPreClose` 回调。<br/>**默认值**：`false` |
+| forceDestroy | `bool` | 是否强制销毁实例。<br/>**默认值**：`false` |
+| withoutAssetNames | `params string[]` | 排除名单。 |
+
+**说明**
+
+行为同 [CloseAll](#ui-closeall)，但作用范围为**所有群组**。
+
+---
+
+### CloseAllAndExcluded {#ui-closeallandexcluded}
+
+```csharp
+public static void CloseAllAndExcluded(bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+public static void CloseAllAndExcluded(int groupId, bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组 ID。<br/>**默认值**：`0`（未指定的重载） |
+| disableOnPreClose | `bool` | 是否跳过 `OnPreClose` 回调。<br/>**默认值**：`false` |
+| forceDestroy | `bool` | 是否强制销毁实例。<br/>**默认值**：`false` |
+| withoutAssetNames | `params string[]` | 排除名单（仍然有效）。 |
+
+**说明**
+
+行为同 [CloseAll](#ui-closeall)，但**连同**勾选 **Exclude From Close All**（`whenCloseAllToSkip`）的 UI 一并关闭。
+
+---
+
+### CloseAllAndExcludedForAllGroups {#ui-closeallandexcludedforallgroups}
+
+```csharp
+public static void CloseAllAndExcludedForAllGroups(bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| disableOnPreClose | `bool` | 是否跳过 `OnPreClose` 回调。<br/>**默认值**：`false` |
+| forceDestroy | `bool` | 是否强制销毁实例。<br/>**默认值**：`false` |
+| withoutAssetNames | `params string[]` | 排除名单。 |
+
+**说明**
+
+行为同 [CloseAllAndExcluded](#ui-closeallandexcluded)，但作用范围为**所有群组**。
+
+---
+
+### CloseStackByStack {#ui-closestackbystack}
+
+```csharp
+public static void CloseStackByStack(string canvasName, bool disableOnPreClose = false, bool forceDestroy = false)
+public static void CloseStackByStack(int groupId, string canvasName, bool disableOnPreClose = false, bool forceDestroy = false)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组 ID。<br/>**默认值**：`0`（未指定的重载） |
+| canvasName | `string` | Canvas 名称。 |
+| disableOnPreClose | `bool` | 是否跳过 `OnPreClose` 回调。<br/>**默认值**：`false` |
+| forceDestroy | `bool` | 是否强制销毁实例。<br/>**默认值**：`false` |
+
+**说明**
+
+关闭指定群组 + Canvas 的逐层关闭堆栈中**最上层（最后打开）**的 UI（LIFO 后进先出）。仅对启用 `allowCloseStackByStack` 的 UI 有效，常用于实现返回键逐层关闭窗口。
+
+**示例**
+
+```csharp
+// 返回键：逐层关闭最上层 UI
+if (CoreFrames.UIFrame.GetStackByStackCount("Canvas") > 0)
+    CoreFrames.UIFrame.CloseStackByStack("Canvas");
+```
+
+---
+
+### Reveal {#ui-reveal}
+
+```csharp
+public static void Reveal(string assetName)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | UI 资源名称。 |
+
+**说明**
+
+将 [Hide](#ui-hide) 的 UI 重新显现，触发 `OnReveal`（而非 `OnShow`）。仅对隐藏状态的 UI 有效（经 Close 关闭的 UI 无法 Reveal）；UI 已在显示中时输出警告。
+
+---
+
+### RevealAll {#ui-revealall}
+
+```csharp
+public static void RevealAll()
+public static void RevealAll(int groupId)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组 ID。<br/>**默认值**：`0`（无参数重载） |
+
+**说明**
+
+显现群组内**所有**处于隐藏状态的 UI。
+
+---
+
+### RevealAllForAllGroups {#ui-revealallforallgroups}
+
+```csharp
+public static void RevealAllForAllGroups()
+```
+
+**说明**
+
+行为同 [RevealAll](#ui-revealall)，但作用范围为**所有群组**。
+
+---
+
+### Hide {#ui-hide}
+
+```csharp
+public static void Hide(string assetName)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | UI 资源名称。 |
+
+**说明**
+
+隐藏指定 UI 的**所有实例**（仅禁用对象并标记 `isHidden`，保留实例与数据状态），触发 `OnHide`。之后可由 [Reveal](#ui-reveal) 或 [Show](#ui-show) 恢复显示。
+
+**示例**
+
+```csharp
+// 暂时隐藏（保留状态）
+CoreFrames.UIFrame.Hide("PlayerUI");
+
+// 重新显现
+CoreFrames.UIFrame.Reveal("PlayerUI");
+```
+
+---
+
+### HideAll {#ui-hideall}
+
+```csharp
+public static void HideAll(params string[] withoutAssetNames)
+public static void HideAll(int groupId, params string[] withoutAssetNames)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组 ID。<br/>**默认值**：`0`（未指定的重载） |
+| withoutAssetNames | `params string[]` | 排除名单。名单内的 UI 不执行隐藏。 |
+
+**说明**
+
+隐藏群组内的**所有 UI**。
+
+<Highlight color="#0373fc">注意</Highlight> 勾选 **Exclude From Hide All**（`whenHideAllToSkip`）的 UI 会被跳过（若该 UI 启用 `reverseChanges` 则仍会被隐藏），需改用 [HideAllAndExcluded](#ui-hideallandexcluded)。
+
+---
+
+### HideAllForAllGroups {#ui-hideallforallgroups}
+
+```csharp
+public static void HideAllForAllGroups(params string[] withoutAssetNames)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| withoutAssetNames | `params string[]` | 排除名单。 |
+
+**说明**
+
+行为同 [HideAll](#ui-hideall)，但作用范围为**所有群组**。
+
+---
+
+### HideAllAndExcluded {#ui-hideallandexcluded}
+
+```csharp
+public static void HideAllAndExcluded(params string[] withoutAssetNames)
+public static void HideAllAndExcluded(int groupId, params string[] withoutAssetNames)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组 ID。<br/>**默认值**：`0`（未指定的重载） |
+| withoutAssetNames | `params string[]` | 排除名单（仍然有效）。 |
+
+**说明**
+
+行为同 [HideAll](#ui-hideall)，但**连同**勾选 **Exclude From Hide All**（`whenHideAllToSkip`）的 UI 一并隐藏。
+
+---
+
+### HideAllAndExcludedForAllGroups {#ui-hideallandexcludedforallgroups}
+
+```csharp
+public static void HideAllAndExcludedForAllGroups(params string[] withoutAssetNames)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| withoutAssetNames | `params string[]` | 排除名单。 |
+
+**说明**
+
+行为同 [HideAllAndExcluded](#ui-hideallandexcluded)，但作用范围为**所有群组**。
+
+---
+## CoreFrames.SRFrame {#srframe}
+
+场景资源（Scene Resource）的统一操作接口。用于管理场景中的 3D 资源（如 NPC、建筑、特效对象、场中需求的管理组件、AudioListener 等），操作逻辑与 `UIFrame` 相似（群组管理、Show / Close / Hide / Reveal、数据刷新），但不涉及 Canvas 节点与堆栈排序机制。实例默认挂载于 `SRManager` 节点下。
+
+### 属性 {#sr-properties}
+
+| 属性 | 类型 | 默认值 | 说明 |
+| :--- | :--- | :--- | :--- |
+| ignoreTimeScale | `bool` | `false` | SR 系统的轮询计时是否忽略 `Time.timeScale` 影响（改用未缩放时间）。 |
+| enableUpdate | `bool` | `true` | 是否驱动 SR 的 `OnUpdate` 轮询。 |
+| enableFixedUpdate | `bool` | `true` | 是否驱动 SR 的 `OnFixedUpdate` 轮询。 |
+| enableLateUpdate | `bool` | `true` | 是否驱动 SR 的 `OnLateUpdate` 轮询。 |
+
+<Highlight color="#00d679">提醒</Highlight> 旧名称 `enabledUpdate` / `enabledFixedUpdate` / `enabledLateUpdate` 仍以 `[Obsolete]` 转发保留，建议改用新名称。
+
+### 方法总览 {#sr-overview}
+
+#### 初始化
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [InitInstance](#sr-initinstance) | 初始化 `SRManager` 单例实例。 |
+
+#### 状态查询
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [CheckIsShowing](#sr-checkisshowing) | 检查指定 SR 是否为显示状态。 |
+| [CheckIsHiding](#sr-checkishiding) | 检查指定 SR 是否为隐藏（Hide）状态。 |
+| [CheckHasAnyHiding](#sr-checkhasanyhiding) | 检查群组内是否有任一 SR 处于隐藏状态。 |
+| [CheckHasAnyHidingForAllGroups](#sr-checkhasanyhidingforallgroups) | 检查所有群组是否有任一 SR 处于隐藏状态。 |
+
+#### 组件获取
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [GetComponent\<T\>](#sr-getcomponent) | 获取指定 SR 的实例组件（堆栈最上层）。 |
+| [GetComponents\<T\>](#sr-getcomponents) | 获取指定 SR 的所有实例组件。 |
+
+#### 数据刷新
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [SendRefreshData](#sr-sendrefreshdata) | 向指定 SR 发送数据刷新通知。 |
+| [SendRefreshDataToAll](#sr-sendrefreshdatatoall) | 向所有 SR 广播数据刷新通知。 |
+
+#### 预加载与显示
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [Preload](#sr-preload) | 预加载 SR 资源至缓存。 |
+| [Show](#sr-show) | 加载并显示 SR，返回 `SRBase` 实例（支持泛型）。 |
+
+#### 关闭
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [Close](#sr-close) | 关闭指定 SR。 |
+| [CloseAll](#sr-closeall) | 关闭群组内的所有 SR。 |
+| [CloseAllForAllGroups](#sr-closeallforallgroups) | 关闭所有群组的所有 SR。 |
+| [CloseAllAndExcluded](#sr-closeallandexcluded) | 关闭群组内所有 SR（连同勾选排除的一并关闭）。 |
+| [CloseAllAndExcludedForAllGroups](#sr-closeallandexcludedforallgroups) | 关闭所有群组的所有 SR（连同勾选排除的一并关闭）。 |
+
+#### 隐藏与显现
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [Reveal](#sr-reveal) | 将 Hide 的 SR 重新显现。 |
+| [RevealAll](#sr-revealall) | 显现群组内所有隐藏中的 SR。 |
+| [RevealAllForAllGroups](#sr-revealallforallgroups) | 显现所有群组隐藏中的 SR。 |
+| [Hide](#sr-hide) | 隐藏指定 SR（保留实例与状态）。 |
+| [HideAll](#sr-hideall) | 隐藏群组内的所有 SR。 |
+| [HideAllForAllGroups](#sr-hideallforallgroups) | 隐藏所有群组的所有 SR。 |
+| [HideAllAndExcluded](#sr-hideallandexcluded) | 隐藏群组内所有 SR（连同勾选排除的一并隐藏）。 |
+| [HideAllAndExcludedForAllGroups](#sr-hideallandexcludedforallgroups) | 隐藏所有群组的所有 SR（连同勾选排除的一并隐藏）。 |
+
+---
+
+### InitInstance {#sr-initinstance}
+
+```csharp
+public static void InitInstance()
+```
+
+**说明**
+
+主动初始化 `SRManager` 单例实例。管理器对象会自动创建并常驻（`DontDestroyOnLoad`），建议在游戏启动阶段调用一次，确保管理器提前就绪。
+
+---
+
+### CheckIsShowing {#sr-checkisshowing}
+
+```csharp
+public static bool CheckIsShowing(string assetName)
+public static bool CheckIsShowing(SRBase srBase)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | SR 资源名称。 |
+| srBase | `SRBase` | SR 实例组件。 |
+
+**返回值**
+
+`bool` — 显示中返回 `true`；未找到或未显示返回 `false`。
+
+**说明**
+
+检查指定 SR 是否为显示状态。依名称查询时，以该 SR 堆栈**最上层实例**的显示状态为准。
+
+---
+
+### CheckIsHiding {#sr-checkishiding}
+
+```csharp
+public static bool CheckIsHiding(string assetName)
+public static bool CheckIsHiding(SRBase srBase)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | SR 资源名称。 |
+| srBase | `SRBase` | SR 实例组件。 |
+
+**返回值**
+
+`bool` — 处于隐藏（Hide）状态返回 `true`；未找到或非隐藏状态返回 `false`。
+
+**说明**
+
+检查指定 SR 是否处于 [Hide](#sr-hide) 造成的隐藏状态（`isHidden` 标记）。经 [Close](#sr-close) 关闭的 SR 不属于隐藏状态。
+
+---
+
+### CheckHasAnyHiding {#sr-checkhasanyhiding}
+
+```csharp
+public static bool CheckHasAnyHiding()
+public static bool CheckHasAnyHiding(int groupId)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组 ID。<br/>**默认值**：`0`（无参数重载） |
+
+**返回值**
+
+`bool` — 群组内存在任一隐藏中的 SR 时返回 `true`。
+
+**说明**
+
+检查群组内是否有任一 SR 处于隐藏状态。
+
+---
+
+### CheckHasAnyHidingForAllGroups {#sr-checkhasanyhidingforallgroups}
+
+```csharp
+public static bool CheckHasAnyHidingForAllGroups()
+```
+
+**返回值**
+
+`bool` — 任一群组存在隐藏中的 SR 时返回 `true`。
+
+**说明**
+
+行为同 [CheckHasAnyHiding](#sr-checkhasanyhiding)，但检查范围为**所有群组**。
+
+---
+
+### GetComponent\<T\> {#sr-getcomponent}
+
+```csharp
+public static T GetComponent<T>(string assetName) where T : SRBase
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | SR 资源名称。 |
+
+**返回值**
+
+`T` — 该 SR 堆栈最上层的实例组件；未找到时返回 `null`。
+
+**说明**
+
+获取指定 SR 的实例组件，可转为子类进行高级操作。
+
+**示例**
+
+```csharp
+var battleField = CoreFrames.SRFrame.GetComponent<BattleFieldSR>("BattleField");
+```
+
+---
+
+### GetComponents\<T\> {#sr-getcomponents}
+
+```csharp
+public static T[] GetComponents<T>(string assetName) where T : SRBase
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | SR 资源名称。 |
+
+**返回值**
+
+`T[]` — 该 SR 的所有实例组件数组；未找到时返回空数组。
+
+**说明**
+
+获取指定 SR 的**所有**实例组件。当 SR 勾选 `allowInstantiate`（多实例）同时存在多个实例时，可通过此方法批量获取。
+
+---
+
+### SendRefreshData {#sr-sendrefreshdata}
+
+```csharp
+public static void SendRefreshData(RefreshInfo refreshInfo)
+public static void SendRefreshData(RefreshInfo[] refreshInfos)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| refreshInfo | `RefreshInfo` | 刷新信息结构体，包含目标 SR 资源名称与要传递的数据：`new RefreshInfo(assetName, data)`。 |
+| refreshInfos | `RefreshInfo[]` | 刷新信息数组（批量通知多个 SR）。 |
+
+**说明**
+
+向指定 SR 的**所有实例**发送刷新通知，触发其 `OnReceiveAndRefresh(data)`（显示中或隐藏中的实例皆会收到）。
+
+---
+
+### SendRefreshDataToAll {#sr-sendrefreshdatatoall}
+
+```csharp
+public static void SendRefreshDataToAll()
+public static void SendRefreshDataToAll(object data)
+public static void SendRefreshDataToAll(RefreshInfo[] specificRefreshInfos)
+public static void SendRefreshDataToAll(object data, RefreshInfo[] specificRefreshInfos)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| data | `object` | 广播给所有 SR 的共用数据。<br/>**默认值**：`null`（仅通知、不带数据） |
+| specificRefreshInfos | `RefreshInfo[]` | 特定名单。名单内的 SR 改用各自 `RefreshInfo` 中的数据，其余 SR 使用共用 `data`。 |
+
+**说明**
+
+向**所有** SR 广播刷新通知，触发各实例的 `OnReceiveAndRefresh`。
+
+---
+
+### Preload {#sr-preload}
+
+```csharp
+public static async UniTask Preload(string assetName, uint priority = 0, Progression progression = null)
+public static async UniTask Preload(string packageName, string assetName, uint priority = 0, Progression progression = null)
+public static async UniTask Preload(string[] assetNames, uint priority = 0, Progression progression = null)
+public static async UniTask Preload(string packageName, string[] assetNames, uint priority = 0, Progression progression = null)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | SR 资源名称（Bundle 资源使用 Address 名称；支持 `res#` 前缀）。 |
+| assetNames | `string[]` | SR 资源名称数组（批量预加载）。 |
+| priority | `uint` | 资源加载优先级。<br/>**默认值**：`0` |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+
+**返回值**
+
+`UniTask` — 可等待的异步操作。
+
+**说明**
+
+预先将 SR 资源加载至缓存（不显示）。之后调用 [Show](#sr-show) 时可直接取用，避免显示当下产生加载延迟，优化运行性能。
+
+**示例**
+
+```csharp
+await CoreFrames.SRFrame.Preload("BattleField");
+```
+
+---
+
+### Show {#sr-show}
+
+```csharp
+public static async UniTask<SRBase> Show(string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f)
+public static async UniTask<SRBase> Show(string packageName, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f)
+public static async UniTask<SRBase> Show(int groupId, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f)
+public static async UniTask<SRBase> Show(int groupId, string packageName, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f)
+public static async UniTask<T> Show<T>(string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f) where T : SRBase
+public static async UniTask<T> Show<T>(string packageName, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f) where T : SRBase
+public static async UniTask<T> Show<T>(int groupId, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f) where T : SRBase
+public static async UniTask<T> Show<T>(int groupId, string packageName, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f) where T : SRBase
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组 ID。<br/>**默认值**：`0`（未指定的重载） |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | SR 资源名称（Bundle 资源使用 Address 名称；支持 `res#` 前缀）。 |
+| data | `object` | 传递给 SR `OnShow(obj)` 的数据。<br/>**默认值**：`null` |
+| awaitingUIAssetName | `string` | 过渡 UI 资源名称（属于 **UIFrame** 的 UI）。打开 SR 前先行显示，SR 打开完成后自动关闭。<br/>**默认值**：`null`（不使用过渡 UI） |
+| priority | `uint` | 资源加载优先级。<br/>**默认值**：`0` |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+| parent | `Transform` | 挂载的父节点。<br/>**默认值**：`null`（挂载至 `SRManager` 节点下） |
+| awaitingUIExtraDuration | `float` | 过渡 UI 的额外停留秒数。<br/>**默认值**：`0f` |
+
+**返回值**
+
+`UniTask<SRBase>` — 打开的 SR 实例组件（泛型重载返回 `UniTask<T>`）；加载失败（未找到资源）时输出错误日志并返回 `null`。
+
+**说明**
+
+加载并显示场景资源，同时记录 `groupId` 供批量操作筛选。打开流程会依序触发 `OnPreShow` → `OnShow`。
+
+<Highlight color="#0373fc">注意</Highlight> 同名 SR **已在显示中**且未勾选 `allowInstantiate` 时，不会重复打开，输出警告并直接返回现有实例。
+
+**示例**
+
+```csharp
+// 显示场景资源
+var sr = await CoreFrames.SRFrame.Show("BattleField");
+
+// 泛型打开并指定父节点
+var npc = await CoreFrames.SRFrame.Show<NpcSR>("VillageNpc", parent: npcRoot);
+
+// 指定群组打开
+await CoreFrames.SRFrame.Show(2, "BattleEffects");
+```
+
+---
+
+### Close {#sr-close}
+
+```csharp
+public static void Close(string assetName, bool disableOnPreClose = false, bool forceDestroy = false)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | SR 资源名称。 |
+| disableOnPreClose | `bool` | 是否跳过 `OnPreClose` 回调。<br/>**默认值**：`false` |
+| forceDestroy | `bool` | 是否强制销毁实例。未强制时，依 Prefab 上 `allowInstantiate` / `onCloseAndDestroy` 设置决定。<br/>**默认值**：`false` |
+
+**说明**
+
+关闭指定 SR（多实例时关闭堆栈**最上层**的实例）。SR 不在显示状态且未传入 `forceDestroy` 时不动作。实例销毁时将联动卸载资源（参考[关闭、隐藏与销毁](#close-hide-destroy)）。
+
+**示例**
+
+```csharp
+CoreFrames.SRFrame.Close("BattleField");
+```
+
+---
+
+### CloseAll {#sr-closeall}
+
+```csharp
+public static void CloseAll(bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+public static void CloseAll(int groupId, bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组 ID。<br/>**默认值**：`0`（未指定的重载） |
+| disableOnPreClose | `bool` | 是否跳过 `OnPreClose` 回调。<br/>**默认值**：`false` |
+| forceDestroy | `bool` | 是否强制销毁实例。<br/>**默认值**：`false` |
+| withoutAssetNames | `params string[]` | 排除名单。名单内的 SR 不执行关闭。 |
+
+**说明**
+
+关闭群组内的**所有 SR**（含每个 SR 的整个堆栈实例）。
+
+<Highlight color="#0373fc">注意</Highlight>
+
+- 勾选 **Exclude From Close All**（`whenCloseAllToSkip`）的 SR 会被跳过，需改用 [CloseAllAndExcluded](#sr-closeallandexcluded)。
+- 未显示中的 SR 会被跳过（除非传入 `forceDestroy`）。
+
+---
+
+### CloseAllForAllGroups {#sr-closeallforallgroups}
+
+```csharp
+public static void CloseAllForAllGroups(bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| disableOnPreClose | `bool` | 是否跳过 `OnPreClose` 回调。<br/>**默认值**：`false` |
+| forceDestroy | `bool` | 是否强制销毁实例。<br/>**默认值**：`false` |
+| withoutAssetNames | `params string[]` | 排除名单。 |
+
+**说明**
+
+行为同 [CloseAll](#sr-closeall)，但作用范围为**所有群组**。
+
+---
+
+### CloseAllAndExcluded {#sr-closeallandexcluded}
+
+```csharp
+public static void CloseAllAndExcluded(bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+public static void CloseAllAndExcluded(int groupId, bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组 ID。<br/>**默认值**：`0`（未指定的重载） |
+| disableOnPreClose | `bool` | 是否跳过 `OnPreClose` 回调。<br/>**默认值**：`false` |
+| forceDestroy | `bool` | 是否强制销毁实例。<br/>**默认值**：`false` |
+| withoutAssetNames | `params string[]` | 排除名单（仍然有效）。 |
+
+**说明**
+
+行为同 [CloseAll](#sr-closeall)，但**连同**勾选 **Exclude From Close All**（`whenCloseAllToSkip`）的 SR 一并关闭。
+
+---
+
+### CloseAllAndExcludedForAllGroups {#sr-closeallandexcludedforallgroups}
+
+```csharp
+public static void CloseAllAndExcludedForAllGroups(bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| disableOnPreClose | `bool` | 是否跳过 `OnPreClose` 回调。<br/>**默认值**：`false` |
+| forceDestroy | `bool` | 是否强制销毁实例。<br/>**默认值**：`false` |
+| withoutAssetNames | `params string[]` | 排除名单。 |
+
+**说明**
+
+行为同 [CloseAllAndExcluded](#sr-closeallandexcluded)，但作用范围为**所有群组**。
+
+---
+
+### Reveal {#sr-reveal}
+
+```csharp
+public static void Reveal(string assetName)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | SR 资源名称。 |
+
+**说明**
+
+将 [Hide](#sr-hide) 的 SR 重新显现，触发 `OnReveal`（而非 `OnShow`）。仅对隐藏状态的 SR 有效（经 Close 关闭的 SR 无法 Reveal）；SR 已在显示中时输出警告。
+
+---
+
+### RevealAll {#sr-revealall}
+
+```csharp
+public static void RevealAll()
+public static void RevealAll(int groupId)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组 ID。<br/>**默认值**：`0`（无参数重载） |
+
+**说明**
+
+显现群组内**所有**处于隐藏状态的 SR。
+
+---
+
+### RevealAllForAllGroups {#sr-revealallforallgroups}
+
+```csharp
+public static void RevealAllForAllGroups()
+```
+
+**说明**
+
+行为同 [RevealAll](#sr-revealall)，但作用范围为**所有群组**。
+
+---
+
+### Hide {#sr-hide}
+
+```csharp
+public static void Hide(string assetName)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | SR 资源名称。 |
+
+**说明**
+
+隐藏指定 SR 的**所有实例**（仅禁用对象并标记 `isHidden`，保留实例与数据状态），触发 `OnHide`。之后可由 [Reveal](#sr-reveal) 或 [Show](#sr-show) 恢复显示。
+
+**示例**
+
+```csharp
+// 暂时隐藏场景资源（保留状态）
+CoreFrames.SRFrame.Hide("BattleField");
+
+// 重新显现
+CoreFrames.SRFrame.Reveal("BattleField");
+```
+
+---
+
+### HideAll {#sr-hideall}
+
+```csharp
+public static void HideAll(params string[] withoutAssetNames)
+public static void HideAll(int groupId, params string[] withoutAssetNames)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组 ID。<br/>**默认值**：`0`（未指定的重载） |
+| withoutAssetNames | `params string[]` | 排除名单。名单内的 SR 不执行隐藏。 |
+
+**说明**
+
+隐藏群组内的**所有 SR**。
+
+<Highlight color="#0373fc">注意</Highlight> 勾选 **Exclude From Hide All**（`whenHideAllToSkip`）的 SR 会被跳过，需改用 [HideAllAndExcluded](#sr-hideallandexcluded)。
+
+---
+
+### HideAllForAllGroups {#sr-hideallforallgroups}
+
+```csharp
+public static void HideAllForAllGroups(params string[] withoutAssetNames)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| withoutAssetNames | `params string[]` | 排除名单。 |
+
+**说明**
+
+行为同 [HideAll](#sr-hideall)，但作用范围为**所有群组**。
+
+---
+
+### HideAllAndExcluded {#sr-hideallandexcluded}
+
+```csharp
+public static void HideAllAndExcluded(params string[] withoutAssetNames)
+public static void HideAllAndExcluded(int groupId, params string[] withoutAssetNames)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组 ID。<br/>**默认值**：`0`（未指定的重载） |
+| withoutAssetNames | `params string[]` | 排除名单（仍然有效）。 |
+
+**说明**
+
+行为同 [HideAll](#sr-hideall)，但**连同**勾选 **Exclude From Hide All**（`whenHideAllToSkip`）的 SR 一并隐藏。
+
+---
+
+### HideAllAndExcludedForAllGroups {#sr-hideallandexcludedforallgroups}
+
+```csharp
+public static void HideAllAndExcludedForAllGroups(params string[] withoutAssetNames)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| withoutAssetNames | `params string[]` | 排除名单。 |
+
+**说明**
+
+行为同 [HideAllAndExcluded](#sr-hideallandexcluded)，但作用范围为**所有群组**。
+
+---
+## CoreFrames.USFrame {#usframe}
+
+Unity 场景（Unity Scene）的统一操作接口。增强型场景管理系统，封装 Unity 原生 `SceneManager` 的功能并扩展 **Bundle 场景**支持，支持 Single / Additive 多场景加载、主场景 + 子场景组合加载、进度合并上报、分帧激活根对象与场景卸载。
+
+<Highlight color="#00d679">提醒</Highlight> 场景名称支持 `build#` 前缀：有前缀时从 **Build Settings** 加载，无前缀时从 **Asset Bundle (YooAsset)** 加载（参考[名称前缀解析](#asset-name-prefix)）。
+
+### 方法总览 {#us-overview}
+
+#### 初始化与场景查询
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [InitInstance](#us-initinstance) | 初始化 `USManager` 单例实例。 |
+| [SceneCount](#us-scenecount) | 获取当前已加载的场景数量。 |
+| [GetActiveScene](#us-getactivescene) | 获取当前的活动场景。 |
+| [GetSceneAt](#us-getsceneat) | 依索引获取已加载的场景。 |
+| [GetSceneByName](#us-getscenebyname) | 依名称获取已加载的场景。 |
+| [GetSceneByBuildIndex](#us-getscenebybuildindex) | 依 Build Index 获取已加载的场景。 |
+| [GetAllScenes](#us-getallscenes) | 获取所有（或筛选后的）已加载场景。 |
+
+#### 场景操作
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [CreateScene](#us-createscene) | 创建新的空场景。 |
+| [MergeScenes](#us-mergescenes) | 合并两个场景。 |
+| [MoveGameObjectToScene](#us-movegameobjecttoscene) | 将 GameObject 移动至指定场景。 |
+| [MoveGameObjectToActiveScene](#us-movegameobjecttoactivescene) | 将 GameObject 移动至活动场景。 |
+| [SetActiveScene](#us-setactivescene) | 设置活动场景。 |
+| [SetActiveSceneRootGameObjects](#us-setactivescenerootgameobjects) | 批量设置场景根对象的 Active 状态。 |
+| [SetActiveSceneRootGameObjectsAsync](#us-setactivescenerootgameobjectsasync) | 分帧批量设置场景根对象的 Active 状态。 |
+
+#### 场景加载（异步）
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [LoadSingleSceneAsync](#us-loadsinglesceneasync) | 以 Single 模式异步加载场景。 |
+| [LoadAdditiveSceneAsync](#us-loadadditivesceneasync) | 以 Additive 模式异步加载场景。 |
+| [LoadMainAndSubScenesAsync](#us-loadmainandsubscenesasync) | 一次加载一个主场景与多个子场景（进度自动合并）。 |
+| [LoadSubScenesAsync](#us-loadsubscenesasync) | 批量加载多个 Additive 子场景（进度自动合并）。 |
+| [LoadSceneAsync](#us-loadsceneasync) | 通用异步加载场景（自行指定 LoadSceneMode）。 |
+
+#### 场景加载（同步）
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [LoadSingleScene](#us-loadsinglescene) | 以 Single 模式同步加载场景。 |
+| [LoadAdditiveScene](#us-loadadditivescene) | 以 Additive 模式同步加载场景。 |
+| [LoadMainAndSubScenes](#us-loadmainandsubscenes) | 一次加载一个主场景与多个子场景（同步）。 |
+| [LoadSubScenes](#us-loadsubscenes) | 批量加载多个 Additive 子场景（同步）。 |
+| [LoadScene](#us-loadscene) | 通用同步加载场景（自行指定 LoadSceneMode）。 |
+
+#### 卸载
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [Unload](#us-unload) | 卸载指定场景（依名称或 Build Index）。 |
+
+---
+
+### InitInstance {#us-initinstance}
+
+```csharp
+public static void InitInstance()
+```
+
+**说明**
+
+主动初始化 `USManager` 单例实例（纯 C# 单例，非 MonoBehaviour），建议在游戏启动阶段调用一次。
+
+---
+
+### SceneCount {#us-scenecount}
+
+```csharp
+public static int SceneCount()
+```
+
+**返回值**
+
+`int` — 当前已加载的场景数量（等同 `SceneManager.sceneCount`）。
+
+**说明**
+
+获取当前已加载的场景数量。
+
+---
+
+### GetActiveScene {#us-getactivescene}
+
+```csharp
+public static Scene GetActiveScene()
+```
+
+**返回值**
+
+`Scene` — 当前的活动场景（等同 `SceneManager.GetActiveScene()`）。
+
+**说明**
+
+获取当前的活动场景（Active Scene）。
+
+---
+
+### GetSceneAt {#us-getsceneat}
+
+```csharp
+public static Scene GetSceneAt(int index)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| index | `int` | 已加载场景列表中的索引（0 ~ SceneCount - 1）。 |
+
+**返回值**
+
+`Scene` — 对应索引的场景。
+
+**说明**
+
+依索引获取已加载的场景（等同 `SceneManager.GetSceneAt`）。
+
+---
+
+### GetSceneByName {#us-getscenebyname}
+
+```csharp
+public static Scene GetSceneByName(string sceneName)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| sceneName | `string` | 场景名称。 |
+
+**返回值**
+
+`Scene` — 名称匹配的已加载场景；未找到时返回的 `Scene` 为无效场景（`IsValid()` 为 `false`）。
+
+**说明**
+
+依名称获取**已加载**的场景（等同 `SceneManager.GetSceneByName`）。
+
+---
+
+### GetSceneByBuildIndex {#us-getscenebybuildindex}
+
+```csharp
+public static Scene GetSceneByBuildIndex(int buildIndex)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| buildIndex | `int` | Build Settings 中的场景索引。 |
+
+**返回值**
+
+`Scene` — 对应 Build Index 的已加载场景；未加载时返回的 `Scene` 为无效场景。
+
+**说明**
+
+依 Build Index 获取**已加载**的场景（等同 `SceneManager.GetSceneByBuildIndex`）。
+
+---
+
+### GetAllScenes {#us-getallscenes}
+
+```csharp
+public static Scene[] GetAllScenes(params string[] sceneNames)
+public static Scene[] GetAllScenes(params int[] buildIndexes)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| sceneNames | `params string[]` | 场景名称筛选条件。不传入时返回**所有**已加载场景。 |
+| buildIndexes | `params int[]` | Build Index 筛选条件。不传入时返回**所有**已加载场景。 |
+
+**返回值**
+
+`Scene[]` — 符合条件的已加载场景数组；未找到时返回空数组。
+
+**说明**
+
+获取所有（或依名称 / Build Index 筛选后的）已加载场景。
+
+---
+
+### CreateScene {#us-createscene}
+
+```csharp
+public static Scene CreateScene(string sceneName, CreateSceneParameters parameters)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| sceneName | `string` | 新场景名称。 |
+| parameters | `CreateSceneParameters` | 创建场景的参数（含 `LocalPhysicsMode`）。 |
+
+**返回值**
+
+`Scene` — 创建的空场景。
+
+**说明**
+
+在运行时创建新的空场景（等同 `SceneManager.CreateScene`）。
+
+---
+
+### MergeScenes {#us-mergescenes}
+
+```csharp
+public static bool MergeScenes(Scene sourceScene, Scene targetScene)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| sourceScene | `Scene` | 来源场景（合并后将被卸载）。 |
+| targetScene | `Scene` | 目标场景（接收来源场景的所有对象）。 |
+
+**返回值**
+
+`bool` — 合并成功返回 `true`；发生异常时输出异常日志并返回 `false`。
+
+**说明**
+
+将来源场景的所有 GameObject 合并至目标场景（等同 `SceneManager.MergeScenes`）。
+
+---
+
+### MoveGameObjectToScene {#us-movegameobjecttoscene}
+
+```csharp
+public static bool MoveGameObjectToScene(GameObject go, Scene targetScene)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| go | `GameObject` | 要移动的对象（必须是场景根对象）。 |
+| targetScene | `Scene` | 目标场景。 |
+
+**返回值**
+
+`bool` — 移动成功返回 `true`；发生异常时输出异常日志并返回 `false`。
+
+**说明**
+
+将 GameObject 移动至指定场景（等同 `SceneManager.MoveGameObjectToScene`）。
+
+---
+
+### MoveGameObjectToActiveScene {#us-movegameobjecttoactivescene}
+
+```csharp
+public static bool MoveGameObjectToActiveScene(GameObject go)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| go | `GameObject` | 要移动的对象（必须是场景根对象）。 |
+
+**返回值**
+
+`bool` — 移动成功返回 `true`；发生异常时输出异常日志并返回 `false`。
+
+**说明**
+
+将 GameObject 移动至当前的**活动场景**。
+
+---
+
+### SetActiveScene {#us-setactivescene}
+
+```csharp
+public static bool SetActiveScene(int index)
+public static bool SetActiveScene(string sceneName)
+public static bool SetActiveScene(Scene scene)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| index | `int` | 已加载场景列表中的索引。 |
+| sceneName | `string` | 场景名称。 |
+| scene | `Scene` | 场景实体。 |
+
+**返回值**
+
+`bool` — 设置成功返回 `true`（等同 `SceneManager.SetActiveScene`）。
+
+**说明**
+
+设置活动场景（Active Scene）。多场景 Additive 架构下，新生成的对象会归属于活动场景。
+
+**示例**
+
+```csharp
+// 加载子场景后，把活动场景切过去
+await CoreFrames.USFrame.LoadAdditiveSceneAsync("BattleScene");
+CoreFrames.USFrame.SetActiveScene("BattleScene");
+```
+
+---
+
+### SetActiveSceneRootGameObjects {#us-setactivescenerootgameobjects}
+
+```csharp
+public static void SetActiveSceneRootGameObjects(string sceneName, bool active, params string[] withoutRootGameObjectNames)
+public static void SetActiveSceneRootGameObjects(Scene scene, bool active, string[] withoutRootGameObjectNames = null)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| sceneName | `string` | 场景名称。存在多个同名场景时，会对**所有同名场景**执行。 |
+| scene | `Scene` | 场景实体。 |
+| active | `bool` | 要设置的 Active 状态。 |
+| withoutRootGameObjectNames | `params string[]` | 排除名单。名单内的根对象不变更状态。 |
+
+**说明**
+
+批量设置场景**根对象**的 Active 状态。场景无效或尚未加载完成时，输出错误／警告日志且不动作。常搭配 `activeRootGameObjects: false` 加载的场景使用，在适当时机再激活场景内容。
+
+---
+
+### SetActiveSceneRootGameObjectsAsync {#us-setactivescenerootgameobjectsasync}
+
+```csharp
+public async static UniTask SetActiveSceneRootGameObjectsAsync(string sceneName, bool active, int framesInterval = 1, int activeObjectsPerInterval = 3, params string[] withoutRootGameObjectNames)
+public async static UniTask SetActiveSceneRootGameObjectsAsync(Scene scene, bool active, int framesInterval = 1, int activeObjectsPerInterval = 3, params string[] withoutRootGameObjectNames)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| sceneName | `string` | 场景名称。存在多个同名场景时，会对**所有同名场景**执行。 |
+| scene | `Scene` | 场景实体。 |
+| active | `bool` | 要设置的 Active 状态。 |
+| framesInterval | `int` | 每批处理之间等待的帧数。<br/>**默认值**：`1` |
+| activeObjectsPerInterval | `int` | 每批处理的根对象数量。<br/>**默认值**：`3` |
+| withoutRootGameObjectNames | `params string[]` | 排除名单。 |
+
+**返回值**
+
+`UniTask` — 可等待的异步操作。
+
+**说明**
+
+**分帧**批量设置场景根对象的 Active 状态（每处理 `activeObjectsPerInterval` 个对象，等待 `framesInterval` 帧），避免大量对象同帧激活造成卡顿。
+
+**示例**
+
+```csharp
+// 每 2 帧激活 5 个根对象，平滑激活场景内容
+await CoreFrames.USFrame.SetActiveSceneRootGameObjectsAsync("BattleScene", true, 2, 5);
+```
+
+---
+
+### LoadSingleSceneAsync {#us-loadsinglesceneasync}
+
+```csharp
+public static async UniTask LoadSingleSceneAsync(string sceneName, Progression progression = null)
+public static async UniTask<T> LoadSingleSceneAsync<T>(string sceneName, Progression progression = null) where T : class
+public static async UniTask LoadSingleSceneAsync(string packageName, string sceneName, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, Progression progression = null)
+public static async UniTask<T> LoadSingleSceneAsync<T>(string packageName, string sceneName, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, Progression progression = null) where T : class
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| sceneName | `string` | 场景名称（支持 `build#` 前缀）。 |
+| localPhysicsMode | `LocalPhysicsMode` | 场景的独立物理模式。<br/>**默认值**：`LocalPhysicsMode.None` |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+
+**返回值**
+
+`UniTask` — 可等待的异步操作。泛型重载返回 `UniTask<T>`：Build 场景为 `AsyncOperation`、Bundle 场景为 `BundlePack`（以 `as T` 转型，类型不符时返回 `null`）。
+
+**说明**
+
+以 **Single** 模式异步加载场景（取代现有场景）。
+
+<Highlight color="#0373fc">注意</Highlight> 同名场景**已加载**时，输出警告且不重复加载。
+
+**示例**
+
+```csharp
+// 加载 Bundle 场景（Address 名称）
+await CoreFrames.USFrame.LoadSingleSceneAsync("MainScene");
+
+// 加载 Build Settings 场景，并监听进度
+await CoreFrames.USFrame.LoadSingleSceneAsync("build#MainScene", (progress, current, total) =>
+{
+    Debug.Log($"加载进度: {progress * 100}%");
+});
+```
+
+---
+
+### LoadAdditiveSceneAsync {#us-loadadditivesceneasync}
+
+```csharp
+public static async UniTask LoadAdditiveSceneAsync(string sceneName, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+public static async UniTask LoadAdditiveSceneAsync(string sceneName, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, bool activeRootGameObjects = true, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+public static async UniTask<T> LoadAdditiveSceneAsync<T>(string sceneName, bool activateOnLoad = true, uint priority = 100, Progression progression = null) where T : class
+public static async UniTask<T> LoadAdditiveSceneAsync<T>(string sceneName, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, bool activeRootGameObjects = true, bool activateOnLoad = true, uint priority = 100, Progression progression = null) where T : class
+public static async UniTask LoadAdditiveSceneAsync(string packageName, string sceneName, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+public static async UniTask LoadAdditiveSceneAsync(string packageName, string sceneName, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, bool activeRootGameObjects = true, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+public static async UniTask<T> LoadAdditiveSceneAsync<T>(string packageName, string sceneName, bool activateOnLoad = true, uint priority = 100, Progression progression = null) where T : class
+public static async UniTask<T> LoadAdditiveSceneAsync<T>(string packageName, string sceneName, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, bool activeRootGameObjects = true, bool activateOnLoad = true, uint priority = 100, Progression progression = null) where T : class
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| sceneName | `string` | 场景名称（支持 `build#` 前缀）。 |
+| localPhysicsMode | `LocalPhysicsMode` | 场景的独立物理模式。<br/>**默认值**：`LocalPhysicsMode.None` |
+| activeRootGameObjects | `bool` | 加载后是否激活场景根对象。`false` 时加载完成后自动禁用所有根对象（之后可用 [SetActiveSceneRootGameObjects](#us-setactivescenerootgameobjects) 激活）。<br/>**默认值**：`true` |
+| activateOnLoad | `bool` | 加载完成后是否自动激活场景（仅对 **Bundle** 场景生效）。<br/>**默认值**：`true` |
+| priority | `uint` | 场景加载优先级（仅对 **Bundle** 场景生效）。<br/>**默认值**：`100` |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+
+**返回值**
+
+`UniTask` — 可等待的异步操作。泛型重载返回 `UniTask<T>`：Build 场景为 `AsyncOperation`、Bundle 场景为 `BundlePack`（以 `as T` 转型，类型不符时返回 `null`）。
+
+**说明**
+
+以 **Additive** 模式异步叠加加载场景（不卸载现有场景）。
+
+**示例**
+
+```csharp
+// 叠加加载子场景
+await CoreFrames.USFrame.LoadAdditiveSceneAsync("EnvironmentScene");
+
+// 加载后先不激活根对象，稍后再分帧激活
+await CoreFrames.USFrame.LoadAdditiveSceneAsync("HeavyScene", LocalPhysicsMode.None, false);
+await CoreFrames.USFrame.SetActiveSceneRootGameObjectsAsync("HeavyScene", true);
+```
+
+---
+
+### LoadMainAndSubScenesAsync {#us-loadmainandsubscenesasync}
+
+```csharp
+public static async UniTask LoadMainAndSubScenesAsync(string singleSceneName, AdditiveSceneInfo[] additiveSceneInfos, uint priority = 100, Progression progression = null)
+public static async UniTask LoadMainAndSubScenesAsync(string singleSceneName, LocalPhysicsMode localPhysicsMode, AdditiveSceneInfo[] additiveSceneInfos, uint priority = 100, Progression progression = null)
+public static async UniTask LoadMainAndSubScenesAsync(string packageName, string singleSceneName, AdditiveSceneInfo[] additiveSceneInfos, uint priority = 100, Progression progression = null)
+public static async UniTask LoadMainAndSubScenesAsync(string packageName, string singleSceneName, LocalPhysicsMode localPhysicsMode, AdditiveSceneInfo[] additiveSceneInfos, uint priority = 100, Progression progression = null)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| singleSceneName | `string` | 主场景名称（Single 模式加载；支持 `build#` 前缀）。 |
+| localPhysicsMode | `LocalPhysicsMode` | 主场景的独立物理模式。<br/>**默认值**：`LocalPhysicsMode.None`（未指定的重载） |
+| additiveSceneInfos | `AdditiveSceneInfo[]` | 子场景信息数组（Additive 模式依序加载）。 |
+| priority | `uint` | 场景加载优先级（子场景依序递增；仅对 Bundle 场景生效）。<br/>**默认值**：`100` |
+| progression | `Progression` | 加载进度回调（主场景 + 子场景**合并**为单一进度上报）。<br/>**默认值**：`null` |
+
+`AdditiveSceneInfo` 结构体字段：
+
+| 字段 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| sceneName | `string` | 子场景名称（支持 `build#` 前缀）。 |
+| activeRootGameObjects | `bool` | 加载后是否激活场景根对象。 |
+| localPhysicsMode | `LocalPhysicsMode` | 子场景的独立物理模式。 |
+
+**返回值**
+
+`UniTask` — 可等待的异步操作。
+
+**说明**
+
+一次加载**一个 Single 主场景**与**多个 Additive 子场景**，进度自动合并为单一 `progression` 上报（0 ~ 1）。
+
+<Highlight color="#0373fc">注意</Highlight> 主场景**已加载**时，输出警告并中止整个流程（子场景也不会加载）。
+
+**示例**
+
+```csharp
+// 一次加载主场景 + 两个子场景
+await CoreFrames.USFrame.LoadMainAndSubScenesAsync(
+    "BattleScene",
+    new AdditiveSceneInfo[]
+    {
+        new AdditiveSceneInfo { sceneName = "EnvironmentScene", activeRootGameObjects = true },
+        new AdditiveSceneInfo { sceneName = "LightingScene", activeRootGameObjects = true }
+    },
+    progression: (progress, current, total) => Debug.Log($"总进度: {progress * 100}%")
+);
+```
+
+---
+
+### LoadSubScenesAsync {#us-loadsubscenesasync}
+
+```csharp
+public static async UniTask LoadSubScenesAsync(AdditiveSceneInfo[] additiveSceneInfos, uint priority = 100, Progression progression = null)
+public static async UniTask LoadSubScenesAsync(string packageName, AdditiveSceneInfo[] additiveSceneInfos, uint priority = 100, Progression progression = null)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| additiveSceneInfos | `AdditiveSceneInfo[]` | 子场景信息数组（字段参考 [LoadMainAndSubScenesAsync](#us-loadmainandsubscenesasync)）。 |
+| priority | `uint` | 场景加载优先级（子场景依序递增；仅对 Bundle 场景生效）。<br/>**默认值**：`100` |
+| progression | `Progression` | 加载进度回调（所有子场景**合并**为单一进度上报）。<br/>**默认值**：`null` |
+
+**返回值**
+
+`UniTask` — 可等待的异步操作。
+
+**说明**
+
+批量加载**多个 Additive 子场景**（不加载主场景），进度自动合并上报。
+
+---
+
+### LoadSceneAsync {#us-loadsceneasync}
+
+```csharp
+public static async UniTask LoadSceneAsync(string sceneName, LoadSceneMode loadSceneMode, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+public static async UniTask LoadSceneAsync(string sceneName, LoadSceneMode loadSceneMode, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+public static async UniTask<T> LoadSceneAsync<T>(string sceneName, LoadSceneMode loadSceneMode, bool activateOnLoad = true, uint priority = 100, Progression progression = null) where T : class
+public static async UniTask<T> LoadSceneAsync<T>(string sceneName, LoadSceneMode loadSceneMode, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, bool activateOnLoad = true, uint priority = 100, Progression progression = null) where T : class
+public static async UniTask LoadSceneAsync(string packageName, string sceneName, LoadSceneMode loadSceneMode, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+public static async UniTask LoadSceneAsync(string packageName, string sceneName, LoadSceneMode loadSceneMode, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+public static async UniTask<T> LoadSceneAsync<T>(string packageName, string sceneName, LoadSceneMode loadSceneMode, bool activateOnLoad = true, uint priority = 100, Progression progression = null) where T : class
+public static async UniTask<T> LoadSceneAsync<T>(string packageName, string sceneName, LoadSceneMode loadSceneMode, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, bool activateOnLoad = true, uint priority = 100, Progression progression = null) where T : class
+public static async UniTask<AsyncOperation> LoadSceneAsync(int buildIndex, LoadSceneMode loadSceneMode = LoadSceneMode.Single, Progression progression = null)
+public static async UniTask<AsyncOperation> LoadSceneAsync(int buildIndex, LoadSceneMode loadSceneMode = LoadSceneMode.Single, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, Progression progression = null)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| sceneName | `string` | 场景名称（支持 `build#` 前缀）。 |
+| buildIndex | `int` | Build Settings 中的场景索引（此重载**仅能**从 Build 加载）。 |
+| loadSceneMode | `LoadSceneMode` | 加载模式（`Single` / `Additive`）。<br/>**默认值**：`LoadSceneMode.Single`（buildIndex 重载） |
+| localPhysicsMode | `LocalPhysicsMode` | 场景的独立物理模式。<br/>**默认值**：`LocalPhysicsMode.None` |
+| activateOnLoad | `bool` | 加载完成后是否自动激活场景（仅对 **Bundle** 场景生效）。<br/>**默认值**：`true` |
+| priority | `uint` | 场景加载优先级（仅对 **Bundle** 场景生效）。<br/>**默认值**：`100` |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+
+**返回值**
+
+`UniTask` — 可等待的异步操作。泛型重载返回 `UniTask<T>`：Build 场景为 `AsyncOperation`、Bundle 场景为 `BundlePack`；buildIndex 重载返回 `UniTask<AsyncOperation>`。
+
+**说明**
+
+通用的异步场景加载方法，可自行指定 `LoadSceneMode`。等同 [LoadSingleSceneAsync](#us-loadsinglesceneasync) / [LoadAdditiveSceneAsync](#us-loadadditivesceneasync) 的一般化版本。
+
+**示例**
+
+```csharp
+using UnityEngine.SceneManagement;
+
+// 泛型获取 Bundle 场景的 BundlePack
+var pack = await CoreFrames.USFrame.LoadSceneAsync<BundlePack>("BattleScene", LoadSceneMode.Additive);
+
+// 依 Build Index 加载
+var op = await CoreFrames.USFrame.LoadSceneAsync(1, LoadSceneMode.Single);
+```
+
+---
+
+### LoadSingleScene {#us-loadsinglescene}
+
+```csharp
+public static void LoadSingleScene(string sceneName, Progression progression = null)
+public static void LoadSingleScene(string packageName, string sceneName, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, Progression progression = null)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| sceneName | `string` | 场景名称（支持 `build#` 前缀）。 |
+| localPhysicsMode | `LocalPhysicsMode` | 场景的独立物理模式。<br/>**默认值**：`LocalPhysicsMode.None` |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+
+**说明**
+
+以 **Single** 模式**同步**加载场景。行为同 [LoadSingleSceneAsync](#us-loadsinglesceneasync)（同名场景已加载时输出警告且不重复加载）。
+
+---
+
+### LoadAdditiveScene {#us-loadadditivescene}
+
+```csharp
+public static void LoadAdditiveScene(string sceneName, Progression progression = null)
+public static void LoadAdditiveScene(string sceneName, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, bool activeRootGameObjects = true, Progression progression = null)
+public static void LoadAdditiveScene(string packageName, string sceneName, Progression progression = null)
+public static void LoadAdditiveScene(string packageName, string sceneName, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, bool activeRootGameObjects = true, Progression progression = null)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| sceneName | `string` | 场景名称（支持 `build#` 前缀）。 |
+| localPhysicsMode | `LocalPhysicsMode` | 场景的独立物理模式。<br/>**默认值**：`LocalPhysicsMode.None` |
+| activeRootGameObjects | `bool` | 加载后是否激活场景根对象。<br/>**默认值**：`true` |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+
+**说明**
+
+以 **Additive** 模式**同步**叠加加载场景。行为同 [LoadAdditiveSceneAsync](#us-loadadditivesceneasync)。
+
+---
+
+### LoadMainAndSubScenes {#us-loadmainandsubscenes}
+
+```csharp
+public static void LoadMainAndSubScenes(string singleSceneName, AdditiveSceneInfo[] additiveSceneInfos, Progression progression = null)
+public static void LoadMainAndSubScenes(string singleSceneName, LocalPhysicsMode localPhysicsMode, AdditiveSceneInfo[] additiveSceneInfos, Progression progression = null)
+public static void LoadMainAndSubScenes(string packageName, string singleSceneName, AdditiveSceneInfo[] additiveSceneInfos, Progression progression = null)
+public static void LoadMainAndSubScenes(string packageName, string singleSceneName, LocalPhysicsMode localPhysicsMode, AdditiveSceneInfo[] additiveSceneInfos, Progression progression = null)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| singleSceneName | `string` | 主场景名称（Single 模式加载；支持 `build#` 前缀）。 |
+| localPhysicsMode | `LocalPhysicsMode` | 主场景的独立物理模式。<br/>**默认值**：`LocalPhysicsMode.None`（未指定的重载） |
+| additiveSceneInfos | `AdditiveSceneInfo[]` | 子场景信息数组（字段参考 [LoadMainAndSubScenesAsync](#us-loadmainandsubscenesasync)）。 |
+| progression | `Progression` | 加载进度回调（合并上报）。<br/>**默认值**：`null` |
+
+**说明**
+
+**同步**版本的主场景 + 子场景组合加载。行为同 [LoadMainAndSubScenesAsync](#us-loadmainandsubscenesasync)（主场景已加载时输出警告并中止）。
+
+---
+
+### LoadSubScenes {#us-loadsubscenes}
+
+```csharp
+public static void LoadSubScenes(AdditiveSceneInfo[] additiveSceneInfos, Progression progression = null)
+public static void LoadSubScenes(string packageName, AdditiveSceneInfo[] additiveSceneInfos, Progression progression = null)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| additiveSceneInfos | `AdditiveSceneInfo[]` | 子场景信息数组（字段参考 [LoadMainAndSubScenesAsync](#us-loadmainandsubscenesasync)）。 |
+| progression | `Progression` | 加载进度回调（合并上报）。<br/>**默认值**：`null` |
+
+**说明**
+
+**同步**批量加载多个 Additive 子场景。行为同 [LoadSubScenesAsync](#us-loadsubscenesasync)。
+
+---
+
+### LoadScene {#us-loadscene}
+
+```csharp
+public static void LoadScene(string sceneName, LoadSceneMode loadSceneMode, Progression progression = null)
+public static void LoadScene(string packageName, string sceneName, LoadSceneMode loadSceneMode, Progression progression = null)
+public static void LoadScene(string packageName, string sceneName, LoadSceneMode loadSceneMode, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, Progression progression = null)
+public static Scene LoadScene(int buildIndex, LoadSceneMode loadSceneMode = LoadSceneMode.Single, Progression progression = null)
+public static Scene LoadScene(int buildIndex, LoadSceneMode loadSceneMode = LoadSceneMode.Single, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, Progression progression = null)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| sceneName | `string` | 场景名称（支持 `build#` 前缀）。 |
+| buildIndex | `int` | Build Settings 中的场景索引（此重载**仅能**从 Build 加载）。 |
+| loadSceneMode | `LoadSceneMode` | 加载模式（`Single` / `Additive`）。<br/>**默认值**：`LoadSceneMode.Single`（buildIndex 重载） |
+| localPhysicsMode | `LocalPhysicsMode` | 场景的独立物理模式。<br/>**默认值**：`LocalPhysicsMode.None` |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+
+**返回值**
+
+名称重载无返回值；buildIndex 重载返回 `Scene` — 加载的场景（同名场景已以 Single 模式加载时返回 `default`）。
+
+**说明**
+
+通用的**同步**场景加载方法，可自行指定 `LoadSceneMode`。
+
+---
+
+### Unload {#us-unload}
+
+```csharp
+public static void Unload(bool recursively, params string[] sceneNames)
+public static void Unload(bool recursively, params int[] buildIndexes)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| recursively | `bool` | `true` 时卸载**所有同名**场景；`false` 时仅卸载**最后加载**的一个。 |
+| sceneNames | `params string[]` | 场景名称（支持 `build#` 前缀；无前缀为 Bundle 场景卸载）。 |
+| buildIndexes | `params int[]` | Build Settings 中的场景索引（此重载**仅能**卸载 Build 场景）。 |
+
+**说明**
+
+卸载指定场景。Bundle 场景卸载会联动 AssetLoader 引用计数；Build 场景卸载通过 `SceneManager.UnloadSceneAsync`。
+
+<Highlight color="#0373fc">注意</Highlight> 仅剩最后一个场景时无法卸载（输出警告）。
+
+**示例**
+
+```csharp
+// 卸载最后加载的一个同名子场景
+CoreFrames.USFrame.Unload(false, "EnvironmentScene");
+
+// 卸载所有同名场景（Build 场景）
+CoreFrames.USFrame.Unload(true, "build#LightingScene");
+```
+
+---
+## CoreFrames.CPFrame {#cpframe}
+
+克隆 Prefab（Clone Prefab）的统一操作接口。专门管理从 Prefab 实例化（Clone）出来的小型对象，如掉落物（急救包、药草等）、子弹、UI 模板组件（物品 ICON 等）。特性是不再使用时**直接 `Destroy` 即可**——实例销毁时会自动联动 AssetLoader 卸载，确保资源引用计数正确，无需额外调用关闭接口。
+
+### 方法总览 {#cp-overview}
+
+#### 初始化
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [InitInstance](#cp-initinstance) | 初始化 `CPManager` 单例实例。 |
+
+#### 预加载
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [PreloadAsync](#cp-preloadasync) | 异步预加载 Prefab 资源至缓存。 |
+| [Preload](#cp-preload) | 同步预加载 Prefab 资源至缓存。 |
+
+#### 加载与克隆
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [LoadWithCloneAsync\<T\>](#cp-loadwithcloneasync) | 异步加载并克隆 Prefab，返回 `T` 实例。 |
+| [LoadWithClone\<T\>](#cp-loadwithclone) | 同步加载并克隆 Prefab，返回 `T` 实例。 |
+
+---
+
+### InitInstance {#cp-initinstance}
+
+```csharp
+public static void InitInstance()
+```
+
+**说明**
+
+主动初始化 `CPManager` 单例实例（纯 C# 单例，非 MonoBehaviour），建议在游戏启动阶段调用一次。
+
+---
+
+### PreloadAsync {#cp-preloadasync}
+
+```csharp
+public static async UniTask PreloadAsync(string assetName, uint priority = 0, Progression progression = null)
+public static async UniTask PreloadAsync(string packageName, string assetName, uint priority = 0, Progression progression = null)
+public static async UniTask PreloadAsync(string[] assetNames, uint priority = 0, Progression progression = null)
+public static async UniTask PreloadAsync(string packageName, string[] assetNames, uint priority = 0, Progression progression = null)
+public static async UniTask PreloadAsync<T>(string assetName, uint priority = 0, Progression progression = null) where T : UnityEngine.Object
+public static async UniTask PreloadAsync<T>(string packageName, string assetName, uint priority = 0, Progression progression = null) where T : UnityEngine.Object
+public static async UniTask PreloadAsync<T>(string[] assetNames, uint priority = 0, Progression progression = null) where T : UnityEngine.Object
+public static async UniTask PreloadAsync<T>(string packageName, string[] assetNames, uint priority = 0, Progression progression = null) where T : UnityEngine.Object
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | Prefab 资源名称（Bundle 资源使用 Address 名称；支持 `res#` 前缀）。 |
+| assetNames | `string[]` | Prefab 资源名称数组（批量预加载）。 |
+| priority | `uint` | 资源加载优先级。<br/>**默认值**：`0` |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+
+**返回值**
+
+`UniTask` — 可等待的异步操作。
+
+**说明**
+
+预先将 Prefab 资源加载至缓存（仅加载资源、**不实例化**）。之后调用 [LoadWithCloneAsync\<T\>](#cp-loadwithcloneasync) 时可直接取用，避免克隆当下产生加载延迟。泛型重载可指定加载的资源类型（非泛型重载以 `Object` 类型加载）。
+
+**示例**
+
+```csharp
+// 进入战斗前预加载子弹 Prefab
+await CoreFrames.CPFrame.PreloadAsync("BulletCP");
+
+// 批量预加载
+await CoreFrames.CPFrame.PreloadAsync(new string[] { "BulletCP", "MedkitCP" });
+```
+
+---
+
+### Preload {#cp-preload}
+
+```csharp
+public static void Preload(string assetName, Progression progression = null)
+public static void Preload(string packageName, string assetName, Progression progression = null)
+public static void Preload(string[] assetNames, Progression progression = null)
+public static void Preload(string packageName, string[] assetNames, Progression progression = null)
+public static void Preload<T>(string assetName, Progression progression = null) where T : UnityEngine.Object
+public static void Preload<T>(string packageName, string assetName, Progression progression = null) where T : UnityEngine.Object
+public static void Preload<T>(string[] assetNames, Progression progression = null) where T : UnityEngine.Object
+public static void Preload<T>(string packageName, string[] assetNames, Progression progression = null) where T : UnityEngine.Object
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | Prefab 资源名称（Bundle 资源使用 Address 名称；支持 `res#` 前缀）。 |
+| assetNames | `string[]` | Prefab 资源名称数组（批量预加载）。 |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+
+**说明**
+
+**同步**版本的 Prefab 资源预加载（无 `priority` 参数），行为同 [PreloadAsync](#cp-preloadasync)。
+
+---
+
+### LoadWithCloneAsync\<T\> {#cp-loadwithcloneasync}
+
+```csharp
+public static async UniTask<T> LoadWithCloneAsync<T>(string assetName, Transform parent = null, uint priority = 0, Progression progression = null) where T : CPBase, new()
+public static async UniTask<T> LoadWithCloneAsync<T>(string packageName, string assetName, Transform parent = null, uint priority = 0, Progression progression = null) where T : CPBase, new()
+public static async UniTask<T> LoadWithCloneAsync<T>(string assetName, Transform parent, bool worldPositionStays, uint priority = 0, Progression progression = null) where T : CPBase, new()
+public static async UniTask<T> LoadWithCloneAsync<T>(string packageName, string assetName, Transform parent, bool worldPositionStays, uint priority = 0, Progression progression = null) where T : CPBase, new()
+public static async UniTask<T> LoadWithCloneAsync<T>(string assetName, Vector3 position, Quaternion rotation, Transform parent = null, Vector3? scale = null, uint priority = 0, Progression progression = null) where T : CPBase, new()
+public static async UniTask<T> LoadWithCloneAsync<T>(string packageName, string assetName, Vector3 position, Quaternion rotation, Transform parent = null, Vector3? scale = null, uint priority = 0, Progression progression = null) where T : CPBase, new()
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | Prefab 资源名称（Bundle 资源使用 Address 名称；支持 `res#` 前缀）。 |
+| parent | `Transform` | 挂载的父节点。<br/>**默认值**：`null` |
+| worldPositionStays | `bool` | 设置父节点时是否维持世界坐标（同 Unity `Instantiate` 语义）。 |
+| position | `Vector3` | 实例的初始坐标。 |
+| rotation | `Quaternion` | 实例的初始旋转。 |
+| scale | `Vector3?` | 实例的初始缩放。<br/>**默认值**：`null`（保留 Prefab 原缩放） |
+| priority | `uint` | 资源加载优先级。<br/>**默认值**：`0` |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+
+**返回值**
+
+`UniTask<T>` — 克隆出的实例组件；加载失败（未找到资源）或实例上未找到 `T` 组件时返回 `null`。
+
+**说明**
+
+异步加载 Prefab 并实例化（Clone）。`T` 需为挂载于 Prefab 根对象上的 `CPBase` 组件（或其子类）。实例化后依序触发 `OnCreate` → `InitFirst`（绑定）→ `OnShow`。
+
+<Highlight color="#0373fc">注意</Highlight>
+
+- Prefab 主体 Active 为 `true` 时，克隆后自动触发 `OnShow`；为 `false` 时，实例保持禁用状态，需自行 `SetActive(true)` 才会触发 `OnShow`。
+- 每次克隆都会经过加载计数，实例销毁时自动抵扣。
+
+<Highlight color="#00d679">提醒</Highlight> 不再使用时，直接 `Destroy(instance.gameObject)` 即可，会自动联动 AssetLoader 卸载资源。
+
+**示例**
+
+```csharp
+// 克隆子弹并挂载至枪口节点
+var bullet = await CoreFrames.CPFrame.LoadWithCloneAsync<BulletCP>("BulletCP", muzzle.transform);
+
+// 指定位置与旋转克隆掉落物
+var drop = await CoreFrames.CPFrame.LoadWithCloneAsync<DropItemCP>("MedkitCP", dropPos, Quaternion.identity);
+
+// 使用完毕，直接销毁（自动联动卸载）
+Object.Destroy(bullet.gameObject);
+```
+
+---
+
+### LoadWithClone\<T\> {#cp-loadwithclone}
+
+```csharp
+public static T LoadWithClone<T>(string assetName, Transform parent = null, Progression progression = null) where T : CPBase, new()
+public static T LoadWithClone<T>(string packageName, string assetName, Transform parent = null, Progression progression = null) where T : CPBase, new()
+public static T LoadWithClone<T>(string assetName, Transform parent, bool worldPositionStays, Progression progression = null) where T : CPBase, new()
+public static T LoadWithClone<T>(string packageName, string assetName, Transform parent, bool worldPositionStays, Progression progression = null) where T : CPBase, new()
+public static T LoadWithClone<T>(string assetName, Vector3 position, Quaternion rotation, Transform parent = null, Vector3? scale = null, Progression progression = null) where T : CPBase, new()
+public static T LoadWithClone<T>(string packageName, string assetName, Vector3 position, Quaternion rotation, Transform parent = null, Vector3? scale = null, Progression progression = null) where T : CPBase, new()
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | Prefab 资源名称（Bundle 资源使用 Address 名称；支持 `res#` 前缀）。 |
+| parent | `Transform` | 挂载的父节点。<br/>**默认值**：`null` |
+| worldPositionStays | `bool` | 设置父节点时是否维持世界坐标（同 Unity `Instantiate` 语义）。 |
+| position | `Vector3` | 实例的初始坐标。 |
+| rotation | `Quaternion` | 实例的初始旋转。 |
+| scale | `Vector3?` | 实例的初始缩放。<br/>**默认值**：`null`（保留 Prefab 原缩放） |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+
+**返回值**
+
+`T` — 克隆出的实例组件；加载失败（未找到资源）或实例上未找到 `T` 组件时返回 `null`。
+
+**说明**
+
+**同步**版本的加载并克隆（无 `priority` 参数），行为同 [LoadWithCloneAsync\<T\>](#cp-loadwithcloneasync)。建议搭配 [Preload](#cp-preload) 先行预加载，避免同步加载造成卡顿。
+
+**示例**
+
+```csharp
+// 已预加载的情况下，同步克隆物品 ICON
+var icon = CoreFrames.CPFrame.LoadWithClone<ItemIconCP>("ItemIconCP", iconRoot);
+```
 
 ---

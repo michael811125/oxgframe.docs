@@ -1,19 +1,20 @@
 ---
 sidebar_position: 2
+description: YooAssetBridge 是 YooAsset 的反射桥接工具，在不修改 YooAsset 源码的情况下访问其内部成员（清单前缀、缓存与内置根目录等）。
 ---
 
 # YooAssetBridge
 
 export const Highlight = ({ children, color }) => (
-  <span
-    style={{
-      backgroundColor: color,
-      borderRadius: '5px',
-      color: '#fff',
-      padding: '2.5px'
-    }}>
-    {children}
-  </span>
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
 );
 
 <Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
@@ -22,45 +23,160 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`YooAssetBridge` 是 **AssetLoader** 对 **YooAsset** 的桥接工具，利用反射（Reflection）机制访问 YooAsset 内部（internal）成员，让框架在**不修改 YooAsset 原生包源码**的情况下获取必要信息。依桥接目标分为 `YooAssetSettingsData`、`DownloadSystemHelper` 与 `DefaultBuildinFileSystemDefine` 三个嵌套静态类。
+
+|  |  |
+| :--- | :--- |
+| **命名空间** | `OxGFrame.AssetLoader.Bundle` |
+| **类型** | `public static class` |
+| **源码** | [YooAssetBridge.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/AssetLoader/Scripts/Runtime/Bundle/YooAssets/YooAssetBridge.cs) |
+
+```csharp
 using OxGFrame.AssetLoader.Bundle;
+```
 
-## Classes & Methods
+<Highlight color="#ff2f00">重要</Highlight> `YooAssetBridge` 高度依赖反射，若未来 YooAsset 包版本更新并变动了内部类、属性或字段命名，此处会同步维护对应。
 
-`YooAssetBridge` 是一个桥接工具，利用反射（Reflection）机制存取 `YooAsset` 内部受保护或私有的成员，确保框架在不更动原生套件源码的情况下获取必要信息。
+## YooAssetBridge.YooAssetSettingsData {#yooassetsettingsdata}
 
----
+桥接 YooAsset 的全局设置数据（`YooAssetSettingsData`）。
 
-### YooAssetSettingsData
-处理 YooAsset 的全局配置数据。
+### 方法总览 {#settingsdata-overview}
 
-* **GetPackageManifestPrefix()**
-    * 取得 `PackageManifestPrefix`（清单前缀名称）。
-* **GetYooDefaultCacheRoot()**
-    * 取得 YooAsset 预设的缓存文件根目录（Sandbox）。
-* **GetYooDefaultBuildinRoot()**
-    * 取得 YooAsset 预设的内置文件根目录（StreamingAssets）。
-
----
-
-### DownloadSystemHelper
-辅助下载与路径转换系统。
-
-* **ConvertToWWWPath(string path)**
-    * 将一般路径转换为适用于 `UnityWebRequest` 或 `WWW` 的格式。
-    * **Params**: `string path` (原始路径)
-
-<Highlight color="#0373fc">注意</Highlight> 此方法会根据执行平台自动处理文件协定前缀（如 `file://`）。
+| 方法 | 说明 |
+| :--- | :--- |
+| [GetPackageManifestPrefix](#getpackagemanifestprefix) | 获取清单文件前缀名称（`PackageManifestPrefix`）。 |
+| [GetYooDefaultCacheRoot](#getyoodefaultcacheroot) | 获取 YooAsset 默认的缓存文件根目录（Sandbox）。 |
+| [GetYooDefaultBuildinRoot](#getyoodefaultbuildinroot) | 获取 YooAsset 默认的内置文件根目录（StreamingAssets）。 |
 
 ---
 
-### DefaultBuildinFileSystemDefine
-定义内置文件系统的核心文件名称。
+### GetPackageManifestPrefix {#getpackagemanifestprefix}
 
-* **BuildinCatalogBinaryFileName()**
-    * 取得内置资源目录清单的二进制文件名称（Catalog Binary File）。
+```csharp
+public static string GetPackageManifestPrefix()
+```
+
+**返回值**
+
+`string` — 清单文件前缀名称。
+
+**说明**
+
+通过反射读取 YooAsset 设置（`YooAssetSettingsData.Setting`）中的 `PackageManifestPrefix` 字段值，即资源清单（Manifest）文件的前缀名称。
 
 ---
 
-<Highlight color="#ff2f00">重要</Highlight> 由于 `YooAssetBridge` 高度依赖反射，若未来 `YooAsset` 套件版本更新并更动了内部类别名称或字段定义，此处会同步维护。
+### GetYooDefaultCacheRoot {#getyoodefaultcacheroot}
+
+```csharp
+public static string GetYooDefaultCacheRoot()
+```
+
+**返回值**
+
+`string` — YooAsset 默认的缓存文件根目录路径。
+
+**说明**
+
+通过反射调用 YooAsset 内部的 `GetYooDefaultCacheRoot` 方法，获取默认的缓存文件根目录（Sandbox，本地持久化的下载存储目录）。
+
+<Highlight color="#00d679">提醒</Highlight> [BundleConfig.GetLocalSandboxRootPath](./BundleConfig.mdx#getlocalsandboxrootpath) 即以此方法获取根目录。
+
+**示例**
+
+```csharp
+// 获取本地缓存根目录（Sandbox）
+string cacheRoot = YooAssetBridge.YooAssetSettingsData.GetYooDefaultCacheRoot();
+```
+
+---
+
+### GetYooDefaultBuildinRoot {#getyoodefaultbuildinroot}
+
+```csharp
+public static string GetYooDefaultBuildinRoot()
+```
+
+**返回值**
+
+`string` — YooAsset 默认的内置文件根目录路径。
+
+**说明**
+
+通过反射调用 YooAsset 内部的 `GetYooDefaultBuildinRoot` 方法，获取默认的内置文件根目录（位于 `StreamingAssets` 下）。
+
+<Highlight color="#00d679">提醒</Highlight> [BundleConfig.GetBuiltinRootPath](./BundleConfig.mdx#getbuiltinrootpath) 即以此方法获取根目录。
+
+---
+
+## YooAssetBridge.DownloadSystemHelper {#downloadsystemhelper}
+
+桥接 YooAsset 的下载系统辅助（`DownloadSystemHelper`），负责路径转换。
+
+### 方法总览 {#downloadhelper-overview}
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [ConvertToWWWPath](#converttowwwpath) | 将本地路径转换为 WWW / `UnityWebRequest` 可用的加载路径。 |
+
+---
+
+### ConvertToWWWPath {#converttowwwpath}
+
+```csharp
+public static string ConvertToWWWPath(string path)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| path | `string` | 原始本地路径。 |
+
+**返回值**
+
+`string` — 转换后的加载路径。
+
+**说明**
+
+通过反射调用 YooAsset 内部的 `DownloadSystemHelper.ConvertToWWWPath` 方法，将一般本地路径转换为适用于 `UnityWebRequest`（WWW）加载的格式。
+
+<Highlight color="#0373fc">注意</Highlight> 此方法会根据运行平台自动处理文件协议前缀（如 `file://`）。
+
+**示例**
+
+```csharp
+// 转换 StreamingAssets 路径为 UnityWebRequest 可用格式
+string wwwPath = YooAssetBridge.DownloadSystemHelper.ConvertToWWWPath(Application.streamingAssetsPath);
+```
+
+---
+
+## YooAssetBridge.DefaultBuildinFileSystemDefine {#defaultbuildinfilesystemdefine}
+
+桥接 YooAsset 内置文件系统的定义（`DefaultBuildinFileSystemDefine`）。
+
+### 方法总览 {#buildindefine-overview}
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [BuildinCatalogBinaryFileName](#buildincatalogbinaryfilename) | 获取内置资源目录清单（Catalog）的二进制文件名称。 |
+
+---
+
+### BuildinCatalogBinaryFileName {#buildincatalogbinaryfilename}
+
+```csharp
+public static string BuildinCatalogBinaryFileName()
+```
+
+**返回值**
+
+`string` — 内置资源目录清单的二进制文件名称。
+
+**说明**
+
+通过反射读取 YooAsset 内部 `DefaultBuildinFileSystemDefine.BuildinCatalogBinaryFileName` 字段值，即内置资源目录清单（Catalog Binary File）的文件名称。
 
 ---

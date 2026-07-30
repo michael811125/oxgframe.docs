@@ -1,19 +1,20 @@
 ---
 sidebar_position: 2
+description: NetOption is the abstract base class for NetFrame connection options, with built-in TcpNetOption, KcpNetOption, and WebSocketNetOption derived classes.
 ---
 
 # NetOption
 
 export const Highlight = ({ children, color }) => (
-  <span
-    style={{
-      backgroundColor: color,
-      borderRadius: '5px',
-      color: '#fff',
-      padding: '2.5px'
-    }}>
-    {children}
-  </span>
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
 );
 
 <Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
@@ -22,77 +23,247 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`NetOption` is the abstract base class of **NetFrame** connection options and defines the auto-reconnection setting shared by all protocols. Three built-in derived classes carry the connection parameters of the three built-in providers; when implementing a custom provider, you can also inherit this class to add your own options.
+
+|  |  |
+| :--- | :--- |
+| **Namespace** | `OxGFrame.NetFrame` |
+| **Type** | `public abstract class` |
+| **Source** | [NetOption.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/NetFrame/Scripts/Runtime/Core/Interface/NetOption/NetOption.cs) |
+
+```csharp
 using OxGFrame.NetFrame;
+```
 
-## Core Design Concept
+**Declaration**
 
-`NetOption` is an abstract base class. When implementing custom network protocols (such as TCP, UDP, WebSocket), developers must inherit from this class to define specific configurations for that connection.
+```csharp
+public abstract class NetOption
+```
+
+### Derived Class Overview {#derived-overview}
+
+| Class | Provider | Description |
+| :--- | :--- | :--- |
+| [TcpNetOption](#tcp-netoption) | `TcpNetProvider` | TCP connection options (host, port, and packet processing settings). |
+| [KcpNetOption](#kcp-netoption) | `KcpNetProvider` | KCP connection options (host, port, channel, and KCP config). |
+| [WebSocketNetOption](#websocket-netoption) | `WebSocketNetProvider` | WebSocket connection options (connection URL). |
+
+### Properties {#properties}
+
+| Property | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| autoReconnectCount | `int` | `-1` | Number of automatic reconnection attempts. When greater than `0`, the node automatically retries after an unintentional disconnection, decrementing the count per attempt; `-1` disables auto-reconnection. Use `int.MaxValue` for practically unlimited retries. |
+
+### Constructor {#constructor}
+
+```csharp
+public NetOption(int autoReconnectCount = -1)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| autoReconnectCount | `int` | Number of automatic reconnection attempts.<br/>**Default**: `-1` (auto-reconnection disabled) |
+
+**Description**
+
+Called by derived-class constructors via `base(autoReconnectCount)` to initialize the reconnection count.
+
+<Highlight color="#00d679">Reminder</Highlight> The reconnection interval and callback can be configured via `NetNode.SetReconnectTickerTime` (default: 5 seconds) and `NetNode.SetReconnectAction`.
 
 ---
 
-## Properties
+## TcpNetOption {#tcp-netoption}
 
-### autoReconnectCount
-* Type: `int`
-* Description: Set the number of automatic reconnection attempts.
-* **Value Rules**:
-    * <Highlight color="#00d679">Positive integer (n)</Highlight>: When the connection is disconnected, it will try to reconnect automatically N times.
-    * <Highlight color="#0373fc">-1</Highlight>: **Disable automatic reconnection** (Default value).
-    * <Highlight color="#ff2f00">int.MaxValue</Highlight>: Theoretical infinite reconnection attempts.
+Connection options for `TcpNetProvider` (Telepathy).
 
----
+|  |  |
+| :--- | :--- |
+| **Type** | `public class` |
+| **Source** | [TcpNetOption.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/NetFrame/Scripts/Runtime/Core/Implement/NetProvider/Tcp/NetOption/TcpNetOption.cs) |
 
-## Constructor
-
-### NetOption(int autoReconnectCount)
-* **Params**:
-    * `autoReconnectCount`: Number of reconnection attempts for initialization. Default is `-1`.
-
----
-
-## How to Extend (Custom Option)
-
-When you implement a specific network service, you can add more parameters by inheriting from `NetOption`.
-
-**Example Code:**
+**Declaration**
 
 ```csharp
 public class TcpNetOption : NetOption
+```
+
+### Properties {#tcp-properties}
+
+| Property | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| host | `string` | — | Server host address. |
+| port | `int` | — | Server port. |
+| processLimitPerTick | `int` | `64` | Maximum number of packets processed per polling tick. |
+| maxBufferSize | `int` | `65536` | Maximum buffer size of a single packet (64KB). |
+
+### Constructors {#tcp-constructor}
+
+```csharp
+public TcpNetOption(string host, int port, int autoReconnectCount = -1)
+public TcpNetOption(string host, int port, int processLimitPerTick, int maxBufferSize = 65536, int autoReconnectCount = -1)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| host | `string` | Server host address. |
+| port | `int` | Server port. |
+| processLimitPerTick | `int` | Maximum number of packets processed per polling tick. |
+| maxBufferSize | `int` | Maximum buffer size of a single packet.<br/>**Default**: `65536` |
+| autoReconnectCount | `int` | Number of automatic reconnection attempts.<br/>**Default**: `-1` (auto-reconnection disabled) |
+
+**Example**
+
+```csharp
+// Basic connection (auto-reconnect 3 times after disconnection)
+var tcpOption = new TcpNetOption("127.0.0.1", 8888, autoReconnectCount: 3);
+NetFrames.Connect(tcpOption);
+
+// Custom per-tick processing limit and buffer size
+var tunedOption = new TcpNetOption("127.0.0.1", 8888, processLimitPerTick: 128, maxBufferSize: 131072);
+```
+
+---
+
+## KcpNetOption {#kcp-netoption}
+
+Connection options for `KcpNetProvider` (kcp2k).
+
+|  |  |
+| :--- | :--- |
+| **Type** | `public class` |
+| **Source** | [KcpNetOption.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/NetFrame/Scripts/Runtime/Core/Implement/NetProvider/Kcp/NetOption/KcpNetOption.cs) |
+
+**Declaration**
+
+```csharp
+public class KcpNetOption : NetOption
+```
+
+### Properties {#kcp-properties}
+
+| Property | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| host | `string` | — | Server host address. |
+| port | `int` | — | Server port. |
+| kcpChannel | `KcpChannel` | `KcpChannel.Reliable` | KCP transmission channel (`Reliable` / `Unreliable`). |
+| config | `KcpConfig` | Built-in default config (see below) | kcp2k connection configuration (NoDelay, window sizes, timeout, etc.). |
+
+The built-in default value of `config`:
+
+```csharp
+new KcpConfig
+(
+    NoDelay: true,
+    DualMode: false,
+    Interval: 1,
+    Timeout: 2000,
+    SendWindowSize: Kcp.WND_SND * 1000,
+    ReceiveWindowSize: Kcp.WND_RCV * 1000,
+    CongestionWindow: false,
+    MaxRetransmits: Kcp.DEADLINK * 2
+)
+```
+
+### Constructors {#kcp-constructor}
+
+```csharp
+public KcpNetOption(string host, int port, KcpChannel kcpChannel = KcpChannel.Reliable, int autoReconnectCount = -1)
+public KcpNetOption(string host, int port, KcpConfig config, KcpChannel kcpChannel = KcpChannel.Reliable, int autoReconnectCount = -1)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| host | `string` | Server host address. |
+| port | `int` | Server port. Cast to `ushort` (0–65535) when connecting. |
+| config | `KcpConfig` | Custom kcp2k connection configuration. If omitted, the built-in default config is used. |
+| kcpChannel | `KcpChannel` | KCP transmission channel.<br/>**Default**: `KcpChannel.Reliable` |
+| autoReconnectCount | `int` | Number of automatic reconnection attempts.<br/>**Default**: `-1` (auto-reconnection disabled) |
+
+**Example**
+
+```csharp
+using kcp2k;
+
+// Use the built-in default config
+var kcpOption = new KcpNetOption("127.0.0.1", 7777);
+NetFrames.Connect(kcpOption);
+
+// Custom KcpConfig
+var config = new KcpConfig(NoDelay: true, Interval: 10, Timeout: 5000);
+var customOption = new KcpNetOption("127.0.0.1", 7777, config, KcpChannel.Reliable, autoReconnectCount: 3);
+```
+
+---
+
+## WebSocketNetOption {#websocket-netoption}
+
+Connection options for `WebSocketNetProvider` (UnityWebSocket).
+
+|  |  |
+| :--- | :--- |
+| **Type** | `public class` |
+| **Source** | [WebSocketNetOption.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/NetFrame/Scripts/Runtime/Core/Implement/NetProvider/WebSocket/NetOption/WebSocketNetOption.cs) |
+
+**Declaration**
+
+```csharp
+public class WebSocketNetOption : NetOption
+```
+
+### Properties {#websocket-properties}
+
+| Property | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| url | `string` | — | WebSocket connection URL (`ws://` or `wss://`). |
+
+### Constructor {#websocket-constructor}
+
+```csharp
+public WebSocketNetOption(string url, int autoReconnectCount = -1)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| url | `string` | WebSocket connection URL (`ws://` or `wss://`). |
+| autoReconnectCount | `int` | Number of automatic reconnection attempts.<br/>**Default**: `-1` (auto-reconnection disabled) |
+
+**Example**
+
+```csharp
+var wsOption = new WebSocketNetOption("ws://127.0.0.1:8080/ws", autoReconnectCount: 3);
+NetFrames.Connect(wsOption);
+```
+
+---
+
+## Custom Extension {#custom-option}
+
+When implementing a custom provider, inherit `NetOption` to add protocol-specific connection parameters:
+
+```csharp
+public class CustomNetOption : NetOption
 {
     public string host { get; set; }
 
     public int port { get; set; }
 
-    /// <summary>
-    /// Processes up to 'limit' messages per tick
-    /// </summary>
-    public int processLimitPerTick = _DEFAULT_PROCESS_LIMIT_PER_TICK;
-
-    /// <summary>
-    /// Max buffer size of single packet
-    /// </summary>
-    public int maxBufferSize = _MAX_BUFFER_SIZE;
-
-    /// <summary>
-    /// Default: process up to 64 packets per frame
-    /// </summary>
-    private const int _DEFAULT_PROCESS_LIMIT_PER_TICK = 64;
-
-    /// <summary>
-    /// Max packet size: 64KB (65536 bytes)
-    /// </summary>
-    private const int _MAX_BUFFER_SIZE = 65536;
-
-    public TcpNetOption(string host, int port, int autoReconnectCount = -1) : base(autoReconnectCount)
+    public CustomNetOption(string host, int port, int autoReconnectCount = -1) : base(autoReconnectCount)
     {
         this.host = host;
         this.port = port;
     }
-
-    public TcpNetOption(string host, int port, int processLimitPerTick, int maxBufferSize = _MAX_BUFFER_SIZE, int autoReconnectCount = -1) : this(host, port, autoReconnectCount)
-    {
-        this.maxBufferSize = maxBufferSize;
-        this.processLimitPerTick = processLimitPerTick;
-    }
 }
 ```
+
+Inside your provider's `CreateConnect`, cast the `NetOption` back to `CustomNetOption` to read the parameters (see the [INetProvider implementation example](./INetProvider.mdx#implementation-example)).
+
+---

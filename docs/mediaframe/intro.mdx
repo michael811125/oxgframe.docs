@@ -27,7 +27,7 @@ export const Highlight = ({ children, color }) => (
 影音模塊 (連動 AssetLoader 實現自動卸載)，涵蓋遊戲 Audio (2D/3D) 跟 Video 的製作，支持多平台加載方式 (Local, StreamingAssets, URL)。
 
 - 音效管理 (AudioFrame)
-- 視頻管理 (VideoFrame)
+- 影片管理 (VideoFrame)
 
 <Highlight color="#ff2f00">重要</Highlight> 另外針對 Audio 在 WebGL 平台有進行細節校正，因為 WebGL 對於 Audio 請求 Clip 無法取得正確長度 (官方放棄修正)，導致音訊控制會有部分缺陷，所以支持預置體製作時，可進行 Preload 請求 Clip 長度進行預設置。
 
@@ -61,6 +61,20 @@ export const Highlight = ({ children, color }) => (
 支持時間軸、播放速度的調整。
 
 ![](/img/mediaframe/latest/gif_1.gif)
+
+### Inspector 預覽播放器 (v3.7.0+)
+
+`AudioBase` / `VideoBase` 的 Inspector 提供**預覽播放器**，無需進入 Play Mode 即可直接試聽、試看媒體內容：
+
+- 支援 Play / Pause / Resume / Stop、拖曳進度條與 Timecode 顯示，支援全部 Source Type。
+
+- 影片直接於 Inspector 內繪製畫面，音軌則於音訊執行緒取樣播放。
+
+- 會偵測被 Insecure HTTP（Unity 2022.1+）阻擋的 `http://` 來源，並詢問是否切換為 Only in development builds。
+
+| `AudioBase` | `VideoBase` |
+| :---: | :---: |
+| ![](/img/mediaframe/latest/img_1.png) | ![](/img/mediaframe/latest/img_2.png) |
 
 ---
 

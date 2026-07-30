@@ -1,19 +1,20 @@
 ---
 sidebar_position: 1
+description: HotfixHelper 是 Hotfixer 的編輯器輔助工具，用於編譯與收集 AOT / Hotfix DLL，並輸出熱更新 DLL 配置檔（HotfixManifest.dat）。
 ---
 
 # HotfixHelper
 
 export const Highlight = ({ children, color }) => (
-  <span
-    style={{
-      backgroundColor: color,
-      borderRadius: '5px',
-      color: '#fff',
-      padding: '2.5px'
-    }}>
-    {children}
-  </span>
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
 );
 
 <Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
@@ -22,49 +23,176 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`HotfixHelper` 是 **Hotfixer** 的編輯器（Editor）輔助工具，用於編譯與收集 AOT / Hotfix DLL 至 `HotfixCollector` 目錄，並輸出熱更新 DLL 配置檔（`HotfixManifest.dat`），供運行時 [Hotfixers.CheckHotfix](../Runtime/Hotfixers.mdx#checkhotfix) 的自動配置模式讀取。
+
+|  |  |
+| :--- | :--- |
+| **命名空間** | `OxGFrame.Hotfixer.Editor` |
+| **類型** | `public static class` |
+| **原始碼** | [HotfixHelper.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/Hotfixer/Scripts/Editor/HotfixHelper.cs) |
+
+```csharp
 using OxGFrame.Hotfixer.Editor;
+```
 
-## Methods
+<Highlight color="#0373fc">注意</Highlight> 本類別僅供 **Unity Editor** 環境使用。
 
-### ToRelativeAssetPath
-將絕對路徑轉換為相對於專案的 `Assets/` 路徑。
+### 方法總覽 {#overview}
 
-**Params**
-* `string s`：完整檔案路徑
-
----
-
-### CopyAOTDllsAndHotfixDlls
-一鍵執行 AOT 與 Hotfix 程式集的複製操作，將所有相關檔案收集至 `HotfixCollector` 目錄中。
-
----
-
-### CopyAOTAssembliesToDestination
-複製 AOT 程式集（經由 IL2CPP 裁剪後的 DLL）至目標目錄。此方法會自動將擴展名更改為 `.dll.bytes` 以利於資源載入。
-
-
-
-**Params**
-* `string dstDir`：自定義輸出路徑（若為 null，則輸出至預設的 `HotfixCollector` 目錄）
-
-<Highlight color="#ff2f00">重要</Highlight> 裁剪後的 AOT DLL 僅在 **HybridCLR -> Generate All** 之後才會產生。如果提示檔案不存在，請先執行 [Generate All](https://www.hybridclr.cn/docs/beginner/quickstart#%E6%89%93%E5%8C%85%E8%BF%90%E8%A1%8C)。
+| 方法 | 說明 |
+| :--- | :--- |
+| [CompileAndCopyToHotfixCollector](#compileandcopytohotfixcollector) | 編譯 Hotfix DLL 並一鍵收集 AOT / Hotfix DLL 至 `HotfixCollector`。 |
+| [CopyAOTDllsAndHotfixDlls](#copyaotdllsandhotfixdlls) | 一鍵複製 AOT 與 Hotfix DLL 至 `HotfixCollector` 目錄。 |
+| [CopyAOTAssembliesToDestination](#copyaotassembliestodestination) | 複製 AOT DLL（IL2CPP 裁剪後）至目標目錄。 |
+| [CopyHotfixAssembliesToDestination](#copyhotfixassembliestodestination) | 複製 Hotfix DLL 至目標目錄。 |
+| [ExportHotfixDllConfig](#exporthotfixdllconfig) | 輸出熱更新 DLL 配置檔（`HotfixManifest.dat`）至 `StreamingAssets`。 |
+| [ToRelativeAssetPath](#torelativeassetpath) | 將絕對路徑轉換為以 `Assets/` 開頭的相對路徑。 |
 
 ---
 
-### CopyHotfixAssembliesToDestination
-複製熱更新程式集（Hotfix DLLs）至目標目錄，並自動將擴展名更改為 `.bytes`。
+### CompileAndCopyToHotfixCollector {#compileandcopytohotfixcollector}
 
-**Params**
-* `string dstDir`：自定義輸出路徑（若為 null，則輸出至預設的 `HotfixCollector` 目錄）
+```csharp
+public static void CompileAndCopyToHotfixCollector()
+```
+
+**說明**
+
+依當前目標平台（`activeBuildTarget`）呼叫 HybridCLR 的 `CompileDllCommand.CompileDll` 編譯熱更新 DLL，接著執行 [CopyAOTDllsAndHotfixDlls](#copyaotdllsandhotfixdlls) 將 AOT 與 Hotfix DLL 收集至 `HotfixCollector` 目錄。
+
+<Highlight color="#00d679">提醒</Highlight> 對應編輯器選單 **HybridCLR → OxGFrame With HybridCLR → Compile And Copy To HotfixCollector**。收集完畢後，再使用 YooAsset Collector 進行收集打包，請參考[收集示例](../../collect_suggest.mdx)。
 
 ---
 
-### ExportHotfixDllConfig
-產生熱更新 DLL 的配置文件（HotfixConfig），支持 JSON 或加密後的二進制格式。
+### CopyAOTDllsAndHotfixDlls {#copyaotdllsandhotfixdlls}
 
-**Params**
-* `List<string> aotDlls`：需要補充元數據（Metadata）的 AOT 程式集清單
-* `List<string> hotfixDlls`：熱更新程式集清單
-* `bool cipher`：是否啟用加密（若為 true 則輸出為 Bytes 格式，否則為 Json）
+```csharp
+public static void CopyAOTDllsAndHotfixDlls()
+```
+
+**說明**
+
+一鍵依序執行 [CopyAOTAssembliesToDestination](#copyaotassembliestodestination) 與 [CopyHotfixAssembliesToDestination](#copyhotfixassembliestodestination)（皆使用預設輸出目錄），將所有相關檔案收集至 `Assets/HotfixCollector` 目錄中。
+
+---
+
+### CopyAOTAssembliesToDestination {#copyaotassembliestodestination}
+
+```csharp
+public static void CopyAOTAssembliesToDestination(string dstDir = null)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| dstDir | `string` | 自訂輸出目錄。<br/>**預設值**：`null`（輸出至 `Assets/HotfixCollector/AOTDlls`） |
+
+**說明**
+
+依當前目標平台，將 **IL2CPP 裁剪後**的 AOT DLL（清單來自 HybridCLR 的 `SettingsUtil.AOTAssemblyNames`）複製至目標目錄，輸出檔名為 `<程式集名稱>.dll.bytes`，以利後續以資源形式收集載入。
+
+<Highlight color="#0373fc">注意</Highlight> 目標目錄於複製前會**先被刪除重建**，請勿在其中存放其他檔案。
+
+<Highlight color="#ff2f00">重要</Highlight> 裁剪後的 AOT DLL 僅在 **HybridCLR → Generate All**（或建置 Player）之後才會產生。若 Console 提示檔案不存在，請先執行 [Generate All](https://www.hybridclr.cn/docs/beginner/quickstart#%E6%89%93%E5%8C%85%E8%BF%90%E8%A1%8C)。
+
+---
+
+### CopyHotfixAssembliesToDestination {#copyhotfixassembliestodestination}
+
+```csharp
+public static void CopyHotfixAssembliesToDestination(string dstDir = null)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| dstDir | `string` | 自訂輸出目錄。<br/>**預設值**：`null`（輸出至 `Assets/HotfixCollector/HotfixDlls`） |
+
+**說明**
+
+依當前目標平台，將 HybridCLR 編譯輸出的熱更新 DLL（清單來自 `SettingsUtil.HotUpdateAssemblyFilesExcludePreserved`）複製至目標目錄，並自動附加 `.bytes` 副檔名（輸出為 `<程式集名稱>.dll.bytes`）。
+
+<Highlight color="#0373fc">注意</Highlight> 目標目錄於複製前會**先被刪除重建**，請勿在其中存放其他檔案。
+
+---
+
+### ExportHotfixDllConfig {#exporthotfixdllconfig}
+
+```csharp
+public static void ExportHotfixDllConfig(List<string> aotDlls, List<string> hotfixDlls, bool cipher)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| aotDlls | `List<string>` | 需補充元數據（Metadata）的 AOT 程式集清單（名稱含 `.dll` 副檔名）。 |
+| hotfixDlls | `List<string>` | 熱更新程式集清單（名稱含 `.dll` 副檔名）。 |
+| cipher | `bool` | 是否加密。`true` 輸出加密 BYTES 格式；`false` 輸出明文 JSON 格式。 |
+
+**說明**
+
+將 AOT 與 Hotfix 程式集清單寫入熱更新 DLL 配置檔，輸出至內建的 `StreamingAssets`（檔名依 `HotfixSettings` 設定，預設為 `HotfixManifest.dat`），供運行時 [Hotfixers.CheckHotfix](../Runtime/Hotfixers.mdx#checkhotfix) 自動配置模式讀取。
+
+明文 JSON 格式內容如下：
+
+```json
+{
+    "aotDlls": [
+        "mscorlib.dll",
+        "UniTask.dll"
+    ],
+    "hotfixDlls": [
+        "HotfixerDemo.Hotfix.Runtime.dll"
+    ]
+}
+```
+
+加密 BYTES 格式會於檔頭寫入加密標記，內容以 `HotfixSettings` 的 `cipher` 金鑰進行 XOR 加密；運行時讀取時依檔頭自動判別格式。
+
+<Highlight color="#00d679">提醒</Highlight>
+
+- 亦可透過編輯器選單 **OxGFrame → Hotfixer → Hotfix Config Generator (HotfixManifest.dat)** 開啟視窗工具產生（支援 Preset Plans 預設方案管理）。
+- 已輸出的配置檔可於 **Project** 視窗選取後，透過選單 **Assets → OxGFrame → Hotfixer → `Convert HotfixManifest.dat (BYTES [Cipher] <-> JSON [Plaintext])`** 進行明文與加密格式互轉（僅對位於 `StreamingAssets` 內且檔名相符的配置檔有效）。
+
+**範例**
+
+```csharp
+using OxGFrame.Hotfixer.Editor;
+using System.Collections.Generic;
+
+HotfixHelper.ExportHotfixDllConfig(
+    // 需補充元數據的 AOT 程式集
+    new List<string> { "mscorlib.dll", "UniTask.dll" },
+    // 熱更新程式集
+    new List<string> { "HotfixerDemo.Hotfix.Runtime.dll" },
+    // 加密輸出
+    true
+);
+```
+
+---
+
+### ToRelativeAssetPath {#torelativeassetpath}
+
+```csharp
+public static string ToRelativeAssetPath(string s)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| s | `string` | 完整檔案路徑（需包含 `Assets/` 路徑段）。 |
+
+**回傳值**
+
+`string` — 以 `Assets/` 開頭的專案相對路徑。
+
+**說明**
+
+將絕對路徑轉換為相對於專案的 `Assets/` 路徑（擷取字串中 `Assets/` 之後的部分）。
 
 ---

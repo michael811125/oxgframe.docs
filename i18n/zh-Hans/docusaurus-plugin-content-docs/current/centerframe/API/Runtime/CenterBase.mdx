@@ -1,5 +1,6 @@
 ---
 sidebar_position: 1
+description: CenterBase 是 CenterFrame 的中心注册抽象基类，以类型安全的缓存统一管理注册对象，为 APICenter 与 EventCenter 的共同基底。
 ---
 
 # CenterBase
@@ -22,67 +23,365 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`CenterBase<TCenter, TClass>` 是 **CenterFrame** 的中心注册抽象基类，内置线程安全单例与 `Dictionary<int, TClass>` 类型安全缓存，统一提供**注册（Add）、移除（Delete）、查找（Find）**等对象管理接口。**APICenter**（`APIBase`）与 **EventCenter**（`EventBase`）皆以此为共同基底，也可自定义 `TClass` 基底类型实现自己的中心。
+
+|  |  |
+| :--- | :--- |
+| **命名空间** | `OxGFrame.CenterFrame` |
+| **类型** | `public abstract class` |
+| **源码** | [CenterBase.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/CenterFrame/Scripts/Runtime/Common/CenterBase.cs) |
+
+```csharp
 using OxGFrame.CenterFrame;
+```
 
-## 核心设计概念
+## 声明 {#declaration}
 
-`CenterBase<TCenter, TClass>` 采用了 **CRTP (Curiously Recurring Template Pattern)** 模式与 **Thread-Safe Singleton** 设计。它建立了一个类型安全的缓存池，让所有继承自此类的中心点都能拥有统一的对象管理逻辑。
+```csharp
+public abstract class CenterBase<TCenter, TClass> where TCenter : CenterBase<TCenter, TClass>, new()
+```
+
+**泛型参数**
+
+| 泛型参数 | 说明 |
+| :--- | :--- |
+| TCenter | 中心子类自身类型（CRTP 自我引用约束），需具备无参构造函数（`new()`）。 |
+| TClass | 受管理对象的基底类型（如 APICenter 的 `APIBase`、EventCenter 的 `EventBase`）。 |
+
+继承时将子类自身与受管理的基底类型作为泛型参数传入：
+
+```csharp
+public class APICenterExample : CenterBase<APICenterExample, APIBase> { /* ... */ }
+public class EventCenterExample : CenterBase<EventCenterExample, EventBase> { /* ... */ }
+```
+
+## 运作方式 {#how-it-works}
+
+### 单例与注册时机 {#singleton}
+
+`CenterBase<TCenter, TClass>` 内置**线程安全的延迟单例**（Double-Checked Locking）。首次调用任一 Default API 静态方法时，自动创建 `TCenter` 实例并执行其构造函数；建议在子类**构造函数**中以 [Register](#register) 完成对象注册。
+
+<Highlight color="#ff2f00">重要</Highlight> 不可在子类构造函数中调用任何 Default API 静态方法（如 `Add` / `Find`），会导致 `GetInstance()` 递归而 StackOverflow（死循环）；构造函数中请改用实例成员方法（如 [Register](#register)）。
+
+### ID 规则 {#id-rules}
+
+- 每个注册对象以唯一的 `int` id 作为缓存键。泛型重载**未指定 id** 时，以 `typeof(UClass).GetHashCode()` 作为 id（同类型仅能注册一个实例）。
+- **指定 id** 的重载可自定义 id，同类型即可注册多个实例。
+- 相同 id 重复注册会输出警告日志并**跳过**，不会覆盖已有对象。
+
+### Default API 与成员方法 {#default-api-vs-members}
+
+静态 Default API（`Add` / `Delete` / `Find`）内部皆通过单例转调用对应的实例成员方法（`Register` / `Remove` / `Get`）：
+
+- **外部调用端**：直接以子类类名使用 Default API（如 `EventCenterExample.Find<UClass>()`）。
+- **子类内部（构造函数）**：使用实例成员方法（如 `this.Register<UClass>()`）。
+
+<Highlight color="#0373fc">注意</Highlight> `CenterBase` 仅负责对象的注册与缓存管理；若受管理对象持有 Unity 资源（如 Prefab），请在移除前自行配合 `AssetLoaders` 进行正确的释放处理。
+
+## 继承实现示例 {#inheritance-example}
+
+以 EventCenter 风格为例，自定义事件中心与事件类：
+
+```csharp
+using Cysharp.Threading.Tasks;
+using OxGFrame.CenterFrame;
+using OxGFrame.CenterFrame.EventCenter;
+using UnityEngine;
+
+// 自定义事件中心：TCenter 传入子类自身（CRTP），TClass 指定受管理的基底类型
+public class EventCenterExample : CenterBase<EventCenterExample, EventBase>
+{
+    public EventCenterExample()
+    {
+        // 构造函数中注册事件（仅能使用实例成员方法 Register，不可调用 Default API）
+        this.Register<EventMsgTest>();
+    }
+}
+
+// 自定义事件：继承 EventBase
+public class EventMsgTest : EventBase
+{
+    private string _message;
+
+    public void Emit(string message)
+    {
+        this._message = message;
+        this.HandleEvent().Forget();
+    }
+
+    public async override UniTaskVoid HandleEvent()
+    {
+        // 处理事件内容
+        Debug.Log($"Received message: {this._message}");
+        this.Release();
+    }
+
+    protected override void Release()
+    {
+        // 释放事件持有的数据
+        this._message = null;
+    }
+}
+```
+
+调用端通过 Default API 查找并派送事件：
+
+```csharp
+// 以类型查找已注册的事件并派送
+EventCenterExample.Find<EventMsgTest>()?.Emit("Hello OxGFrame");
+```
+
+APICenter 风格做法相同，仅将 `TClass` 改为 `APIBase`：
+
+```csharp
+using OxGFrame.CenterFrame;
+using OxGFrame.CenterFrame.APICenter;
+
+// APIGetPlayerData 为继承 APIBase 的自定义 API 类
+public class APICenterExample : CenterBase<APICenterExample, APIBase>
+{
+    public APICenterExample()
+    {
+        this.Register<APIGetPlayerData>();
+    }
+}
+```
+
+<Highlight color="#00d679">提醒</Highlight> 可通过 Project 窗口右键模板快速创建：**Create → OxGFrame → Center Frame → Event Center / API Center → Template Scripts** 下的模板脚本。
+
+## 成员总览 {#overview}
+
+#### 静态方法（Default API）
+
+继承后直接以子类类名调用（如 `EventCenterExample.Find<UClass>()`）。
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [Add](#add) | 实例化并注册对象至缓存。 |
+| [Delete](#delete) | 从缓存移除对象。 |
+| [DeleteAll](#deleteall) | 清空缓存中的所有对象。 |
+| [Find\<UClass\>](#find) | 从缓存查找对象并转型返回。 |
+
+#### 一般方法（实例成员）
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [Get\<UClass\>](#get) | 从缓存获取对象并转型（`Find` 的成员版本）。 |
+| [Has\<UClass\>](#has) | 检查对象是否已注册。 |
+| [Register](#register) | 注册对象至缓存（`Add` 的成员版本）。 |
+| [Remove](#remove) | 从缓存移除对象（`Delete` 的成员版本）。 |
+| [RemoveAll](#removeall) | 清空缓存（`DeleteAll` 的成员版本）。 |
+
+#### 受保护成员（继承后可用）
+
+| 成员 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| `GetInstance()` | `static TCenter` | 获取中心单例（延迟创建、线程安全）。 |
+| `GetFromCache(int id)` | `TClass` | 从缓存取出对象；未找到时输出错误日志并返回 `default`。 |
+| `HasInCache(int id)` | `bool` | 检查缓存中是否存在指定 id。 |
 
 ---
 
-## Default APIs (静态调用接口)
+### Add {#add}
 
-以下方法皆为静态接口，开发者可直接透过子类别名称调用（例如：`YourCenter.Add<YourClass>()`）。
+```csharp
+public static void Add<UClass>() where UClass : TClass, new()
+public static void Add<UClass>(int id) where UClass : TClass, new()
+public static void Add(int id, TClass @class)
+```
 
-### Register (注册/新增)
+**参数**
 
-将对象实例化并加入缓存管理中。
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| id | `int` | 注册 id。未指定时，以 `typeof(UClass).GetHashCode()` 作为 id。 |
+| @class | `TClass` | 已创建的对象实例（以指定 id 注册）。 |
 
-* **Add\<UClass\>()**
-    * 以 `UClass` 的类型 Hash 作为 ID 进行注册。
-* **Add\<UClass\>(int id)**
-    * 指定特定的 `id` 注册 `UClass` 实例。
-* **Add(int id, TClass @class)**
-    * 直接将已存在的实例以指定 `id` 加入缓存。
+**说明**
 
-<Highlight color="#00d679">提醒</Highlight> 使用泛型注册时，该类别必须具备无参数构造函数（`new()`）。
+实例化（`new UClass()`）并注册对象至缓存，或以指定 id 直接注册已有实例。
 
----
+<Highlight color="#0373fc">注意</Highlight>
 
-### Remove (删除/卸载)
+- 泛型重载要求 `UClass` 具备无参构造函数（`new()` 约束）。
+- 相同 id 重复注册会输出警告并跳过，不会覆盖已有对象。
 
-从缓存池中移除对象。
+**示例**
 
-* **Delete\<UClass\>()**
-    * 根据类型移除对应的实例。
-* **Delete(int id)**
-    * 根据指定 `id` 移除实例。
-* **DeleteAll()**
-    * 清空缓存池中所有的对象。
+```csharp
+// 以类型 hash 作为 id 注册
+EventCenterExample.Add<EventMsgTest>();
 
----
-
-### Get (寻找/获取)
-
-从缓存池中检索对象并自动转型。
-
-* **Find\<UClass\>()**
-    * 根据类型寻找对象。
-* **Find\<UClass\>(int id)**
-    * 根据指定 `id` 寻找对象，并强制转换为 `UClass` 类型。
+// 以自定义 id 注册已有实例
+EventCenterExample.Add(0x01, new EventMsgTest());
+```
 
 ---
 
-## 内部实作细节
+### Delete {#delete}
 
-### Thread-Safe Singleton
-内置双重检查锁定（Double-Checked Locking），确保在多执行绪环境下 `GetInstance()` 的唯一性与安全性。
+```csharp
+public static void Delete<UClass>() where UClass : TClass
+public static void Delete(int id)
+```
 
-### Cache System
-底层使用 `Dictionary<int, TClass>` 进行储存：
-* **Key**: 对象的唯一识别码（ID 或 Type Hash）。
-* **Value**: 实例化后的对象。
+**参数**
 
-<Highlight color="#ff2f00">重要</Highlight> `CenterBase` 仅负责对象的存储生命周期，若管理的对象涉及 Unity 资源（如 Prefab），请配合 `AssetLoaders` 进行正确的销毁处理。
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| id | `int` | 注册 id。未指定时，以 `typeof(UClass).GetHashCode()` 查找。 |
+
+**说明**
+
+从缓存移除已注册的对象；未找到时不做任何操作。
+
+---
+
+### DeleteAll {#deleteall}
+
+```csharp
+public static void DeleteAll()
+```
+
+**说明**
+
+清空缓存中的**所有**已注册对象。
+
+---
+
+### Find\<UClass\> {#find}
+
+```csharp
+public static UClass Find<UClass>() where UClass : TClass
+public static UClass Find<UClass>(int id) where UClass : TClass
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| id | `int` | 注册 id。未指定时，以 `typeof(UClass).GetHashCode()` 查找。 |
+
+**返回值**
+
+`UClass` — 缓存中对应的对象（已转型为 `UClass`）；未找到时输出错误日志并返回 `default`（引用类型即 `null`）。
+
+**说明**
+
+从缓存查找已注册的对象并自动转型。无参重载以类型 hash 查找，仅适用于**未指定 id 注册**的对象；以自定义 id 注册者请使用 `Find<UClass>(int id)`。
+
+**示例**
+
+```csharp
+var evt = EventCenterExample.Find<EventMsgTest>();
+evt?.Emit("Hello OxGFrame");
+```
+
+---
+
+### Get\<UClass\> {#get}
+
+```csharp
+public UClass Get<UClass>() where UClass : TClass
+public UClass Get<UClass>(int eventId) where UClass : TClass
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| eventId | `int` | 注册 id。未指定时，以 `typeof(UClass).GetHashCode()` 查找。 |
+
+**返回值**
+
+`UClass` — 缓存中对应的对象（已转型为 `UClass`）；未找到时输出错误日志并返回 `default`。
+
+**说明**
+
+[Find\<UClass\>](#find) 的实例成员版本，供子类内部使用。
+
+---
+
+### Has\<UClass\> {#has}
+
+```csharp
+public bool Has<UClass>() where UClass : TClass
+public bool Has<UClass>(int id) where UClass : TClass
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| id | `int` | 注册 id。未指定时，以 `typeof(UClass).GetHashCode()` 检查。 |
+
+**返回值**
+
+`bool` — 指定对象是否已注册于缓存。
+
+**说明**
+
+检查对象是否已注册。可在注册或查找前先行判断，避免重复注册的警告或未找到的错误日志。
+
+---
+
+### Register {#register}
+
+```csharp
+public void Register<UClass>() where UClass : TClass, new()
+public void Register<UClass>(int id) where UClass : TClass, new()
+public void Register(int id, TClass @class)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| id | `int` | 注册 id。未指定时，以 `typeof(UClass).GetHashCode()` 作为 id。 |
+| @class | `TClass` | 已创建的对象实例（以指定 id 注册）。 |
+
+**说明**
+
+[Add](#add) 的实例成员版本，在子类**构造函数**中注册对象时使用（构造函数中不可调用静态 Default API）。相同 id 重复注册会输出警告并跳过。
+
+**示例**
+
+```csharp
+public EventCenterExample()
+{
+    this.Register<EventMsgTest>();
+}
+```
+
+---
+
+### Remove {#remove}
+
+```csharp
+public void Remove<UClass>() where UClass : TClass
+public void Remove(int id)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| id | `int` | 注册 id。未指定时，以 `typeof(UClass).GetHashCode()` 查找。 |
+
+**说明**
+
+[Delete](#delete) 的实例成员版本；未找到时不做任何操作。
+
+---
+
+### RemoveAll {#removeall}
+
+```csharp
+public void RemoveAll()
+```
+
+**说明**
+
+[DeleteAll](#deleteall) 的实例成员版本，清空缓存中的所有已注册对象。
 
 ---

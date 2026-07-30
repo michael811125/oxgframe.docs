@@ -1,5 +1,6 @@
 ---
 sidebar_position: 1
+description: Hotfixers is the unified entry point of the Hotfixer module. Integrated with HybridCLR, it provides hotfix checking, AOT metadata supplementation, hotfix DLL loading, and state queries.
 ---
 
 # Hotfixers
@@ -22,59 +23,370 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`Hotfixers` is the unified entry point (Facade) of the **Hotfixer** module. Integrated with the **[HybridCLR](https://github.com/focus-creative-games/hybridclr)** code hot-update solution, it covers **hotfix checking (download & load), AOT metadata supplementation, hotfix DLL loading, and state queries**.
+
+|  |  |
+| :--- | :--- |
+| **Namespace** | `OxGFrame.Hotfixer` |
+| **Type** | `public static class` |
+| **Source** | [Hotfixers.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/Hotfixer/Scripts/Runtime/Hotfixers.cs) |
+
+```csharp
 using OxGFrame.Hotfixer;
+```
 
-## Core Mechanism Description
+<Highlight color="#00d679">Reminder</Highlight> If you have questions about [HybridCLR](https://github.com/focus-creative-games/hybridclr), see the [official documentation](https://hybridclr.doc.code-philosophy.com/). For a complete usage flow, check the **HotfixerDemo** sample (importable from the Package Manager).
 
-`Hotfixers` is mainly integrated with **[HybridCLR](https://github.com/focus-creative-games/hybridclr)**, responsible for the following at runtime:
-1. **Supplementing AOT Metadata**: Solving problems such as generic instantiation.
-2. **Loading Hotfix DLLs**: Injecting updated logic into the execution thread.
+## Quick Start {#quick-start}
+
+```csharp
+// Start the hotfix flow (auto-reads HotfixManifest.dat from StreamingAssets)
+Hotfixers.CheckHotfix("HotfixPackage");
+
+// Wait until the hotfix is done before entering the main game logic and asset patching
+await UniTask.WaitUntil(() => Hotfixers.IsDone());
+
+// The main assembly cannot reference the hotfix assembly directly — call hotfix code via reflection
+var assembly = Hotfixers.GetHotfixAssembly("HotfixerDemo.Hotfix.Runtime.dll");
+assembly?.GetType("Hello")?.GetMethod("Run")?.Invoke(null, null);
+```
+
+## General Rules {#general-rules}
+
+### Core Mechanism {#core-mechanism}
+
+`Hotfixers` is integrated with **HybridCLR** and is responsible for the following at runtime:
+
+1. **Supplementing AOT metadata**: solves issues such as AOT generic instantiation (via `RuntimeApi.LoadMetadataForAOTAssembly` with `HomologousImageMode.SuperSet`).
+2. **Loading hotfix DLLs**: loads the updated code logic into the runtime via `Assembly.Load`.
+
+<Highlight color="#ff2f00">Important</Highlight> The main (AOT) assembly cannot reference the hotfix assemblies directly. After loading completes, call into the hotfix layer via **reflection** (use [GetHotfixAssembly](#gethotfixassembly) to obtain the assembly).
+
+<Highlight color="#00d679">Reminder</Highlight> The AOT / Hotfix DLLs must first be collected with the editor tool [HotfixHelper](../Editor/HotfixHelper.mdx) (as `.dll.bytes`) and packed into the hotfix package with YooAsset. See the [Collection Example](../../collect_suggest.mdx).
+
+### Hotfix Flow {#hotfix-flow}
+
+After calling [CheckHotfix](#checkhotfix), the internal state machine runs through the following steps in order:
+
+| Step | State | Description |
+| :--- | :--- | :--- |
+| 1 | `FsmHotfixPrepare` | Prepares the flow. |
+| 2 | `FsmInitHotfixPackage` | Initializes the hotfix package; sends `HotfixInitFailed` on failure. |
+| 3 | `FsmUpdateHotfixPackage` | Updates the hotfix package version; sends `HotfixUpdateFailed` on failure. |
+| 4 | `FsmHotfixCreateDownloader` | Creates the downloader. If there are files to download, sends `HotfixCreateDownloader` and **waits for user confirmation**; otherwise skips ahead to download-over. |
+| 5 | `FsmHotfixBeginDownload` | Starts downloading; sends `HotfixDownloadProgression` progress events, and `HotfixDownloadFailed` on file failures. |
+| 6 | `FsmHotfixDownloadOver` | Download finished. |
+| 7 | `FsmHotfixClearCache` | Clears unused cache files. |
+| 8 | `FsmLoadAOTAssemblies` | Supplements metadata for the AOT assemblies (HybridCLR `RuntimeApi.LoadMetadataForAOTAssembly`). |
+| 9 | `FsmLoadHotfixAssemblies` | Loads the hotfix assemblies (`Assembly.Load`). |
+| 10 | `FsmHotfixDone` | Flow completed; [IsDone](#isdone) returns `true`. |
+
+<Highlight color="#0373fc">Attention</Highlight>
+
+- When there are files to download, the flow stops at step 4 until the user sends the `UserBeginDownload` event to confirm the download (see [Flow Events](#hotfix-events)).
+- Each DLL is loaded as a `TextAsset` from the hotfix package, using the list entry name (including `.dll`) as the asset name, and is unloaded right after loading.
+- In `EditorSimulateMode`, AOT metadata supplementation is skipped; in the Editor or when hotfix is disabled, hotfix assemblies are resolved from the current AppDomain instead of loading the DLL bytes.
+
+### Config File HotfixManifest.dat {#hotfix-manifest}
+
+The auto-config overloads of [CheckHotfix](#checkhotfix) request the hotfix config file from `StreamingAssets` and start the flow based on its content:
+
+- The file name defaults to `HotfixManifest.dat` and can be customized (name and extension) via `HotfixSettings` — see [Global Settings](../../settings.mdx).
+- The content holds the `aotDlls` and `hotfixDlls` lists (names include the `.dll` extension). Both **plaintext JSON** and **encrypted BYTES** formats are supported and auto-detected by the file header when read.
+- The file can be generated with [HotfixHelper.ExportHotfixDllConfig](../Editor/HotfixHelper.mdx#exporthotfixdllconfig) or the editor window tool via the menu **OxGFrame → Hotfixer → Hotfix Config Generator (HotfixManifest.dat)**.
+
+The plaintext JSON format looks like this:
+
+```json
+{
+    "aotDlls": [
+        "mscorlib.dll",
+        "UniTask.dll"
+    ],
+    "hotfixDlls": [
+        "HotfixerDemo.Hotfix.Runtime.dll"
+    ]
+}
+```
+
+### Flow Events {#hotfix-events}
+
+The hotfix flow broadcasts and receives events through **UniEvent** (`UniFramework.Event`). The events are defined in the `OxGFrame.Hotfixer.HotfixEvent` namespace.
+
+**Sent by the framework (HotfixEvents) — listen to these**
+
+| Event | Description |
+| :--- | :--- |
+| `HotfixFsmState` | Flow state change notification, carrying the current state node `stateNode`. |
+| `HotfixInitFailed` | Hotfix package initialization failed. |
+| `HotfixUpdateFailed` | Hotfix package version update failed. |
+| `HotfixCreateDownloader` | Downloader created, carrying the pending file count `totalCount` and total size `totalBytes`. |
+| `HotfixDownloadProgression` | Download progress, carrying `progress`, counts, sizes, and download speed. |
+| `HotfixDownloadFailed` | A file download failed, carrying `fileName` and `error`. |
+
+**Sent by the user (HotfixUserEvents) — drive the flow forward**
+
+| Event | Description |
+| :--- | :--- |
+| `UserTryInitHotfix` | Retries initializing the hotfix package. |
+| `UserTryUpdateHotfix` | Retries updating the hotfix package. |
+| `UserTryCreateDownloader` | Retries creating the downloader. |
+| `UserBeginDownload` | Confirms and begins downloading the hotfix files. |
+
+```csharp
+using OxGFrame.Hotfixer.HotfixEvent;
+using UniFramework.Event;
+
+// Listen for the downloader-created event, then confirm to begin the download
+UniEvent.AddListener<HotfixEvents.HotfixCreateDownloader>((message) =>
+{
+    var msgData = message as HotfixEvents.HotfixCreateDownloader;
+    Debug.Log($"Files to download: {msgData.totalCount}, total size: {msgData.totalBytes}");
+    HotfixUserEvents.UserBeginDownload.SendEventMessage();
+});
+```
+
+### Disabling Hotfix {#hybridclr-disabled}
+
+<Highlight color="#ff2f00">Important</Highlight> If HybridCLR is disabled (the **Enable** checkbox is unchecked in HybridCLR Settings), the macro [OXGFRAME_HYBRIDCLR_DISABLED](https://github.com/michael811125/OxGFrame/wiki/Macro-Definitions) must also be defined to effectively strip the hotfix flow.
+
+![](/img/hotfixer/api/runtime/img_1.png)
+
+With the macro defined, [IsDisabled](#isdisabled) returns `true`, AOT metadata supplementation is skipped, and hotfix assemblies are resolved from the current AppDomain instead.
+
+## Method Overview {#overview}
+
+#### Hotfix Check
+
+| Method | Description |
+| :--- | :--- |
+| [CheckHotfix](#checkhotfix) | Starts the hotfix flow: downloads and loads all hotfix files. |
+
+#### Status & Reset
+
+| Method | Description |
+| :--- | :--- |
+| [IsDone](#isdone) | Returns whether the hotfix flow has fully completed. |
+| [IsDisabled](#isdisabled) | Returns whether the hotfix feature is disabled. |
+| [Reset](#reset) | Resets the hotfix flags and cached data. |
+
+#### Assembly Info
+
+| Method | Description |
+| :--- | :--- |
+| [GetAOTAssemblyNames](#getaotassemblynames) | Gets the AOT assembly names (including the `.dll` extension). |
+| [GetAotAssemblyNamesWithoutExtensions](#getaotassemblynameswithoutextensions) | Gets the AOT assembly names (without the extension). |
+| [GetHotfixAssemblyNames](#gethotfixassemblynames) | Gets the hotfix assembly names (including the `.dll` extension). |
+| [GetHotfixAssemblyNamesWithoutExtensions](#gethotfixassemblynameswithoutextensions) | Gets the hotfix assembly names (without the extension). |
+| [GetHotfixAssembly](#gethotfixassembly) | Gets a loaded `Assembly` object by name. |
 
 ---
 
-## Patch Operation (Update and Check)
+### CheckHotfix {#checkhotfix}
 
-Core methods for performing hot-update checks and loading.
+```csharp
+public static void CheckHotfix(string packageName, Action errorAction = null)
+public static void CheckHotfix(PackageInfoWithBuild packageInfoWithBuild, Action errorAction = null)
+public static void CheckHotfix(string packageName, string[] aotAssemblies, string[] hotfixAssemblies)
+public static void CheckHotfix(PackageInfoWithBuild packageInfoWithBuild, string[] aotAssemblies, string[] hotfixAssemblies)
+```
 
-### CheckHotfix
-Starts downloading and loading all hot-update related files.
+**Parameters**
 
-* **Automatic Configuration Mode**
-    * `CheckHotfix(string packageName, Action errorAction = null)`
-    * `CheckHotfix(PackageInfoWithBuild packageInfo, Action errorAction = null)`
-    * <Highlight color="#00d679">Reminder</Highlight> This mode automatically reads the `HotfixManifest.dat` configuration file in `StreamingAssets`.
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Hotfix package name. |
+| packageInfoWithBuild | `PackageInfoWithBuild` | Custom package info (lets you specify the build mode, etc.; namespace `OxGFrame.AssetLoader.Bundle`). |
+| errorAction | `Action` | Callback invoked when the config file request fails (invalid URL, request error, or timeout), returns empty data, or the config cannot be parsed.<br/>**Default**: `null` |
+| aotAssemblies | `string[]` | List of AOT assemblies that need metadata supplementation (names include the `.dll` extension). |
+| hotfixAssemblies | `string[]` | List of hotfix assemblies (names include the `.dll` extension). |
 
-* **Manual Specification Mode**
-    * `CheckHotfix(string packageName, string[] aotAssemblies, string[] hotfixAssemblies)`
-    * Supports manual passing of a list of AOT assemblies and hotfix assemblies that need supplementation.
+**Description**
+
+Starts the hotfix flow: downloads and loads all hotfix-related files. See the [Hotfix Flow](#hotfix-flow) for the full procedure. The overloads come in two modes:
+
+- **Auto-config mode** (`errorAction` overloads): automatically requests the `HotfixManifest.dat` config file from `StreamingAssets` (see [Config File](#hotfix-manifest)), parses the AOT and hotfix assembly lists, and starts the flow.
+- **Manual mode** (`aotAssemblies` overloads): pass the AOT assemblies to supplement and the hotfix assemblies directly.
+
+<Highlight color="#0373fc">Attention</Highlight>
+
+- This is a non-blocking call. Track completion with [IsDone](#isdone) or the [flow events](#hotfix-events).
+- The `packageName`-only overloads initialize the package as an `AppPackageInfoWithBuild` (build mode `ScriptableBuildPipeline`). To customize the build mode, use the `PackageInfoWithBuild` overloads instead.
+- Calling again while the flow is running is ignored (a warning is logged).
+- Calling again after the flow has completed returns immediately (a warning is logged); call [Reset](#reset) first to run it again.
+
+**Example**
+
+```csharp
+// Auto-config mode: reads HotfixManifest.dat from StreamingAssets
+Hotfixers.CheckHotfix
+(
+    "HotfixPackage",
+    () => Debug.LogWarning("Config file request failed. Please generate HotfixManifest.dat first.")
+);
+
+// Manual mode: pass the AOT and hotfix assembly lists directly
+Hotfixers.CheckHotfix
+(
+    "HotfixPackage",
+    // AOT assemblies that need metadata supplementation
+    new string[] { "mscorlib.dll", "UniTask.dll" },
+    // Hotfix assemblies
+    new string[] { "HotfixerDemo.Hotfix.Runtime.dll" }
+);
+```
 
 ---
 
-## Status & Cache
+### IsDone {#isdone}
 
-* **IsDone()**
-    * Returns whether the hot update has completed loading.
-    * Wait for Hotfixers.IsDone() before entering the main game logic and resource updates.
-* **IsDisabled()**
-    * Checks if the hot-update feature is currently disabled in the environment (usually used for developer mode).
-    * <Highlight color="#ff2f00">Important</Highlight> If HybridCLR is disabled, the Macro [OXGFRAME_HYBRIDCLR_DISABLED](https://github.com/michael811125/OxGFrame/wiki/Macro-Definitions) must be used to effectively eliminate the hot-update flow.
-    ![](/img/hotfixer/api/runtime/img_1.png)
-* **Reset()**
-    * Resets hot-update flags and cache data. If it's the commercial version (supporting HotReload), Reset can be used to re-initialize.
+```csharp
+public static bool IsDone()
+```
+
+**Returns**
+
+`bool` — whether the hotfix flow has fully completed (`true` once both download and load are finished).
+
+**Description**
+
+Returns the hotfix completion state. It is recommended to wait until this becomes `true` before entering the main game logic and asset patching.
+
+**Example**
+
+```csharp
+Hotfixers.CheckHotfix("HotfixPackage");
+
+// Wait until the hotfix is done
+await UniTask.WaitUntil(() => Hotfixers.IsDone());
+
+// Enter the main game flow
+```
 
 ---
 
-## Assembly Info
+### IsDisabled {#isdisabled}
 
-Provides queries for assemblies loaded at runtime.
+```csharp
+public static bool IsDisabled()
+```
 
-### AOT Assemblies (Metadata Assemblies)
-* **GetAOTAssemblyNames()**: Gets AOT assembly names (including `.dll` extension).
-* **GetAotAssemblyNamesWithoutExtensions()**: Gets AOT assembly names (without extension).
+**Returns**
 
-### Hotfix Assemblies (Hotfix Assemblies)
-* **GetHotfixAssemblyNames()**: Gets hot-update assembly names (including `.dll` extension).
-* **GetHotfixAssemblyNamesWithoutExtensions()**: Gets hot-update assembly names (without extension).
-* **GetHotfixAssembly(string assemblyName)**: Gets the loaded `Assembly` object by name.
+`bool` — whether the hotfix feature is disabled; returns `true` when the project defines the `OXGFRAME_HYBRIDCLR_DISABLED` macro.
+
+**Description**
+
+Checks whether the hotfix feature is disabled in the current environment (determined by a compile-time macro; typically used for developer mode).
+
+<Highlight color="#ff2f00">Important</Highlight> If HybridCLR is disabled, the macro [OXGFRAME_HYBRIDCLR_DISABLED](https://github.com/michael811125/OxGFrame/wiki/Macro-Definitions) must be defined to effectively strip the hotfix flow (see [Disabling Hotfix](#hybridclr-disabled)).
+
+---
+
+### Reset {#reset}
+
+```csharp
+public static void Reset()
+```
+
+**Description**
+
+Resets the hotfix flags and cached data (the done flag, the recorded AOT / hotfix assembly names, and the loaded `Assembly` cache), allowing [CheckHotfix](#checkhotfix) to run again.
+
+<Highlight color="#00d679">Reminder</Highlight> Reloading updated hotfix DLLs after a reset falls under HotReload, which requires the HybridCLR **commercial edition** (not supported by the community edition).
+
+---
+
+### GetAOTAssemblyNames {#getaotassemblynames}
+
+```csharp
+public static string[] GetAOTAssemblyNames()
+```
+
+**Returns**
+
+`string[]` — the AOT assembly names (including the `.dll` extension); `null` if [CheckHotfix](#checkhotfix) has not been executed yet.
+
+**Description**
+
+Gets the list of AOT assemblies that need metadata supplementation. The list is set when [CheckHotfix](#checkhotfix) is called.
+
+---
+
+### GetAotAssemblyNamesWithoutExtensions {#getaotassemblynameswithoutextensions}
+
+```csharp
+public static string[] GetAotAssemblyNamesWithoutExtensions()
+```
+
+**Returns**
+
+`string[]` — the AOT assembly names with the `.dll` extension trimmed; `null` if [CheckHotfix](#checkhotfix) has not been executed yet.
+
+**Description**
+
+Same as [GetAOTAssemblyNames](#getaotassemblynames), but the names **exclude** the `.dll` extension (converted and cached on first call).
+
+---
+
+### GetHotfixAssemblyNames {#gethotfixassemblynames}
+
+```csharp
+public static string[] GetHotfixAssemblyNames()
+```
+
+**Returns**
+
+`string[]` — the hotfix assembly names (including the `.dll` extension); `null` if [CheckHotfix](#checkhotfix) has not been executed yet.
+
+**Description**
+
+Gets the list of hotfix assembly names. The list is set when [CheckHotfix](#checkhotfix) is called.
+
+---
+
+### GetHotfixAssemblyNamesWithoutExtensions {#gethotfixassemblynameswithoutextensions}
+
+```csharp
+public static string[] GetHotfixAssemblyNamesWithoutExtensions()
+```
+
+**Returns**
+
+`string[]` — the hotfix assembly names with the `.dll` extension trimmed; `null` if [CheckHotfix](#checkhotfix) has not been executed yet.
+
+**Description**
+
+Same as [GetHotfixAssemblyNames](#gethotfixassemblynames), but the names **exclude** the `.dll` extension (converted and cached on first call).
+
+---
+
+### GetHotfixAssembly {#gethotfixassembly}
+
+```csharp
+public static Assembly GetHotfixAssembly(string assemblyName)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| assemblyName | `string` | Hotfix assembly name (including the `.dll` extension, e.g. `HotfixerDemo.Hotfix.Runtime.dll`). |
+
+**Returns**
+
+`Assembly` — the loaded hotfix assembly; `null` if not found.
+
+**Description**
+
+Gets a loaded `Assembly` object by name. Since the main assembly cannot reference the hotfix assemblies directly, use this method to obtain the assembly and call into the hotfix layer via **reflection**.
+
+**Example**
+
+```csharp
+// After the hotfix is done, enter the hotfix layer via reflection
+var assembly = Hotfixers.GetHotfixAssembly("HotfixerDemo.Hotfix.Runtime.dll");
+assembly?.GetType("Hello")?.GetMethod("Run")?.Invoke(null, null);
+```
 
 ---

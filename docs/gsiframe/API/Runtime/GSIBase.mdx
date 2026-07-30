@@ -1,5 +1,6 @@
 ---
 sidebar_position: 2
+description: GSIBase 是 GSIFrame 的遊戲階段抽象基類，定義 OnCreate、OnEnter、OnUpdate、OnExit 的完整階段生命週期。
 ---
 
 # GSIBase
@@ -22,71 +23,242 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`GSIBase` 是 **GSIFrame**（Game Stage Integration）的遊戲階段抽象基類。每個遊戲階段（如啟動、商標、熱更、登入、大廳）都以一個子類繼承 `GSIBase` 實作，定義了 **OnCreate → OnEnter → OnUpdate → OnExit** 的完整階段生命週期，由 [GSIManagerBase](./GSIManagerBase.mdx) 子類統一註冊、切換與驅動。
+
+|  |  |
+| :--- | :--- |
+| **命名空間** | `OxGFrame.GSIFrame` |
+| **類型** | `public abstract class` |
+| **原始碼** | [GSIBase.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/GSIFrame/Scripts/Runtime/GSIBase.cs) |
+
+```csharp
 using OxGFrame.GSIFrame;
+```
 
-## 核心設計概念
+## 宣告 {#declaration}
 
-`GSIBase` 定義了一個遊戲階段完整的生命週期。透過 `BeginInit` 的自動化流程，確保階段在進入時會依照「停止更新 -> 執行初始 -> 開啟更新」的順序執行，並支持異步處理（UniTask）。
+```csharp
+public abstract class GSIBase
+```
+
+繼承 `GSIBase` 後，必須實作 [OnCreate](#oncreate)、[OnEnter](#onenter)、[OnUpdate](#onupdate)、[OnExit](#onexit) 四個生命週期方法（皆為 `abstract`）。
+
+## 生命週期與呼叫時序 {#lifecycle}
+
+生命週期方法皆由管理器（[GSIManagerBase](./GSIManagerBase.mdx) 子類）在階段切換與驅動更新時自動呼叫，無需手動觸發。當管理器切換至該階段時，內部初始流程依以下順序執行：
+
+1. **首次檢查**：若該階段從未初始化過，先 `await` [OnCreate](#oncreate)（整個生命週期僅執行一次）。
+2. **Step 1**：呼叫 [StopUpdate](#stopupdate)，先暫停 `OnUpdate` 刷新。
+3. **Step 2**：`await` [OnEnter](#onenter)，執行進入階段的初始邏輯。
+4. **Step 3**：呼叫 [RunUpdate](#runupdate)，開啟 `OnUpdate` 刷新。
+
+之後，管理器於每幀驅動更新（`DriveUpdate`）時，若該階段為當前階段且 [runUpdate](#prop-runupdate) 為 `true`，將呼叫 [OnUpdate](#onupdate)；切換至其他階段時，管理器會先呼叫該階段的 [OnExit](#onexit)，再執行新階段的初始流程。
+
+<Highlight color="#00d679">提醒</Highlight> `OnCreate` 與 `OnEnter` 皆為 `UniTask` 非同步方法，可直接 `await` 資源載入等非同步操作；初始流程會等 `OnEnter` 完成後才開啟 `OnUpdate` 刷新。
+
+<Highlight color="#0373fc">注意</Highlight> 初始流程以 `Forget()`（Fire-and-Forget）方式啟動，不會阻塞管理器的驅動更新。
+
+## 繼承實作範例 {#inheritance-example}
+
+```csharp
+using Cysharp.Threading.Tasks;
+using OxGFrame.GSIFrame;
+using UnityEngine;
+
+// 自訂遊戲階段：繼承 GSIBase 並覆寫四個生命週期方法
+public class StartupStageExample : GSIBase
+{
+    public async override UniTask OnCreate()
+    {
+        // 首次切換至該階段時執行一次，適合進行一次性的初始
+        Debug.Log($"StartupStage OnCreate, Id: {this.id}");
+    }
+
+    public async override UniTask OnEnter()
+    {
+        // 每次切換進入該階段時執行
+        // 可 await 資源預載等非同步操作，完成後才會開啟 OnUpdate 刷新
+        Debug.Log("StartupStage OnEnter");
+    }
+
+    public override void OnUpdate(float dt = 0.0f)
+    {
+        // 階段活躍期間每幀執行（由管理器的驅動更新呼叫）
+    }
+
+    public override void OnExit()
+    {
+        // 切換至其他階段時執行，清理該階段產生的資料
+        Debug.Log("StartupStage OnExit");
+    }
+}
+```
+
+階段子類需透過 [GSIManagerBase](./GSIManagerBase.mdx) 子類進行註冊與切換：
+
+```csharp
+// 於任意處透過管理器切換至該階段（詳見 GSIManagerBase）
+GSIManagerExample.ChangeStage<StartupStageExample>();
+```
+
+<Highlight color="#00d679">提醒</Highlight> 可透過 Project 視窗右鍵範本快速建立階段子類：**Create → OxGFrame → GSI Frame → Template Scripts → Template GSI.cs (Game Stage)**。
+
+## 成員總覽 {#overview}
+
+#### 屬性
+
+| 屬性 | 說明 |
+| :--- | :--- |
+| [id](#prop-id) | 階段辨識碼（註冊時由管理器自動設定）。 |
+| [runUpdate](#prop-runupdate) | 是否運行 `OnUpdate` 刷新的開關。 |
+
+#### 生命週期方法（abstract，繼承後必須實作）
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [OnCreate](#oncreate) | 首次進入該階段時執行一次（非同步）。 |
+| [OnEnter](#onenter) | 每次切換進入該階段時執行（非同步）。 |
+| [OnUpdate](#onupdate) | 階段活躍期間每幀執行。 |
+| [OnExit](#onexit) | 切換離開該階段時執行。 |
+
+#### 一般方法
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [SetId](#setid) | 設定階段辨識碼（註冊時由管理器自動呼叫）。 |
+| [RunUpdate](#runupdate) | 開啟 `OnUpdate` 刷新。 |
+| [StopUpdate](#stopupdate) | 停止 `OnUpdate` 刷新。 |
 
 ---
 
-## 屬性與狀態
+### id {#prop-id}
 
-* **id**
-    * 類型：`int`
-    * 說明：階段的唯一識別碼，由 `GSIManager` 註冊時自動分配。
-* **runUpdate**
-    * 類型：`bool`
-    * 說明：控制該階段的 `OnUpdate` 是否執行的開關。
+```csharp
+public int id { get; private set; }
+```
 
----
+**說明**
 
-## 內建流程控制
-
-### 執行順序說明
-
-1. **首次檢查**: 若尚未初始化，執行 `OnCreate`，僅初始一次。
-2. **Step 1**: 調用 `StopUpdate()` 暫停刷新。
-3. **Step 2**: 調用 `OnEnter()` 進行該階段的異步初始化邏輯。
-4. **Step 3**: 調用 `RunUpdate()` 開啟 `OnUpdate` 刷新。
+階段的唯一辨識碼。於管理器註冊階段時自動設定：以泛型多載註冊且未指定 id 時，為該型別的 `GetHashCode()`；有指定時則為傳入的 id。外部僅可讀取，僅能透過 [SetId](#setid) 變更。
 
 ---
 
-## 必須實作的方法 (Implementation)
+### runUpdate {#prop-runupdate}
 
-繼承 `GSIBase` 後，必須實作以下生命週期方法：
+```csharp
+public bool runUpdate { get; private set; }
+```
 
-### OnCreate()
-* **回傳值**: `UniTask`
-* **觸發時機**: 該階段實體「第一次」被切換時。
-* **用途**: 適合進行一次性的資源預載或物件初始化。
+**說明**
 
-### OnEnter()
-* **回傳值**: `UniTask`
-* **觸發時機**: 每次切換進入該階段時。
-* **用途**: 處理進入階段時的邏輯，例如開啟 UI 視窗、播放轉場動畫。
-
-### OnUpdate(float dt)
-* **回傳值**: `void`
-* **觸發時機**: `runUpdate` 為 true 且階段活躍時，隨遊戲幀率刷新。
-* **用途**: 處理階段內的循環邏輯（如計時器、角色控制等）。
-
-### OnExit()
-* **回傳值**: `void`
-* **觸發時機**: 切換至下一個階段前。
-* **用途**: 清理該階段產生的臨時資料、關閉相關 UI 或停止音效。
+是否運行 `OnUpdate` 刷新的開關。為 `true` 時，管理器的驅動更新才會呼叫該階段的 [OnUpdate](#onupdate)。外部僅可讀取，僅能透過 [RunUpdate](#runupdate) / [StopUpdate](#stopupdate) 變更。
 
 ---
 
-## 階段狀態操作
+### OnCreate {#oncreate}
 
-開發者可以在階段內部透過以下方法手動控制更新行為：
+```csharp
+public abstract UniTask OnCreate()
+```
 
-* **RunUpdate()**: 手動開啟 `OnUpdate` 執行。
-* **StopUpdate()**: 手動暫停 `OnUpdate` 執行。
+**回傳值**
+
+`UniTask` — 可等待的非同步操作，初始流程會 `await` 其完成後才繼續執行 `OnEnter`。
+
+**說明**
+
+該階段**首次**被切換進入時執行，整個生命週期僅執行一次，適合進行一次性的初始或資源預載。
+
+<Highlight color="#0373fc">注意</Highlight> `OnCreate` 於首次切換進入該階段時才會執行，並非註冊（`AddStage`）當下。
 
 ---
 
-<Highlight color="#00d679">提醒</Highlight> 由於 `OnCreate` 與 `OnEnter` 支持 `UniTask`，您可以方便地在這些方法中使用 `await` 等待資源加載完成，系統會自動在加載完成後才開啟 `OnUpdate`。
+### OnEnter {#onenter}
+
+```csharp
+public abstract UniTask OnEnter()
+```
+
+**回傳值**
+
+`UniTask` — 可等待的非同步操作，初始流程會 `await` 其完成後才開啟 `OnUpdate` 刷新。
+
+**說明**
+
+**每次**切換進入該階段時執行，處理進入階段的初始邏輯（如開啟 UI、播放轉場動畫、預載資源）。執行前初始流程會先呼叫 [StopUpdate](#stopupdate) 暫停刷新，完成後自動呼叫 [RunUpdate](#runupdate) 開啟刷新。
+
+---
+
+### OnUpdate {#onupdate}
+
+```csharp
+public abstract void OnUpdate(float dt = 0.0f)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| dt | `float` | 幀間隔時間，由管理器的驅動更新傳入（一般為 `Time.deltaTime`）。<br/>**預設值**：`0.0f` |
+
+**說明**
+
+階段活躍期間的每幀更新。該階段為當前階段且 [runUpdate](#prop-runupdate) 為 `true` 時，由管理器的驅動更新（`DriveUpdate`）每幀呼叫，處理階段內的循環邏輯（如計時器、流程判斷）。
+
+---
+
+### OnExit {#onexit}
+
+```csharp
+public abstract void OnExit()
+```
+
+**說明**
+
+切換至其他階段時，由管理器在執行新階段的初始流程前呼叫。用於清理該階段產生的資料、關閉相關 UI 或停止音效等收尾處理。
+
+---
+
+### SetId {#setid}
+
+```csharp
+public void SetId(int id)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| id | `int` | 階段辨識碼。 |
+
+**說明**
+
+設定階段辨識碼 [id](#prop-id)。
+
+<Highlight color="#00d679">提醒</Highlight> 註冊階段時（`AddStage` / `AddGameStage`）由管理器自動呼叫，一般無需手動呼叫。
+
+---
+
+### RunUpdate {#runupdate}
+
+```csharp
+public void RunUpdate()
+```
+
+**說明**
+
+將 [runUpdate](#prop-runupdate) 設為 `true`，開啟 `OnUpdate` 刷新。初始流程於 `OnEnter` 完成後會自動呼叫；亦可於階段內手動呼叫，恢復先前暫停的刷新。
+
+---
+
+### StopUpdate {#stopupdate}
+
+```csharp
+public void StopUpdate()
+```
+
+**說明**
+
+將 [runUpdate](#prop-runupdate) 設為 `false`，暫停 `OnUpdate` 刷新。可於階段內手動呼叫（如過場期間暫停階段更新），再透過 [RunUpdate](#runupdate) 恢復。
 
 ---

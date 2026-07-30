@@ -1,5 +1,6 @@
 ---
 sidebar_position: 1
+description: CenterBase 是 CenterFrame 的中心註冊抽象基類，以型別安全的快取統一管理註冊物件，為 APICenter 與 EventCenter 的共同基底。
 ---
 
 # CenterBase
@@ -22,67 +23,365 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`CenterBase<TCenter, TClass>` 是 **CenterFrame** 的中心註冊抽象基類，內建執行緒安全單例與 `Dictionary<int, TClass>` 型別安全快取，統一提供**註冊（Add）、移除（Delete）、查找（Find）**等物件管理介面。**APICenter**（`APIBase`）與 **EventCenter**（`EventBase`）皆以此為共同基底，也可自訂 `TClass` 基底型別實作自己的中心。
+
+|  |  |
+| :--- | :--- |
+| **命名空間** | `OxGFrame.CenterFrame` |
+| **類型** | `public abstract class` |
+| **原始碼** | [CenterBase.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/CenterFrame/Scripts/Runtime/Common/CenterBase.cs) |
+
+```csharp
 using OxGFrame.CenterFrame;
+```
 
-## 核心設計概念
+## 宣告 {#declaration}
 
-`CenterBase<TCenter, TClass>` 採用了 **CRTP (Curiously Recurring Template Pattern)** 模式與 **Thread-Safe Singleton** 設計。它建立了一個類型安全的緩存池，讓所有繼承自此類的中心點都能擁有統一的對象管理邏輯。
+```csharp
+public abstract class CenterBase<TCenter, TClass> where TCenter : CenterBase<TCenter, TClass>, new()
+```
+
+**泛型參數**
+
+| 泛型參數 | 說明 |
+| :--- | :--- |
+| TCenter | 中心子類自身型別（CRTP 自我參照約束），需具備無參數建構子（`new()`）。 |
+| TClass | 受管理物件的基底型別（如 APICenter 的 `APIBase`、EventCenter 的 `EventBase`）。 |
+
+繼承時將子類自身與受管理的基底型別作為泛型參數傳入：
+
+```csharp
+public class APICenterExample : CenterBase<APICenterExample, APIBase> { /* ... */ }
+public class EventCenterExample : CenterBase<EventCenterExample, EventBase> { /* ... */ }
+```
+
+## 運作方式 {#how-it-works}
+
+### 單例與註冊時機 {#singleton}
+
+`CenterBase<TCenter, TClass>` 內建**執行緒安全的延遲單例**（Double-Checked Locking）。首次呼叫任一 Default API 靜態方法時，自動建立 `TCenter` 實例並執行其建構子；建議於子類**建構子**中以 [Register](#register) 完成物件註冊。
+
+<Highlight color="#ff2f00">重要</Highlight> 不可於子類建構子中呼叫任何 Default API 靜態方法（如 `Add` / `Find`），會導致 `GetInstance()` 遞迴而 StackOverflow（死循環）；建構子中請改用實例成員方法（如 [Register](#register)）。
+
+### ID 規則 {#id-rules}
+
+- 每個註冊物件以唯一的 `int` id 作為快取鍵。泛型多載**未指定 id** 時，以 `typeof(UClass).GetHashCode()` 作為 id（同型別僅能註冊一個實例）。
+- **指定 id** 的多載可自訂 id，同型別即可註冊多個實例。
+- 相同 id 重複註冊會輸出警告日誌並**略過**，不會覆蓋既有物件。
+
+### Default API 與成員方法 {#default-api-vs-members}
+
+靜態 Default API（`Add` / `Delete` / `Find`）內部皆透過單例轉呼叫對應的實例成員方法（`Register` / `Remove` / `Get`）：
+
+- **外部呼叫端**：直接以子類類名使用 Default API（如 `EventCenterExample.Find<UClass>()`）。
+- **子類內部（建構子）**：使用實例成員方法（如 `this.Register<UClass>()`）。
+
+<Highlight color="#0373fc">注意</Highlight> `CenterBase` 僅負責物件的註冊與快取管理；若受管理物件持有 Unity 資源（如 Prefab），請於移除前自行配合 `AssetLoaders` 進行正確的釋放處理。
+
+## 繼承實作範例 {#inheritance-example}
+
+以 EventCenter 風格為例，自訂事件中心與事件類：
+
+```csharp
+using Cysharp.Threading.Tasks;
+using OxGFrame.CenterFrame;
+using OxGFrame.CenterFrame.EventCenter;
+using UnityEngine;
+
+// 自訂事件中心：TCenter 傳入子類自身（CRTP），TClass 指定受管理的基底型別
+public class EventCenterExample : CenterBase<EventCenterExample, EventBase>
+{
+    public EventCenterExample()
+    {
+        // 建構子中註冊事件（僅能使用實例成員方法 Register，不可呼叫 Default API）
+        this.Register<EventMsgTest>();
+    }
+}
+
+// 自訂事件：繼承 EventBase
+public class EventMsgTest : EventBase
+{
+    private string _message;
+
+    public void Emit(string message)
+    {
+        this._message = message;
+        this.HandleEvent().Forget();
+    }
+
+    public async override UniTaskVoid HandleEvent()
+    {
+        // 處理事件內容
+        Debug.Log($"Received message: {this._message}");
+        this.Release();
+    }
+
+    protected override void Release()
+    {
+        // 釋放事件持有的資料
+        this._message = null;
+    }
+}
+```
+
+呼叫端透過 Default API 查找並派送事件：
+
+```csharp
+// 以型別查找已註冊的事件並派送
+EventCenterExample.Find<EventMsgTest>()?.Emit("Hello OxGFrame");
+```
+
+APICenter 風格作法相同，僅將 `TClass` 改為 `APIBase`：
+
+```csharp
+using OxGFrame.CenterFrame;
+using OxGFrame.CenterFrame.APICenter;
+
+// APIGetPlayerData 為繼承 APIBase 的自訂 API 類
+public class APICenterExample : CenterBase<APICenterExample, APIBase>
+{
+    public APICenterExample()
+    {
+        this.Register<APIGetPlayerData>();
+    }
+}
+```
+
+<Highlight color="#00d679">提醒</Highlight> 可透過 Project 視窗右鍵範本快速建立：**Create → OxGFrame → Center Frame → Event Center / API Center → Template Scripts** 下的範本腳本。
+
+## 成員總覽 {#overview}
+
+#### 靜態方法（Default API）
+
+繼承後直接以子類類名呼叫（如 `EventCenterExample.Find<UClass>()`）。
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [Add](#add) | 實例化並註冊物件至快取。 |
+| [Delete](#delete) | 從快取移除物件。 |
+| [DeleteAll](#deleteall) | 清空快取中的所有物件。 |
+| [Find\<UClass\>](#find) | 從快取查找物件並轉型回傳。 |
+
+#### 一般方法（實例成員）
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [Get\<UClass\>](#get) | 從快取取得物件並轉型（`Find` 的成員版本）。 |
+| [Has\<UClass\>](#has) | 檢查物件是否已註冊。 |
+| [Register](#register) | 註冊物件至快取（`Add` 的成員版本）。 |
+| [Remove](#remove) | 從快取移除物件（`Delete` 的成員版本）。 |
+| [RemoveAll](#removeall) | 清空快取（`DeleteAll` 的成員版本）。 |
+
+#### 受保護成員（繼承後可用）
+
+| 成員 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| `GetInstance()` | `static TCenter` | 取得中心單例（延遲建立、執行緒安全）。 |
+| `GetFromCache(int id)` | `TClass` | 從快取取出物件；查無時輸出錯誤日誌並回傳 `default`。 |
+| `HasInCache(int id)` | `bool` | 檢查快取中是否存在指定 id。 |
 
 ---
 
-## Default APIs (靜態調用接口)
+### Add {#add}
 
-以下方法皆為靜態接口，開發者可直接透過子類別名稱調用（例如：`YourCenter.Add<YourClass>()`）。
+```csharp
+public static void Add<UClass>() where UClass : TClass, new()
+public static void Add<UClass>(int id) where UClass : TClass, new()
+public static void Add(int id, TClass @class)
+```
 
-### Register (註冊/新增)
+**參數**
 
-將對象實例化並加入緩存管理中。
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| id | `int` | 註冊 id。未指定時，以 `typeof(UClass).GetHashCode()` 作為 id。 |
+| @class | `TClass` | 已建立的物件實例（以指定 id 註冊）。 |
 
-* **Add\<UClass\>()**
-    * 以 `UClass` 的類型 Hash 作為 ID 進行註冊。
-* **Add\<UClass\>(int id)**
-    * 指定特定的 `id` 註冊 `UClass` 實例。
-* **Add(int id, TClass @class)**
-    * 直接將已存在的實例以指定 `id` 加入緩存。
+**說明**
 
-<Highlight color="#00d679">提醒</Highlight> 使用泛型註冊時，該類別必須具備無參數構造函數（`new()`）。
+實例化（`new UClass()`）並註冊物件至快取，或以指定 id 直接註冊既有實例。
 
----
+<Highlight color="#0373fc">注意</Highlight>
 
-### Remove (刪除/卸載)
+- 泛型多載要求 `UClass` 具備無參數建構子（`new()` 約束）。
+- 相同 id 重複註冊會輸出警告並略過，不會覆蓋既有物件。
 
-從緩存池中移除對象。
+**範例**
 
-* **Delete\<UClass\>()**
-    * 根據類型移除對應的實例。
-* **Delete(int id)**
-    * 根據指定 `id` 移除實例。
-* **DeleteAll()**
-    * 清空緩存池中所有的對象。
+```csharp
+// 以型別 hash 作為 id 註冊
+EventCenterExample.Add<EventMsgTest>();
 
----
-
-### Get (尋找/獲取)
-
-從緩存池中檢索對象並自動轉型。
-
-* **Find\<UClass\>()**
-    * 根據類型尋找對象。
-* **Find\<UClass\>(int id)**
-    * 根據指定 `id` 尋找對象，並強制轉換為 `UClass` 類型。
+// 以自訂 id 註冊既有實例
+EventCenterExample.Add(0x01, new EventMsgTest());
+```
 
 ---
 
-## 內部實作細節
+### Delete {#delete}
 
-### Thread-Safe Singleton
-內建雙重檢查鎖定（Double-Checked Locking），確保在多執行緒環境下 `GetInstance()` 的唯一性與安全性。
+```csharp
+public static void Delete<UClass>() where UClass : TClass
+public static void Delete(int id)
+```
 
-### Cache System
-底層使用 `Dictionary<int, TClass>` 進行儲存：
-* **Key**: 對象的唯一識別碼（ID 或 Type Hash）。
-* **Value**: 實例化後的對象。
+**參數**
 
-<Highlight color="#ff2f00">重要</Highlight> `CenterBase` 僅負責對象的存儲生命週期，若管理的對象涉及 Unity 資源（如 Prefab），請配合 `AssetLoaders` 進行正確的銷毀處理。
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| id | `int` | 註冊 id。未指定時，以 `typeof(UClass).GetHashCode()` 查找。 |
+
+**說明**
+
+從快取移除已註冊的物件；查無時不動作。
+
+---
+
+### DeleteAll {#deleteall}
+
+```csharp
+public static void DeleteAll()
+```
+
+**說明**
+
+清空快取中的**所有**已註冊物件。
+
+---
+
+### Find\<UClass\> {#find}
+
+```csharp
+public static UClass Find<UClass>() where UClass : TClass
+public static UClass Find<UClass>(int id) where UClass : TClass
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| id | `int` | 註冊 id。未指定時，以 `typeof(UClass).GetHashCode()` 查找。 |
+
+**回傳值**
+
+`UClass` — 快取中對應的物件（已轉型為 `UClass`）；查無時輸出錯誤日誌並回傳 `default`（參考型別即 `null`）。
+
+**說明**
+
+從快取查找已註冊的物件並自動轉型。無參數多載以型別 hash 查找，僅適用於**未指定 id 註冊**的物件；以自訂 id 註冊者請使用 `Find<UClass>(int id)`。
+
+**範例**
+
+```csharp
+var evt = EventCenterExample.Find<EventMsgTest>();
+evt?.Emit("Hello OxGFrame");
+```
+
+---
+
+### Get\<UClass\> {#get}
+
+```csharp
+public UClass Get<UClass>() where UClass : TClass
+public UClass Get<UClass>(int eventId) where UClass : TClass
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| eventId | `int` | 註冊 id。未指定時，以 `typeof(UClass).GetHashCode()` 查找。 |
+
+**回傳值**
+
+`UClass` — 快取中對應的物件（已轉型為 `UClass`）；查無時輸出錯誤日誌並回傳 `default`。
+
+**說明**
+
+[Find\<UClass\>](#find) 的實例成員版本，供子類內部使用。
+
+---
+
+### Has\<UClass\> {#has}
+
+```csharp
+public bool Has<UClass>() where UClass : TClass
+public bool Has<UClass>(int id) where UClass : TClass
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| id | `int` | 註冊 id。未指定時，以 `typeof(UClass).GetHashCode()` 檢查。 |
+
+**回傳值**
+
+`bool` — 指定物件是否已註冊於快取。
+
+**說明**
+
+檢查物件是否已註冊。可於註冊或查找前先行判斷，避免重複註冊的警告或查無的錯誤日誌。
+
+---
+
+### Register {#register}
+
+```csharp
+public void Register<UClass>() where UClass : TClass, new()
+public void Register<UClass>(int id) where UClass : TClass, new()
+public void Register(int id, TClass @class)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| id | `int` | 註冊 id。未指定時，以 `typeof(UClass).GetHashCode()` 作為 id。 |
+| @class | `TClass` | 已建立的物件實例（以指定 id 註冊）。 |
+
+**說明**
+
+[Add](#add) 的實例成員版本，於子類**建構子**中註冊物件時使用（建構子中不可呼叫靜態 Default API）。相同 id 重複註冊會輸出警告並略過。
+
+**範例**
+
+```csharp
+public EventCenterExample()
+{
+    this.Register<EventMsgTest>();
+}
+```
+
+---
+
+### Remove {#remove}
+
+```csharp
+public void Remove<UClass>() where UClass : TClass
+public void Remove(int id)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| id | `int` | 註冊 id。未指定時，以 `typeof(UClass).GetHashCode()` 查找。 |
+
+**說明**
+
+[Delete](#delete) 的實例成員版本；查無時不動作。
+
+---
+
+### RemoveAll {#removeall}
+
+```csharp
+public void RemoveAll()
+```
+
+**說明**
+
+[DeleteAll](#deleteall) 的實例成員版本，清空快取中的所有已註冊物件。
 
 ---

@@ -77,7 +77,7 @@ export const Highlight = ({ children, color }) => (
 - OnCreate : 初始参数用。
 - OnBind : 初始事件用。
 - OnPreShow : 当有异步处理或者附属物件控制时，可以在此处理。例如 : TopUI 附属联动开启 LeftUI & RightUI，那么就可以在 TopUI 中的 OnPreShow 方法实现 Show LeftUI & RightUI。
-  - <Highlight color="#00d679">提醒</Highlight> **不建议在 OnPreClose 时进行相关 Show 的处理，如果有进行的话也没关系，因为针对 CloseAll 的 API 有提供 disabledPreClose 参数开关。**
+  - <Highlight color="#00d679">提醒</Highlight> **不建议在 OnPreClose 时进行相关 Show 的处理，如果有进行的话也没关系，因为针对 CloseAll 的 API 有提供 disableOnPreClose 参数开关。**
 - OnShow : 调用 Show 时，此方法会被激活，并且可以通过带入的 object 进行数据传送。
 - OnClose : 调用 Close 时，此方法会被激活。
 - OnRelease : 当物件被 Destroy 时，此方法会被激活。

@@ -1,5 +1,6 @@
 ---
 sidebar_position: 5
+description: AssetPatcher is the unified patch-update entry point of the AssetLoader module, covering patch flow control, package lifecycle management, downloader creation and combined downloads, plus version, state, and path queries.
 ---
 
 # AssetPatcher
@@ -22,80 +23,1759 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`AssetPatcher` is the unified patch-update entry point (Facade) of the **AssetLoader** module, powered by **YooAsset** underneath. It covers **patch flow control** (check, repair, pause, resume, cancel), **package lifecycle management** (initialization, update, unloading, default-package switching), **downloader** creation with multi-package combined downloads, plus version, state, and path queries.
+
+|  |  |
+| :--- | :--- |
+| **Namespace** | `OxGFrame.AssetLoader` |
+| **Type** | `public static class` |
+| **Source** | [AssetPatcher.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/AssetLoader/Scripts/Runtime/AssetPatcher.cs) |
+
+```csharp
 using OxGFrame.AssetLoader;
+using OxGFrame.AssetLoader.Bundle; // for PackageInfoWithBuild, BundleConfig.PlayMode, etc.
+```
 
-## Patch Status
+<Highlight color="#0373fc">Attention</Highlight> A `PatchLauncher` must be set up in the startup scene beforehand (it configures the PlayMode, preset packages, and download options). See the [AssetLoader Introduction](../../intro.mdx) for setup details.
 
-Used to monitor the progress of the current resource update process.
+## Quick Start {#quick-start}
 
-* **IsInitialized()**: Determines if the resource system has completed initialization.
-* **IsCheck()**: Whether a version check is currently being performed.
-* **IsRepair()**: Whether a repair (re-download) process is currently being performed.
-* **IsDone()**: Whether the update process is fully complete and resource loading can begin.
+```csharp
+// Start the patch check flow (version comparison -> manifest update -> main downloader -> download)
+AssetPatcher.Check();
+
+// Once the patch flow completes, assets can be loaded
+while (!AssetPatcher.IsDone())
+    await UniTask.Yield();
+
+// Initialize a DLC package and update its version and manifest
+bool success = await AssetPatcher.InitDlcPackage(new DlcPackageInfoWithBuild()
+{
+    packageName = "Dlc01Package",
+    dlcVersion = "v1.0"
+}, updatePackage: true);
+
+// Switch the default package (used by AssetLoaders when no packageName is given)
+AssetPatcher.SwitchDefaultPackage("Dlc01Package");
+
+// Query the current patch version
+string patchVersion = AssetPatcher.GetPatchVersion();
+```
+
+## General Rules {#general-rules}
+
+### Package Concept {#package-concept}
+
+OxGFrame manages assets in units of **packages** (YooAsset `ResourcePackage`):
+
+| Type | Description |
+| :--- | :--- |
+| **App Package** | Main asset package whose remote path follows the app version. |
+| **DLC Package** | Extension package with an **independent version** path (`dlcVersion`); can be initialized and unloaded on demand. |
+
+- **Preset Packages**: the package lists (App and DLC) configured on the `PatchLauncher` Inspector. They are initialized automatically on startup (`Awake`) and combined into the main download of the patch flow; the **first App package** in the list becomes the **default package**.
+- **Default package**: whenever an [AssetLoaders](./AssetLoaders.mdx) method is called without a `packageName`, the default package is used (changeable via [SetDefaultPackage](#setdefaultpackage) / [SwitchDefaultPackage](#switchdefaultpackage)).
+- Fields of the package info base class `PackageInfoWithBuild`:
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| buildMode | `BundleConfig.BuildMode` | Build pipeline (EditorSimulateMode only): `ScriptableBuildPipeline` / `BuiltinBuildPipeline` / `RawFileBuildPipeline`. |
+| packageName | `string` | Package name. |
+| hostServer | `string` | Custom host server URL (assembled automatically from the config when empty). |
+| fallbackHostServer | `string` | Custom fallback host server URL (assembled automatically from the config when empty). |
+| initializeParameters | `InitializeParameters` | YooAsset initialization parameters (used by CustomMode). |
+
+`AppPackageInfoWithBuild` inherits the fields above as-is; `DlcPackageInfoWithBuild` additionally adds:
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| withoutPlatform | `bool` | Whether the DLC remote path skips the platform segment.<br/>**Default**: `false` |
+| dlcVersion | `string` | DLC version. When empty, the newest (date-based) version is used automatically. |
+
+### PlayMode {#play-mode}
+
+The `BundleConfig.PlayMode` configured on the `PatchLauncher` determines how the asset system runs:
+
+| Value | Description |
+| :--- | :--- |
+| `EditorSimulateMode` | Editor simulate mode: runs in the editor without actually building AssetBundles. |
+| `OfflineMode` | Offline mode: uses built-in (StreamingAssets) assets only, no remote updates. |
+| `HostMode` | Host mode: connects to the asset server for version checks, manifest updates, and downloads. |
+| `WeakHostMode` | Weak-network host mode: like HostMode, but can keep running with the last recorded local version while offline (local assets must be complete). |
+| `WebGLMode` | WebGL mode: uses the web platform's built-in assets only (WebGL only). |
+| `WebGLRemoteMode` | WebGL remote mode: built-in assets plus a remote asset server (WebGL only). |
+| `CustomMode` | Custom mode: you provide the YooAsset `InitializeParameters` yourself; preset packages must be configured manually via [SetPresetPackages](#setpresetpackages). |
+
+<Highlight color="#00d679">Reminder</Highlight> After building, the PlayMode can be overridden with Scripting Define Symbols (`OXGFRAME_OFFLINE_MODE`, `OXGFRAME_HOST_MODE`, `OXGFRAME_WEAK_HOST_MODE`, `OXGFRAME_WEBGL_MODE`, `OXGFRAME_WEBGL_REMOTE_MODE`, `OXGFRAME_CUSTOM_MODE`).
+
+### YooAsset Version Compatibility {#yooasset-compat}
+
+Since **v3.7.0**, both **YooAsset 2.x** (verified with 2.3.18–2.3.19) and **YooAsset 3.x** (verified with 3.0.3-beta–3.0.5; **3.0.5+** recommended) are supported:
+
+- `YOOASSET_2` (2.x) or `YOOASSET_3` (3.x) is defined automatically from the installed `com.tuyoogame.yooasset` package version — **no manual macro setup is needed**.
+- The public API signatures are **identical** under both versions; no project code changes are required — the differences are handled internally by the framework.
+- The custom decryption interface method `IDecryptInitialize.CheckIsIntialized()` has been renamed to `CheckIsInitialized()` (only affects custom decryption implementations).
+
+| Item | YooAsset 2.x | YooAsset 3.x |
+| :--- | :--- | :--- |
+| Initialization & file systems | Classic `InitializeParameters` | Native v3 Options API and the new file systems (handled internally) |
+| `BuildMode.ArchiveFileBuildPipeline` ([BundleConfig](./BundleConfig.mdx)) | Not supported | Supported (incl. archive-package simulation in EditorSimulateMode) |
+| 8 built-in cryptogram services | Supported | Supported (implementing the v3 split decryption interfaces, plus `IBundleEncryptor` / `IManifestEncryptor` on the editor side) |
+| `onDownloadError` callback type | `DownloaderOperation.DownloadError` | Signature-compatible alias `Action<DownloadErrorEventArgs>` (usage unchanged) |
+| Raw file loading | `RawFileHandle` | `RawFileObject` / `EnsureBundleFileAsync` (same behavior) |
+
+### Patch Flow & Main Downloader {#patch-flow}
+
+- [Check](#check) / [Repair](#repair) start the state-machine-driven patch flow (version comparison → manifest update → downloader creation → download → done). Each stage raises events through `PatchEvents` for UI progress display and interaction.
+- [Pause](#pause) / [Resume](#resume) / [Cancel](#cancel) only affect the **main downloader** created by the patch flow; downloaders you create yourself via [GetPackageDownloader](#getpackagedownloader) and friends are not affected.
+- Once the flow completes, [IsDone](#isdone) returns `true` and assets can be loaded through [AssetLoaders](./AssetLoaders.mdx).
+
+### DownloadInfo Struct {#downloadinfo}
+
+```csharp
+public struct DownloadInfo
+```
+
+The return type of the [GetDownloadInfoWithCombinePackages](#getdownloadinfowithcombinepackages) family, used to pre-compute the pending download totals:
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| totalCount | `int` | Total number of files to download. |
+| totalBytes | `ulong` | Total number of bytes to download. |
 
 ---
 
-## Patch Operation
+## Patch Status {#patch-status}
 
-Controls the core behavior of the main downloader.
+Query the current state of the patch and asset system.
 
-### Check / Repair
-* **Check()**: Starts the patch update process (includes version comparison and file list acquisition).
-* **Repair()**: Starts the resource repair process, which forces a check of the integrity of all files.
+### Method Overview {#status-overview}
 
-### Control Methods
-* **Pause() / Resume()**: Pauses or resumes main downloader tasks.
-* **Cancel()**: Cancels download.
-
----
-
-## Package Operation (Package Management)
-
-Manages the lifecycle and local cache of each independent Package.
-
-### InitPackage
-Initializes a specified Package. The system automatically determines if the Package is an **App (Main)** or **DLC (Extension)** type and automatically looks for resources from remote or built-in paths.
-
-### UnloadPackageAndClearCacheFiles
-Unloads a specified Package and completely deletes associated resource files from the disk (Sandbox).
-* **Params**:
-    * `string packageName`: Package name.
-    * `bool destroyPackage`: Whether to also release the Package from memory.
-
-### Default Package Settings
-* **SetDefaultPackage**: Sets the initial default resource package.
-* **SwitchDefaultPackage**: Switches the default resource package between registered packages.
-* **GetDefaultPackageName**: Gets the package name currently used as default when loading resources.
+| Method | Description |
+| :--- | :--- |
+| [IsInitialized](#isinitialized) | Whether the asset system (preset packages) has finished initializing. |
+| [IsReleased](#isreleased) | Whether the asset system has been released (`Release` was called). |
+| [IsCheck](#ischeck) | Whether a patch check flow is currently running. |
+| [IsRepair](#isrepair) | Whether a repair flow is currently running. |
+| [IsDone](#isdone) | Whether the patch flow has fully completed. |
 
 ---
 
-## Downloader (Downloader Management)
+### IsInitialized {#isinitialized}
 
-Provides a highly flexible download solution, supporting combined downloading of multiple Packages at the same time.
+```csharp
+public static bool IsInitialized()
+```
 
-### GetPackageDownloader
-Gets a downloader for a single Package, supporting precise filtering of content to be updated via **Tags** or **AssetNames**.
+**Returns**
 
-### BeginDownloadWithCombinePackages
-Combines update requests for multiple Packages. This is very useful when handling "DLC + Main resource update", allowing them to be displayed in a single progress bar.
+`bool` — whether all preset packages have finished initializing.
 
-**Key Parameters:**
-* `OnDownloadSpeedProgress`: Callback for receiving download speed, remaining time, and total progress.
-* `DownloadError`: Callback when download fails (including file information and error message).
+**Description**
 
----
-
-## Path & Storage
-
-* **GetLocalSandboxRootPath()**: Gets the local persistent storage root directory (.../yoo).
-* **GetBuiltinRootPath()**: Gets the built-in resource root directory within StreamingAssets.
-* **GoToAppStore()**: Calls the system browser to go to the store link (to update the App itself).
+Tells whether the asset system has completed initialization (`true` after the `PatchLauncher` startup initialization of preset packages, or after a successful manual [InitSetupPresetPackages](#initsetuppresetpackages) call).
 
 ---
 
-## Release
+### IsReleased {#isreleased}
 
-### Release()
-<Highlight color="#ff2f00">Important</Highlight> Call when the game is about to close. This method asynchronously releases resource references for all Packages and clears global configurations related to Bundles, ensuring correct memory recovery.
+```csharp
+public static bool IsReleased()
+```
+
+**Returns**
+
+`bool` — whether [Release](#release) has been called.
+
+**Description**
+
+Tells whether the asset system (YooAsset) has been released. After release, bundle-unloading operations in `AssetLoaders` are skipped.
+
+---
+
+### IsCheck {#ischeck}
+
+```csharp
+public static bool IsCheck()
+```
+
+**Returns**
+
+`bool` — whether a patch check flow is currently running.
+
+**Description**
+
+Tells whether the patch check flow started by [Check](#check) is in progress (`false` after the flow completes or is canceled).
+
+---
+
+### IsRepair {#isrepair}
+
+```csharp
+public static bool IsRepair()
+```
+
+**Returns**
+
+`bool` — whether a repair flow is currently running.
+
+**Description**
+
+Tells whether the repair flow started by [Repair](#repair) is in progress.
+
+---
+
+### IsDone {#isdone}
+
+```csharp
+public static bool IsDone()
+```
+
+**Returns**
+
+`bool` — whether the patch flow has fully completed.
+
+**Description**
+
+Tells whether the patch flow has completed and asset loading can begin. Reset to `false` when [Check](#check) / [Repair](#repair) starts, and set to `true` when the flow finishes.
+
+**Example**
+
+```csharp
+AssetPatcher.Check();
+
+while (!AssetPatcher.IsDone())
+    await UniTask.Yield();
+
+// Patch finished — start loading assets
+```
+
+---
+
+## Patch Operations {#patch-operation}
+
+Control the patch flow and the main downloader.
+
+### Method Overview {#operation-overview}
+
+#### Flow Control
+
+| Method | Description |
+| :--- | :--- |
+| [SetPresetPackages](#setpresetpackages) | Configures preset App/DLC packages at runtime (for CustomMode). |
+| [InitSetupPresetPackages](#initsetuppresetpackages) | Initializes the preset packages manually. |
+| [Check](#check) | Starts the patch check flow. |
+| [Repair](#repair) | Starts the repair flow (clears the local cache and re-downloads). |
+
+#### Main Downloader Control
+
+| Method | Description |
+| :--- | :--- |
+| [Pause](#pause) | Pauses the main downloader. |
+| [Resume](#resume) | Resumes the main downloader. |
+| [Cancel](#cancel) | Cancels the main downloader. |
+
+---
+
+### SetPresetPackages {#setpresetpackages}
+
+```csharp
+public static void SetPresetPackages(List<AppPackageInfoWithBuild> appPackages, List<DlcPackageInfoWithBuild> dlcPackages)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| appPackages | `List<AppPackageInfoWithBuild>` | Preset App package list (the first entry becomes the default package). |
+| dlcPackages | `List<DlcPackageInfoWithBuild>` | Preset DLC package list. |
+
+**Description**
+
+Configures the preset packages at runtime (overriding the lists set on the `PatchLauncher`).
+
+<Highlight color="#00d679">Reminder</Highlight> Calling this before the `PatchLauncher` awakes is safe — the values are written to `BundleConfig` instead, with a warning logged (no exception is thrown).
+
+<Highlight color="#0373fc">Attention</Highlight> Intended mainly for **CustomMode** — in CustomMode the preset lists on the `PatchLauncher` Inspector are ignored, so configure them with this method and then call [InitSetupPresetPackages](#initsetuppresetpackages).
+
+**Example**
+
+```csharp
+AssetPatcher.SetPresetPackages(
+    new List<AppPackageInfoWithBuild>()
+    {
+        new AppPackageInfoWithBuild() { packageName = "DefaultPackage" }
+    },
+    new List<DlcPackageInfoWithBuild>());
+
+await AssetPatcher.InitSetupPresetPackages();
+```
+
+---
+
+### InitSetupPresetPackages {#initsetuppresetpackages}
+
+```csharp
+public static async UniTask InitSetupPresetPackages()
+```
+
+**Returns**
+
+`UniTask` — an awaitable async operation.
+
+**Description**
+
+Initializes and sets up all preset packages (App and DLC). On completion, the first App package in the list is set as the default package and the [IsInitialized](#isinitialized) state is updated.
+
+<Highlight color="#00d679">Reminder</Highlight> Normally the `PatchLauncher` runs this automatically in `Awake`; call it manually only in CustomMode or when the `initializePresetPackages` option is disabled.
+
+---
+
+### Check {#check}
+
+```csharp
+public static void Check()
+```
+
+**Description**
+
+Starts the patch check flow: compares the app version, updates package versions and asset manifests, creates the main downloader, and downloads the updated content. Each stage raises events through `PatchEvents`.
+
+<Highlight color="#0373fc">Attention</Highlight> If a check or repair flow is already running, repeated calls are ignored (a warning is logged).
+
+**Example**
+
+```csharp
+// Start the patch flow
+AssetPatcher.Check();
+
+// Wait for completion by polling (or subscribe to PatchEvents)
+while (!AssetPatcher.IsDone())
+    await UniTask.Yield();
+```
+
+---
+
+### Repair {#repair}
+
+```csharp
+public static void Repair()
+```
+
+**Description**
+
+Starts the repair flow: **clears the local patch cache data and config files (empties the download directory)**, then reruns the full patch flow. Useful for repairing corrupted or incomplete local assets.
+
+<Highlight color="#ff2f00">Important</Highlight> Repairing deletes the downloaded local assets — everything must be downloaded again afterwards.
+
+---
+
+### Pause {#pause}
+
+```csharp
+public static void Pause()
+```
+
+**Description**
+
+Pauses all download tasks of the patch flow's main downloader. Has no effect when no patch flow is running (no main downloader exists).
+
+---
+
+### Resume {#resume}
+
+```csharp
+public static void Resume()
+```
+
+**Description**
+
+Resumes all download tasks of the patch flow's main downloader.
+
+---
+
+### Cancel {#cancel}
+
+```csharp
+public static void Cancel()
+```
+
+**Description**
+
+Cancels the main downloader's download tasks, raises the cancellation event (`PatchEvents.PatchDownloadCanceled`), and ends the Check/Repair states.
+
+---
+
+## Version & Platform Info {#version-info}
+
+### Method Overview {#version-overview}
+
+| Method | Description |
+| :--- | :--- |
+| [GetPlatform](#getplatform) | Gets the current runtime platform name. |
+| [GetAppVersion](#getappversion) | Gets the app version. |
+| [GetPatchVersion](#getpatchversion) | Gets the newest patch (asset) version. |
+
+---
+
+### GetPlatform {#getplatform}
+
+```csharp
+public static string GetPlatform()
+```
+
+**Returns**
+
+`string` — the platform name; if the patch flow has not obtained it yet (e.g., simulate mode), `Application.platform.ToString()` is returned.
+
+**Description**
+
+Gets the runtime platform name recorded in the patch configuration (from the AppConfig).
+
+---
+
+### GetAppVersion {#getappversion}
+
+```csharp
+public static string GetAppVersion()
+```
+
+**Returns**
+
+`string` — the app version; if the patch flow has not obtained it yet (e.g., simulate mode), `Application.version` is returned.
+
+**Description**
+
+Gets the app version recorded in the patch configuration (from the AppConfig).
+
+---
+
+### GetPatchVersion {#getpatchversion}
+
+```csharp
+public static string GetPatchVersion(bool encode = false, int length = 16, string separator = "-")
+public static string GetPatchVersion(string[] customPatchVersions, bool encode = false, int length = 16, string separator = "-")
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| customPatchVersions | `string[]` | Custom version list. If omitted, the patch versions recorded for the preset packages are used. |
+| encode | `bool` | Whether to output an encoded version string (recommended for display).<br/>**Default**: `false` |
+| length | `int` | Length of the encoded string (valid range 11–32).<br/>**Default**: `16` |
+| separator | `string` | Separator of the encoded string.<br/>**Default**: `"-"` |
+
+**Returns**
+
+`string` — the newest patch version string; if no version record exists (e.g., simulate mode), a version generated from the current date is returned.
+
+**Description**
+
+Gets the **newest** patch (asset) version among the version list. With `encode = true`, an encoded display string is returned.
+
+**Example**
+
+```csharp
+// Raw version string
+string version = AssetPatcher.GetPatchVersion();
+
+// Encoded display version
+string display = AssetPatcher.GetPatchVersion(encode: true);
+```
+
+---
+
+## Package Management {#package-operation}
+
+Manage package initialization, updating, queries, default switching, and unloading.
+
+### Method Overview {#package-overview}
+
+#### Initialization & Update
+
+| Method | Description |
+| :--- | :--- |
+| [InitPackage](#initpackage) | Initializes an App or DLC package automatically based on the info type. |
+| [InitAppPackage](#initapppackage) | Initializes an App package. |
+| [InitDlcPackage](#initdlcpackage) | Initializes a DLC package. |
+| [UpdatePackage](#updatepackage) | Updates the version and manifest of a package. |
+
+#### Default Package
+
+| Method | Description |
+| :--- | :--- |
+| [SetDefaultPackage](#setdefaultpackage) | Sets the default package (auto-registers when not registered). |
+| [SwitchDefaultPackage](#switchdefaultpackage) | Switches the default among registered packages. |
+| [GetDefaultPackageName](#getdefaultpackagename) | Gets the default package name. |
+| [GetDefaultPackage](#getdefaultpackage) | Gets the default package instance. |
+
+#### Package Getters
+
+| Method | Description |
+| :--- | :--- |
+| [GetPackage](#getpackage) | Gets a package by name. |
+| [GetPackages](#getpackages) | Gets packages by names in batch. |
+| [GetAllPackages](#getallpackages) | Gets all registered packages. |
+| [GetPresetAppPackages](#getpresetapppackages) | Gets the preset App packages. |
+| [GetPresetDlcPackages](#getpresetdlcpackages) | Gets the preset DLC packages. |
+| [GetPresetAppPackageInfos](#getpresetapppackageinfos) | Gets the preset App package info list. |
+| [GetPresetAppPackageNames](#getpresetapppackagenames) | Gets the preset App package name list. |
+| [GetPresetDlcPackageInfos](#getpresetdlcpackageinfos) | Gets the preset DLC package info list. |
+| [GetPresetDlcPackageNames](#getpresetdlcpackagenames) | Gets the preset DLC package name list. |
+
+#### Local File Query & Unload
+
+| Method | Description |
+| :--- | :--- |
+| [CheckPackageHasAnyFilesInLocal](#checkpackagehasanyfilesinlocal) | Checks whether the package has any files in the local sandbox. |
+| [GetPackageSizeInLocal](#getpackagesizeinlocal) | Gets the total file size of the package in the local sandbox. |
+| [UnloadPackage](#unloadpackage) | Unloads (destroys) the package from memory. |
+| [UnloadPackageAndClearCacheFiles](#unloadpackageandclearcachefiles) | Unloads the package and clears its cache files from the local sandbox. |
+
+---
+
+### InitPackage {#initpackage}
+
+```csharp
+public static async UniTask<bool> InitPackage(PackageInfoWithBuild packageInfo, bool updatePackage = false)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageInfo | `PackageInfoWithBuild` | Package info (`AppPackageInfoWithBuild` or `DlcPackageInfoWithBuild`). |
+| updatePackage | `bool` | Whether to update the version and manifest right after successful initialization.<br/>**Default**: `false` |
+
+**Returns**
+
+`UniTask<bool>` — whether initialization (and the optional update) succeeded; `false` when `packageInfo` is neither an App nor a DLC info type.
+
+**Description**
+
+Dispatches automatically to [InitAppPackage](#initapppackage) or [InitDlcPackage](#initdlcpackage) based on the runtime type of `packageInfo`.
+
+---
+
+### InitAppPackage {#initapppackage}
+
+```csharp
+public static async UniTask<bool> InitAppPackage(AppPackageInfoWithBuild packageInfo, bool updatePackage = false)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageInfo | `AppPackageInfoWithBuild` | App package info (see [Package Concept](#package-concept) for the fields). |
+| updatePackage | `bool` | Whether to update the version and manifest right after successful initialization.<br/>**Default**: `false` |
+
+**Returns**
+
+`UniTask<bool>` — whether initialization (and the optional update) succeeded.
+
+**Description**
+
+Registers the package and initializes it according to the current PlayMode. With `autoConfigureServerEndpoints` enabled (a PlayMode parameter), the host and fallback server URLs are assembled automatically from the configuration (used by the host-mode family).
+
+<Highlight color="#0373fc">Attention</Highlight>
+
+- An already-initialized package is not re-initialized; only the optional update (per `updatePackage`) is performed.
+- Modern YooAsset requires the version and manifest before assets can be loaded, so the startup flow always initializes preset packages with `updatePackage = true`.
+
+**Example**
+
+```csharp
+bool success = await AssetPatcher.InitAppPackage(new AppPackageInfoWithBuild()
+{
+    packageName = "OtherPackage"
+}, updatePackage: true);
+```
+
+---
+
+### InitDlcPackage {#initdlcpackage}
+
+```csharp
+public static async UniTask<bool> InitDlcPackage(DlcPackageInfoWithBuild packageInfo, bool updatePackage = false)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageInfo | `DlcPackageInfoWithBuild` | DLC package info (includes `dlcVersion` and `withoutPlatform`; see [Package Concept](#package-concept)). |
+| updatePackage | `bool` | Whether to update the version and manifest right after successful initialization.<br/>**Default**: `false` |
+
+**Returns**
+
+`UniTask<bool>` — whether initialization (and the optional update) succeeded.
+
+**Description**
+
+Registers the package and initializes it according to the current PlayMode. If `packageInfo.hostServer` / `fallbackHostServer` are set they take precedence; otherwise (with `autoConfigureServerEndpoints` enabled) the URLs are assembled from the DLC path rules (including `dlcVersion` and `withoutPlatform`).
+
+**Example**
+
+```csharp
+// Initialize a DLC package pinned to a fixed version
+bool success = await AssetPatcher.InitDlcPackage(new DlcPackageInfoWithBuild()
+{
+    packageName = "Dlc01Package",
+    dlcVersion = "v1.0"
+}, updatePackage: true);
+
+// Leave dlcVersion empty to use the newest (date-based) version automatically
+await AssetPatcher.InitDlcPackage(new DlcPackageInfoWithBuild()
+{
+    packageName = "Dlc02Package",
+    dlcVersion = null
+}, updatePackage: true);
+```
+
+---
+
+### UpdatePackage {#updatepackage}
+
+```csharp
+public static async UniTask<bool> UpdatePackage(string packageName)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. |
+
+**Returns**
+
+`UniTask<bool>` — whether the version request and manifest update succeeded.
+
+**Description**
+
+Requests the newest version of the package from the server and updates its asset manifest; on success the version is recorded locally.
+
+<Highlight color="#00d679">Reminder</Highlight> In weak-network mode (with `enableLastLocalVersionsCheckInWeakNetwork` enabled), if the version request fails, the last recorded local version is used to update the manifest and the local content is verified for completeness (returns `false` when incomplete — a network connection is required).
+
+---
+
+### SetDefaultPackage {#setdefaultpackage}
+
+```csharp
+public static void SetDefaultPackage(string packageName)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. |
+
+**Description**
+
+Sets the given package as the default package; if the package is **not registered yet, it is registered automatically** first.
+
+<Highlight color="#0373fc">Attention</Highlight> Auto-registration is not initialization — a newly registered package still needs to go through [InitPackage](#initpackage) before assets can be loaded from it.
+
+---
+
+### SwitchDefaultPackage {#switchdefaultpackage}
+
+```csharp
+public static void SwitchDefaultPackage(string packageName)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. |
+
+**Description**
+
+Switches the default package among the **registered** packages. If the name is not found, an error is logged and nothing changes.
+
+**Example**
+
+```csharp
+// Make the DLC package the default
+AssetPatcher.SwitchDefaultPackage("Dlc01Package");
+
+// From now on, AssetLoaders calls without a packageName use Dlc01Package
+var prefab = await AssetLoaders.LoadAssetAsync<GameObject>("DlcShopUI");
+```
+
+---
+
+### GetDefaultPackageName {#getdefaultpackagename}
+
+```csharp
+public static string GetDefaultPackageName()
+```
+
+**Returns**
+
+`string` — the name of the current default package.
+
+**Description**
+
+Gets the package name currently used by default when loading assets.
+
+---
+
+### GetDefaultPackage {#getdefaultpackage}
+
+```csharp
+public static ResourcePackage GetDefaultPackage()
+```
+
+**Returns**
+
+`ResourcePackage` — the current default package instance (YooAsset).
+
+**Description**
+
+Gets the default package instance, usable with the [downloader](#downloader) family of methods.
+
+---
+
+### GetPackage {#getpackage}
+
+```csharp
+public static ResourcePackage GetPackage(string packageName)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. |
+
+**Returns**
+
+`ResourcePackage` — the package matching the name; `null` when the name is empty or not found.
+
+**Description**
+
+Gets a registered package instance by name.
+
+---
+
+### GetPackages {#getpackages}
+
+```csharp
+public static ResourcePackage[] GetPackages(params string[] packageNames)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageNames | `string[]` | Package name list (params). |
+
+**Returns**
+
+`ResourcePackage[]` — the packages found (missing ones are skipped); `null` when the input list is empty.
+
+**Description**
+
+Gets registered package instances by names in batch.
+
+---
+
+### GetAllPackages {#getallpackages}
+
+```csharp
+public static ResourcePackage[] GetAllPackages()
+```
+
+**Returns**
+
+`ResourcePackage[]` — all registered packages.
+
+**Description**
+
+Gets all package instances currently registered.
+
+---
+
+### GetPresetAppPackages {#getpresetapppackages}
+
+```csharp
+public static ResourcePackage[] GetPresetAppPackages()
+```
+
+**Returns**
+
+`ResourcePackage[]` — the preset App package instances (unregistered ones are skipped); an empty array when the list is empty.
+
+**Description**
+
+Gets the preset App package instances configured on the `PatchLauncher`.
+
+**Example**
+
+```csharp
+// Download the updates of all preset App packages combined
+var packages = AssetPatcher.GetPresetAppPackages();
+bool succeed = await AssetPatcher.BeginDownloadWithCombinePackages(packages);
+```
+
+---
+
+### GetPresetDlcPackages {#getpresetdlcpackages}
+
+```csharp
+public static ResourcePackage[] GetPresetDlcPackages()
+```
+
+**Returns**
+
+`ResourcePackage[]` — the preset DLC package instances (unregistered ones are skipped); an empty array when the list is empty.
+
+**Description**
+
+Gets the preset DLC package instances configured on the `PatchLauncher`.
+
+---
+
+### GetPresetAppPackageInfos {#getpresetapppackageinfos}
+
+```csharp
+public static PackageInfoWithBuild[] GetPresetAppPackageInfos()
+```
+
+**Returns**
+
+`PackageInfoWithBuild[]` — the preset App package info list.
+
+**Description**
+
+Gets the preset App package infos (name, build pipeline, etc.) configured on the `PatchLauncher`.
+
+---
+
+### GetPresetAppPackageNames {#getpresetapppackagenames}
+
+```csharp
+public static string[] GetPresetAppPackageNames()
+```
+
+**Returns**
+
+`string[]` — the preset App package names.
+
+**Description**
+
+Gets the preset App package names configured on the `PatchLauncher`.
+
+---
+
+### GetPresetDlcPackageInfos {#getpresetdlcpackageinfos}
+
+```csharp
+public static DlcPackageInfoWithBuild[] GetPresetDlcPackageInfos()
+```
+
+**Returns**
+
+`DlcPackageInfoWithBuild[]` — the preset DLC package info list.
+
+**Description**
+
+Gets the preset DLC package infos (name, version, etc.) configured on the `PatchLauncher`.
+
+---
+
+### GetPresetDlcPackageNames {#getpresetdlcpackagenames}
+
+```csharp
+public static string[] GetPresetDlcPackageNames()
+```
+
+**Returns**
+
+`string[]` — the preset DLC package names.
+
+**Description**
+
+Gets the preset DLC package names configured on the `PatchLauncher`.
+
+---
+
+### CheckPackageHasAnyFilesInLocal {#checkpackagehasanyfilesinlocal}
+
+```csharp
+public static bool CheckPackageHasAnyFilesInLocal(string packageName)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. |
+
+**Returns**
+
+`bool` — whether the package has any files in its local sandbox directory; `false` when the package or the directory does not exist.
+
+**Description**
+
+Checks whether the package has files downloaded locally — useful to tell whether a DLC has been downloaded.
+
+<Highlight color="#00d679">Reminder</Highlight> Always returns `true` in `EditorSimulateMode`.
+
+---
+
+### GetPackageSizeInLocal {#getpackagesizeinlocal}
+
+```csharp
+public static ulong GetPackageSizeInLocal(string packageName)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. |
+
+**Returns**
+
+`ulong` — the total file size (bytes) of the package in the local sandbox; `0` when the package or the directory does not exist.
+
+**Description**
+
+Sums the file sizes of the package in its local sandbox directory.
+
+<Highlight color="#00d679">Reminder</Highlight> Always returns `1` in `EditorSimulateMode`.
+
+---
+
+### UnloadPackage {#unloadpackage}
+
+```csharp
+public static async UniTask<bool> UnloadPackage(string packageName)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. |
+
+**Returns**
+
+`UniTask<bool>` — whether unloading succeeded; treated as handled (`true`) when the package is not found.
+
+**Description**
+
+Unloads (destroys) the package from memory and unregisters it. The cache files in the local sandbox are **not** deleted.
+
+---
+
+### UnloadPackageAndClearCacheFiles {#unloadpackageandclearcachefiles}
+
+```csharp
+public static async UniTask<bool> UnloadPackageAndClearCacheFiles(string packageName, bool destroyPackage = false)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. |
+| destroyPackage | `bool` | Whether to also clear the manifest files and destroy/remove the package from memory.<br/>**Default**: `false` |
+
+**Returns**
+
+`UniTask<bool>` — whether clearing (and unloading) succeeded; treated as handled (`true`) when the package is not found.
+
+**Description**
+
+Clears the package's bundle cache files from the local sandbox; with `destroyPackage = true` the manifest files are cleared as well and the package is destroyed from memory.
+
+<Highlight color="#ff2f00">Important</Highlight> This deletes the downloaded asset files locally — typically used to remove a DLC that is no longer needed. To use it again, the package must be re-initialized and re-downloaded.
+
+**Example**
+
+```csharp
+// Remove a DLC completely (clear files + destroy from memory)
+bool succeed = await AssetPatcher.UnloadPackageAndClearCacheFiles("Dlc01Package", true);
+```
+
+---
+
+## Downloader {#downloader}
+
+Creates YooAsset downloaders (`ResourceDownloaderOperation`) with filtering by **Tags**, **AssetNames**, or **AssetInfos**, and supports **combining multiple packages** into one download with unified progress (ideal for updating "DLC + main assets" in a single progress bar).
+
+The download progress delegate (`DownloadSpeedCalculator.OnDownloadSpeedProgress`):
+
+```csharp
+public delegate void OnDownloadSpeedProgress(int totalDownloadCount, int currentDownloadCount, long totalDownloadBytes, long currentDownloadBytes, long downloadSpeedBytes)
+```
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| totalDownloadCount | `int` | Total number of files to download. |
+| currentDownloadCount | `int` | Number of files downloaded so far. |
+| totalDownloadBytes | `long` | Total number of bytes to download. |
+| currentDownloadBytes | `long` | Number of bytes downloaded so far. |
+| downloadSpeedBytes | `long` | Current download speed (bytes/second). |
+
+<Highlight color="#00d679">Reminder</Highlight> Passing `-1` for `maxConcurrencyDownloadCount` (concurrent downloads) or `failedRetryCount` (retries on failure) uses the global `PatchLauncher` settings (defaults: `10` concurrent, `3` retries).
+
+### Method Overview {#downloader-overview}
+
+#### Single-Package Downloaders
+
+| Method | Description |
+| :--- | :--- |
+| [GetPackageDownloader](#getpackagedownloader) | Creates a downloader for all content. |
+| [GetPackageDownloaderByTags](#getpackagedownloaderbytags) | Creates a downloader filtered by tags. |
+| [GetPackageDownloaderByAssetNames](#getpackagedownloaderbyassetnames) | Creates a downloader filtered by asset names. |
+| [GetPackageDownloaderByAssetInfos](#getpackagedownloaderbyassetinfos) | Creates a downloader filtered by `AssetInfo`. |
+
+#### Combined Downloader Getters
+
+| Method | Description |
+| :--- | :--- |
+| [GetDownloadersWithCombinePackages](#getdownloaderswithcombinepackages) | Creates downloader arrays for multiple packages. |
+| [GetDownloadersWithCombinePackagesByTags](#getdownloaderswithcombinepackagesbytags) | Creates downloader arrays for multiple packages by tags. |
+| [GetDownloadersWithCombinePackagesByAssetNames](#getdownloaderswithcombinepackagesbyassetnames) | Creates downloader arrays for multiple packages by asset names. |
+| [GetDownloadersWithCombinePackagesByAssetInfos](#getdownloaderswithcombinepackagesbyassetinfos) | Creates downloader arrays for multiple packages by `AssetInfo`. |
+
+#### Combined Download
+
+| Method | Description |
+| :--- | :--- |
+| [BeginDownloadWithCombinePackages](#begindownloadwithcombinepackages) | Starts a combined download of multiple packages. |
+| [BeginDownloadWithCombinePackagesByTags](#begindownloadwithcombinepackagesbytags) | Starts a combined download of multiple packages by tags. |
+| [BeginDownloadWithCombinePackagesByAssetNames](#begindownloadwithcombinepackagesbyassetnames) | Starts a combined download of multiple packages by asset names. |
+| [BeginDownloadWithCombinePackagesByAssetInfos](#begindownloadwithcombinepackagesbyassetinfos) | Starts a combined download of multiple packages by `AssetInfo`. |
+| [BeginDownloadWithCombineDownloaders](#begindownloadwithcombinedownloaders) | Starts a combined download of prepared downloaders. |
+
+#### Download Info
+
+| Method | Description |
+| :--- | :--- |
+| [GetDownloadInfoWithCombinePackages](#getdownloadinfowithcombinepackages) | Totals the pending download count and size of multiple packages. |
+| [GetDownloadInfoWithCombinePackagesByTags](#getdownloadinfowithcombinepackagesbytags) | Totals the pending downloads filtered by tags. |
+| [GetDownloadInfoWithCombinePackagesByAssetNames](#getdownloadinfowithcombinepackagesbyassetnames) | Totals the pending downloads filtered by asset names. |
+| [GetDownloadInfoWithCombinePackagesByAssetInfos](#getdownloadinfowithcombinepackagesbyassetinfos) | Totals the pending downloads filtered by `AssetInfo`. |
+
+---
+
+### GetPackageDownloader {#getpackagedownloader}
+
+```csharp
+public static ResourceDownloaderOperation GetPackageDownloader(ResourcePackage package)
+public static ResourceDownloaderOperation GetPackageDownloader(ResourcePackage package, int maxConcurrencyDownloadCount, int failedRetryCount)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| package | `ResourcePackage` | Target package. |
+| maxConcurrencyDownloadCount | `int` | Concurrent download count. `-1` uses the global settings. |
+| failedRetryCount | `int` | Retry count on download failure. `-1` uses the global settings. |
+
+**Returns**
+
+`ResourceDownloaderOperation` — a downloader (YooAsset) for all updated content of the package.
+
+**Description**
+
+Creates a resource downloader for the package. Use the downloader's `TotalDownloadCount` / `TotalDownloadBytes` to inspect the pending downloads, and start the download at your own timing.
+
+**Example**
+
+```csharp
+var package = AssetPatcher.GetPackage("Dlc01Package");
+var downloader = AssetPatcher.GetPackageDownloader(package);
+
+Debug.Log($"Files to download: {downloader.TotalDownloadCount}, size: {downloader.TotalDownloadBytes} bytes");
+```
+
+---
+
+### GetPackageDownloaderByTags {#getpackagedownloaderbytags}
+
+```csharp
+public static ResourceDownloaderOperation GetPackageDownloaderByTags(ResourcePackage package, params string[] tags)
+public static ResourceDownloaderOperation GetPackageDownloaderByTags(ResourcePackage package, int maxConcurrencyDownloadCount, int failedRetryCount, params string[] tags)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| package | `ResourcePackage` | Target package. |
+| maxConcurrencyDownloadCount | `int` | Concurrent download count. `-1` uses the global settings. |
+| failedRetryCount | `int` | Retry count on download failure. `-1` uses the global settings. |
+| tags | `string[]` | Asset group tags (params). When null or empty, all content is downloaded. |
+
+**Returns**
+
+`ResourceDownloaderOperation` — a downloader filtered by tags.
+
+**Description**
+
+Creates a downloader restricted to the given **tags** — useful for downloading in batches (by group).
+
+**Example**
+
+```csharp
+var package = AssetPatcher.GetDefaultPackage();
+var downloader = AssetPatcher.GetPackageDownloaderByTags(package, "UI", "Battle");
+```
+
+---
+
+### GetPackageDownloaderByAssetNames {#getpackagedownloaderbyassetnames}
+
+```csharp
+public static ResourceDownloaderOperation GetPackageDownloaderByAssetNames(ResourcePackage package, params string[] assetNames)
+public static ResourceDownloaderOperation GetPackageDownloaderByAssetNames(ResourcePackage package, int maxConcurrencyDownloadCount, int failedRetryCount, params string[] assetNames)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| package | `ResourcePackage` | Target package. |
+| maxConcurrencyDownloadCount | `int` | Concurrent download count. `-1` uses the global settings. |
+| failedRetryCount | `int` | Retry count on download failure. `-1` uses the global settings. |
+| assetNames | `string[]` | Asset name list (params). When null or empty, all content is downloaded. |
+
+**Returns**
+
+`ResourceDownloaderOperation` — a downloader filtered by asset names.
+
+**Description**
+
+Creates a downloader restricted to the bundles that contain the given **asset names**, allowing precise updates of specific assets.
+
+---
+
+### GetPackageDownloaderByAssetInfos {#getpackagedownloaderbyassetinfos}
+
+```csharp
+public static ResourceDownloaderOperation GetPackageDownloaderByAssetInfos(ResourcePackage package, params AssetInfo[] assetInfos)
+public static ResourceDownloaderOperation GetPackageDownloaderByAssetInfos(ResourcePackage package, int maxConcurrencyDownloadCount, int failedRetryCount, params AssetInfo[] assetInfos)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| package | `ResourcePackage` | Target package. |
+| maxConcurrencyDownloadCount | `int` | Concurrent download count. `-1` uses the global settings. |
+| failedRetryCount | `int` | Retry count on download failure. `-1` uses the global settings. |
+| assetInfos | `AssetInfo[]` | YooAsset `AssetInfo` list (params). When null or empty, all content is downloaded. |
+
+**Returns**
+
+`ResourceDownloaderOperation` — a downloader filtered by `AssetInfo`.
+
+**Description**
+
+Creates a downloader restricted to the bundles that contain the given `AssetInfo` entries.
+
+---
+
+### GetDownloadersWithCombinePackages {#getdownloaderswithcombinepackages}
+
+```csharp
+public static ResourceDownloaderOperation[] GetDownloadersWithCombinePackages(ResourcePackage[] packages)
+public static ResourceDownloaderOperation[] GetDownloadersWithCombinePackages(ResourcePackage[] packages, int maxConcurrencyDownloadCount, int failedRetryCount)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | Target packages. |
+| maxConcurrencyDownloadCount | `int` | Concurrent download count. `-1` uses the global settings. |
+| failedRetryCount | `int` | Retry count on download failure. `-1` uses the global settings. |
+
+**Returns**
+
+`ResourceDownloaderOperation[]` — an array with one downloader per package.
+
+**Description**
+
+Creates one downloader per package, usable with [BeginDownloadWithCombineDownloaders](#begindownloadwithcombinedownloaders) for a combined download.
+
+---
+
+### GetDownloadersWithCombinePackagesByTags {#getdownloaderswithcombinepackagesbytags}
+
+```csharp
+public static ResourceDownloaderOperation[] GetDownloadersWithCombinePackagesByTags(ResourcePackage[] packages, params string[] tags)
+public static ResourceDownloaderOperation[] GetDownloadersWithCombinePackagesByTags(ResourcePackage[] packages, int maxConcurrencyDownloadCount, int failedRetryCount, params string[] tags)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | Target packages. |
+| maxConcurrencyDownloadCount | `int` | Concurrent download count. `-1` uses the global settings. |
+| failedRetryCount | `int` | Retry count on download failure. `-1` uses the global settings. |
+| tags | `string[]` | Asset group tags (params). When null or empty, all content is downloaded. |
+
+**Returns**
+
+`ResourceDownloaderOperation[]` — downloader array filtered by tags.
+
+**Description**
+
+Creates one downloader per package filtered by tags.
+
+---
+
+### GetDownloadersWithCombinePackagesByAssetNames {#getdownloaderswithcombinepackagesbyassetnames}
+
+```csharp
+public static ResourceDownloaderOperation[] GetDownloadersWithCombinePackagesByAssetNames(ResourcePackage[] packages, params string[] assetNames)
+public static ResourceDownloaderOperation[] GetDownloadersWithCombinePackagesByAssetNames(ResourcePackage[] packages, int maxConcurrencyDownloadCount, int failedRetryCount, params string[] assetNames)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | Target packages. |
+| maxConcurrencyDownloadCount | `int` | Concurrent download count. `-1` uses the global settings. |
+| failedRetryCount | `int` | Retry count on download failure. `-1` uses the global settings. |
+| assetNames | `string[]` | Asset name list (params). When null or empty, all content is downloaded. |
+
+**Returns**
+
+`ResourceDownloaderOperation[]` — downloader array filtered by asset names.
+
+**Description**
+
+Creates one downloader per package filtered by asset names.
+
+---
+
+### GetDownloadersWithCombinePackagesByAssetInfos {#getdownloaderswithcombinepackagesbyassetinfos}
+
+```csharp
+public static ResourceDownloaderOperation[] GetDownloadersWithCombinePackagesByAssetInfos(ResourcePackage[] packages, params AssetInfo[] assetInfos)
+public static ResourceDownloaderOperation[] GetDownloadersWithCombinePackagesByAssetInfos(ResourcePackage[] packages, int maxConcurrencyDownloadCount, int failedRetryCount, params AssetInfo[] assetInfos)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | Target packages. |
+| maxConcurrencyDownloadCount | `int` | Concurrent download count. `-1` uses the global settings. |
+| failedRetryCount | `int` | Retry count on download failure. `-1` uses the global settings. |
+| assetInfos | `AssetInfo[]` | YooAsset `AssetInfo` list (params). When null or empty, all content is downloaded. |
+
+**Returns**
+
+`ResourceDownloaderOperation[]` — downloader array filtered by `AssetInfo`.
+
+**Description**
+
+Creates one downloader per package filtered by `AssetInfo`.
+
+---
+
+### BeginDownloadWithCombinePackages {#begindownloadwithcombinepackages}
+
+```csharp
+public static async UniTask<bool> BeginDownloadWithCombinePackages(ResourcePackage[] packages, OnDownloadSpeedProgress onDownloadSpeedProgress = null, DownloadError onDownloadError = null)
+public static async UniTask<bool> BeginDownloadWithCombinePackages(ResourcePackage[] packages, int maxConcurrencyDownloadCount, int failedRetryCount, OnDownloadSpeedProgress onDownloadSpeedProgress = null, DownloadError onDownloadError = null)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | Target packages. |
+| maxConcurrencyDownloadCount | `int` | Concurrent download count. `-1` uses the global settings. |
+| failedRetryCount | `int` | Retry count on download failure. `-1` uses the global settings. |
+| onDownloadSpeedProgress | `OnDownloadSpeedProgress` | Combined progress callback (includes download speed).<br/>**Default**: `null` |
+| onDownloadError | `DownloaderOperation.DownloadError` | Download failure callback (YooAsset).<br/>**Default**: `null` |
+
+**Returns**
+
+`UniTask<bool>` — whether all downloads succeeded; `false` if any downloader fails, `true` when there is nothing to download.
+
+**Description**
+
+Downloads the updated content of multiple packages **sequentially**, reporting progress against the combined totals (a single progress bar). Ideal for updating "DLC + main assets" in one pass.
+
+**Example**
+
+```csharp
+var packages = AssetPatcher.GetPresetAppPackages();
+
+bool succeed = await AssetPatcher.BeginDownloadWithCombinePackages(
+    packages,
+    onDownloadSpeedProgress: (totalCount, currentCount, totalBytes, currentBytes, speedBytes) =>
+    {
+        // Update the download progress UI (with download speed)
+        Debug.Log($"Progress: {currentCount}/{totalCount}, speed: {speedBytes} bytes/s");
+    },
+    onDownloadError: (errorData) =>
+    {
+        // Handle the download failure
+    });
+```
+
+---
+
+### BeginDownloadWithCombinePackagesByTags {#begindownloadwithcombinepackagesbytags}
+
+```csharp
+public static async UniTask<bool> BeginDownloadWithCombinePackagesByTags(ResourcePackage[] packages, string[] tags = null, OnDownloadSpeedProgress onDownloadSpeedProgress = null, DownloadError onDownloadError = null)
+public static async UniTask<bool> BeginDownloadWithCombinePackagesByTags(ResourcePackage[] packages, int maxConcurrencyDownloadCount, int failedRetryCount, string[] tags = null, OnDownloadSpeedProgress onDownloadSpeedProgress = null, DownloadError onDownloadError = null)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | Target packages. |
+| maxConcurrencyDownloadCount | `int` | Concurrent download count. `-1` uses the global settings. |
+| failedRetryCount | `int` | Retry count on download failure. `-1` uses the global settings. |
+| tags | `string[]` | Asset group tags. When null, all content is downloaded.<br/>**Default**: `null` |
+| onDownloadSpeedProgress | `OnDownloadSpeedProgress` | Combined progress callback.<br/>**Default**: `null` |
+| onDownloadError | `DownloaderOperation.DownloadError` | Download failure callback.<br/>**Default**: `null` |
+
+**Returns**
+
+`UniTask<bool>` — whether all downloads succeeded.
+
+**Description**
+
+Starts a combined download of multiple packages filtered by tags. Otherwise behaves like [BeginDownloadWithCombinePackages](#begindownloadwithcombinepackages).
+
+---
+
+### BeginDownloadWithCombinePackagesByAssetNames {#begindownloadwithcombinepackagesbyassetnames}
+
+```csharp
+public static async UniTask<bool> BeginDownloadWithCombinePackagesByAssetNames(ResourcePackage[] packages, string[] assetNames = null, OnDownloadSpeedProgress onDownloadSpeedProgress = null, DownloadError onDownloadError = null)
+public static async UniTask<bool> BeginDownloadWithCombinePackagesByAssetNames(ResourcePackage[] packages, int maxConcurrencyDownloadCount, int failedRetryCount, string[] assetNames = null, OnDownloadSpeedProgress onDownloadSpeedProgress = null, DownloadError onDownloadError = null)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | Target packages. |
+| maxConcurrencyDownloadCount | `int` | Concurrent download count. `-1` uses the global settings. |
+| failedRetryCount | `int` | Retry count on download failure. `-1` uses the global settings. |
+| assetNames | `string[]` | Asset name list. When null, all content is downloaded.<br/>**Default**: `null` |
+| onDownloadSpeedProgress | `OnDownloadSpeedProgress` | Combined progress callback.<br/>**Default**: `null` |
+| onDownloadError | `DownloaderOperation.DownloadError` | Download failure callback.<br/>**Default**: `null` |
+
+**Returns**
+
+`UniTask<bool>` — whether all downloads succeeded.
+
+**Description**
+
+Starts a combined download of multiple packages filtered by asset names. Otherwise behaves like [BeginDownloadWithCombinePackages](#begindownloadwithcombinepackages).
+
+---
+
+### BeginDownloadWithCombinePackagesByAssetInfos {#begindownloadwithcombinepackagesbyassetinfos}
+
+```csharp
+public static async UniTask<bool> BeginDownloadWithCombinePackagesByAssetInfos(ResourcePackage[] packages, AssetInfo[] assetInfos = null, OnDownloadSpeedProgress onDownloadSpeedProgress = null, DownloadError onDownloadError = null)
+public static async UniTask<bool> BeginDownloadWithCombinePackagesByAssetInfos(ResourcePackage[] packages, int maxConcurrencyDownloadCount, int failedRetryCount, AssetInfo[] assetInfos = null, OnDownloadSpeedProgress onDownloadSpeedProgress = null, DownloadError onDownloadError = null)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | Target packages. |
+| maxConcurrencyDownloadCount | `int` | Concurrent download count. `-1` uses the global settings. |
+| failedRetryCount | `int` | Retry count on download failure. `-1` uses the global settings. |
+| assetInfos | `AssetInfo[]` | YooAsset `AssetInfo` list. When null, all content is downloaded.<br/>**Default**: `null` |
+| onDownloadSpeedProgress | `OnDownloadSpeedProgress` | Combined progress callback.<br/>**Default**: `null` |
+| onDownloadError | `DownloaderOperation.DownloadError` | Download failure callback.<br/>**Default**: `null` |
+
+**Returns**
+
+`UniTask<bool>` — whether all downloads succeeded.
+
+**Description**
+
+Starts a combined download of multiple packages filtered by `AssetInfo`. Otherwise behaves like [BeginDownloadWithCombinePackages](#begindownloadwithcombinepackages).
+
+---
+
+### BeginDownloadWithCombineDownloaders {#begindownloadwithcombinedownloaders}
+
+```csharp
+public static async UniTask<bool> BeginDownloadWithCombineDownloaders(ResourceDownloaderOperation[] downloaders, OnDownloadSpeedProgress onDownloadSpeedProgress = null, DownloadError onDownloadError = null)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| downloaders | `ResourceDownloaderOperation[]` | Prepared downloader array (different creation methods can be mixed). |
+| onDownloadSpeedProgress | `OnDownloadSpeedProgress` | Combined progress callback.<br/>**Default**: `null` |
+| onDownloadError | `DownloaderOperation.DownloadError` | Download failure callback.<br/>**Default**: `null` |
+
+**Returns**
+
+`UniTask<bool>` — whether all downloads succeeded; `false` if any downloader fails, `true` when there is nothing to download.
+
+**Description**
+
+Downloads multiple **prepared downloaders** sequentially with unified progress totals. This is the underlying implementation of the `BeginDownloadWithCombinePackages` family — handy when combining downloaders built with different filters into one download pass.
+
+---
+
+### GetDownloadInfoWithCombinePackages {#getdownloadinfowithcombinepackages}
+
+```csharp
+public static DownloadInfo GetDownloadInfoWithCombinePackages(ResourcePackage[] packages)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | Target packages. |
+
+**Returns**
+
+`DownloadInfo` — the combined pending download count and bytes (see the [DownloadInfo struct](#downloadinfo)).
+
+**Description**
+
+Totals the pending downloads of multiple packages — useful for showing a "download N files (M bytes)?" confirmation before starting.
+
+**Example**
+
+```csharp
+var packages = AssetPatcher.GetPresetAppPackages();
+var info = AssetPatcher.GetDownloadInfoWithCombinePackages(packages);
+
+Debug.Log($"Files to download: {info.totalCount}, total size: {info.totalBytes} bytes");
+```
+
+---
+
+### GetDownloadInfoWithCombinePackagesByTags {#getdownloadinfowithcombinepackagesbytags}
+
+```csharp
+public static DownloadInfo GetDownloadInfoWithCombinePackagesByTags(ResourcePackage[] packages, params string[] tags)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | Target packages. |
+| tags | `string[]` | Asset group tags (params). When null or empty, all content is counted. |
+
+**Returns**
+
+`DownloadInfo` — the combined pending download count and bytes.
+
+**Description**
+
+Totals the pending downloads of multiple packages filtered by tags.
+
+---
+
+### GetDownloadInfoWithCombinePackagesByAssetNames {#getdownloadinfowithcombinepackagesbyassetnames}
+
+```csharp
+public static DownloadInfo GetDownloadInfoWithCombinePackagesByAssetNames(ResourcePackage[] packages, params string[] assetNames)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | Target packages. |
+| assetNames | `string[]` | Asset name list (params). When null or empty, all content is counted. |
+
+**Returns**
+
+`DownloadInfo` — the combined pending download count and bytes.
+
+**Description**
+
+Totals the pending downloads of multiple packages filtered by asset names.
+
+---
+
+### GetDownloadInfoWithCombinePackagesByAssetInfos {#getdownloadinfowithcombinepackagesbyassetinfos}
+
+```csharp
+public static DownloadInfo GetDownloadInfoWithCombinePackagesByAssetInfos(ResourcePackage[] packages, params AssetInfo[] assetInfos)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | Target packages. |
+| assetInfos | `AssetInfo[]` | YooAsset `AssetInfo` list (params). When null or empty, all content is counted. |
+
+**Returns**
+
+`DownloadInfo` — the combined pending download count and bytes.
+
+**Description**
+
+Totals the pending downloads of multiple packages filtered by `AssetInfo`.
+
+---
+
+## Paths & Utilities {#path-utils}
+
+Helpers for local/built-in asset paths, the store link, group records, and decryption services.
+
+### Method Overview {#utils-overview}
+
+#### Path Queries
+
+| Method | Description |
+| :--- | :--- |
+| [GetLocalSandboxRootPath](#getlocalsandboxrootpath) | Gets the local persistent storage root directory. |
+| [GetLocalSandboxPackagePath](#getlocalsandboxpackagepath) | Gets a package's local persistent path. |
+| [GetBuiltinRootPath](#getbuiltinrootpath) | Gets the built-in asset root directory. |
+| [GetBuiltinPackagePath](#getbuiltinpackagepath) | Gets a package's built-in asset path. |
+| [GetRequestStreamingAssetsPath](#getrequeststreamingassetspath) | Gets a StreamingAssets path suitable for UnityWebRequest. |
+
+#### Store & Misc
+
+| Method | Description |
+| :--- | :--- |
+| [GetAppStoreLink](#getappstorelink) | Gets the app store link. |
+| [GoToAppStore](#gotoappstore) | Opens the system browser at the store page. |
+| [GetDefaultGroupTag](#getdefaultgrouptag) | Gets the default group tag (`#all`). |
+| [ClearLastGroupInfo](#clearlastgroupinfo) | Clears the last selected group record. |
+| [GetBundleDecryptionServices](#getbundledecryptionservices) | Gets the bundle decryption services. |
+| [GetManifestDecryptionServices](#getmanifestdecryptionservices) | Gets the manifest decryption services. |
+
+---
+
+### GetLocalSandboxRootPath {#getlocalsandboxrootpath}
+
+```csharp
+public static string GetLocalSandboxRootPath()
+```
+
+**Returns**
+
+`string` — the local persistent storage root directory (YooAsset default cache root, `.../yoo`).
+
+**Description**
+
+Gets the local storage (sandbox) root directory for downloaded assets.
+
+---
+
+### GetLocalSandboxPackagePath {#getlocalsandboxpackagepath}
+
+```csharp
+public static string GetLocalSandboxPackagePath(string packageName)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. |
+
+**Returns**
+
+`string` — the package's local persistent path (`.../yoo/<PackageName>`).
+
+**Description**
+
+Gets the local storage path of the package's downloaded assets.
+
+---
+
+### GetBuiltinRootPath {#getbuiltinrootpath}
+
+```csharp
+public static string GetBuiltinRootPath()
+```
+
+**Returns**
+
+`string` — the built-in asset root directory (`.../StreamingAssets/yoo`).
+
+**Description**
+
+Gets the root directory of the assets shipped with the build.
+
+---
+
+### GetBuiltinPackagePath {#getbuiltinpackagepath}
+
+```csharp
+public static string GetBuiltinPackagePath(string packageName)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. |
+
+**Returns**
+
+`string` — the package's built-in asset path (`.../StreamingAssets/yoo/<PackageName>`).
+
+**Description**
+
+Gets the built-in asset path of the package shipped with the build.
+
+---
+
+### GetRequestStreamingAssetsPath {#getrequeststreamingassetspath}
+
+```csharp
+public static string GetRequestStreamingAssetsPath()
+```
+
+**Returns**
+
+`string` — a StreamingAssets path suitable for `UnityWebRequest` (the `file://` prefix is added automatically on macOS/iOS).
+
+**Description**
+
+Gets a cross-platform StreamingAssets path usable for web requests.
+
+---
+
+### GetAppStoreLink {#getappstorelink}
+
+```csharp
+public static async UniTask<string> GetAppStoreLink()
+```
+
+**Returns**
+
+`UniTask<string>` — the store link (`STORE_LINK`) from the config file.
+
+**Description**
+
+Reads the app store link from the bundle URL config file (burlcfg), used to guide players to update when the app version is outdated.
+
+---
+
+### GoToAppStore {#gotoappstore}
+
+```csharp
+public static void GoToAppStore()
+```
+
+**Description**
+
+Reads the store link and opens the system browser at the store page via `Application.OpenURL` (to update the app itself).
+
+---
+
+### GetDefaultGroupTag {#getdefaultgrouptag}
+
+```csharp
+public static string GetDefaultGroupTag()
+```
+
+**Returns**
+
+`string` — the default group tag (`#all`).
+
+**Description**
+
+Gets the default tag of the patch groups (grouped packaging), representing all content.
+
+---
+
+### ClearLastGroupInfo {#clearlastgroupinfo}
+
+```csharp
+public static void ClearLastGroupInfo()
+```
+
+**Description**
+
+Clears the locally stored "last selected group (GroupInfo)" record. The patch flow remembers which asset group the player chose to download last time; this method resets that record.
+
+---
+
+### GetBundleDecryptionServices {#getbundledecryptionservices}
+
+```csharp
+public static DecryptionServices GetBundleDecryptionServices()
+```
+
+**Returns**
+
+`DecryptionServices` — the configured bundle decryption services; `null` when no encryption (NONE) is configured.
+
+**Description**
+
+Gets the bundle decryption services (YooAsset) initialized from the `PatchLauncher` cryptogram settings.
+
+---
+
+### GetManifestDecryptionServices {#getmanifestdecryptionservices}
+
+```csharp
+public static DecryptionServices GetManifestDecryptionServices()
+```
+
+**Returns**
+
+`DecryptionServices` — the configured manifest decryption services; `null` when no encryption (NONE) is configured.
+
+**Description**
+
+Gets the manifest decryption services (YooAsset) initialized from the `PatchLauncher` cryptogram settings.
+
+---
+
+## Release {#release-section}
+
+### Release {#release}
+
+```csharp
+public async static UniTask Release()
+```
+
+**Returns**
+
+`UniTask` — an awaitable async operation.
+
+**Description**
+
+Releases the entire asset system: destroys and removes all packages, destroys YooAssets, and clears the bundle-related global configuration to ensure memory is reclaimed correctly.
+
+<Highlight color="#ff2f00">Important</Highlight> Call this when **the game is about to quit**. Afterwards [IsReleased](#isreleased) returns `true`, bundle-unloading operations in `AssetLoaders` are skipped, and the asset system can no longer be used.
+
+**Example**
+
+```csharp
+private async void OnApplicationQuit()
+{
+    await AssetPatcher.Release();
+}
+```
 
 ---

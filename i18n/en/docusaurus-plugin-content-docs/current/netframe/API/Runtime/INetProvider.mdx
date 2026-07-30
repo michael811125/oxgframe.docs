@@ -1,5 +1,6 @@
 ---
 sidebar_position: 3
+description: INetProvider is the network provider interface of NetFrame, defining the standard behavior of the underlying transport, with built-in TCP, KCP, and WebSocket implementations.
 ---
 
 # INetProvider
@@ -22,68 +23,244 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
-using OxGFrame.NetFrame;
+`INetProvider` defines the standard behavior of the low-level network transport in **NetFrame**. Acting as the "transport driver layer", it wraps different communication libraries behind a unified interface consumed by the upper-level `NetNode`. Three implementations are built in — TCP, KCP, and WebSocket — and you can implement this interface yourself to support other transport protocols.
 
-## Core Design Concept
-
-`INetProvider` defines the standard behavior for low-level network transmission. It plays the role of the "transmission driver layer", encapsulating different communication libraries (such as Telepathy, Mirror, WebSocketSharp, etc.) into a unified interface for the upper-level `NetNode` or `NetManager` to call.
-
----
-
-## Events
-
-Implementers must handle the following events to notify the upper level of state changes:
-
-* **OnOpen**: Triggered when the connection is successfully opened. `payload` is usually connection information.
-* **OnBinary**: Triggered when binary data is received. Parameter is `byte[]`.
-* **OnMessage**: Triggered when string data is received. Parameter is `string`.
-* **OnError**: Triggered when a communication anomaly occurs.
-* **OnClose**: Triggered when the connection is closed.
-
----
-
-## Interface Methods
-
-### CreateConnect(NetOption netOption)
-Opens a connection based on the provided configuration.
-* **Params**: 
-    * `NetOption netOption`: Configuration object containing connection target (Host/Port) and various parameters. It must be cast to the corresponding subclass (e.g., `TcpNetOption`) during implementation.
-
-### IsConnected()
-* **Returns**: `bool`, returns whether the current low-level transmission is in a connected state.
-
-### SendBinary(byte[] buffer)
-Sends binary data.
-* **Params**: `byte[] buffer`: Raw byte data to be sent.
-* **Returns**: `bool`, returns true if successfully sent.
-
-### SendMessage(string text)
-Sends string data.
-* **Params**: `string text`: String to be sent.
-* **Note**: Not all protocols support direct string sending (e.g., pure TCP); implementers should throw an exception or perform UTF-8 conversion as appropriate.
-
-### OnUpdate()
-Drives the polling of the low-level transmission.
-* **Purpose**: Usually used to extract packets from the receive queue and trigger events. For asynchronous transmission libraries, this method ensures callbacks occur on the Unity main thread.
-
-### Close()
-Interrupts the connection and cleans up low-level resources.
-
----
-
-## Implementation Example: TcpNetProvider (Based on Telepathy)
-
-The following demonstrates how to implement a TCP transmission layer using the third-party library Telepathy:
+|  |  |
+| :--- | :--- |
+| **Namespace** | `OxGFrame.NetFrame` |
+| **Type** | `public interface` |
+| **Source** | [INetProvider.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/NetFrame/Scripts/Runtime/Core/Interface/NetProvider/INetProvider.cs) |
 
 ```csharp
-public class TcpNetProvider : INetProvider
-{
-    private Client _client = null;
-    
-    // Max packets processed per tick
-    public int processLimitPerTick;
+using OxGFrame.NetFrame;
+```
 
-    // Events defined by the interface
+**Declaration**
+
+```csharp
+public interface INetProvider
+```
+
+### Built-in Implementations {#built-in-implementations}
+
+| Implementation | Underlying Library | NetOption | SendMessage (String Sending) |
+| :--- | :--- | :--- | :--- |
+| [TcpNetProvider](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/NetFrame/Scripts/Runtime/Core/Implement/NetProvider/Tcp/TcpNetProvider.cs) | [Telepathy](https://github.com/MirrorNetworking/Telepathy) | [TcpNetOption](./NetOption.mdx#tcp-netoption) | Not supported (throws) |
+| [KcpNetProvider](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/NetFrame/Scripts/Runtime/Core/Implement/NetProvider/Kcp/KcpNetProvider.cs) | [kcp2k](https://github.com/MirrorNetworking/kcp2k) | [KcpNetOption](./NetOption.mdx#kcp-netoption) | Not supported (throws) |
+| [WebSocketNetProvider](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/NetFrame/Scripts/Runtime/Core/Implement/NetProvider/WebSocket/WebSocketNetProvider.cs) | [UnityWebSocket](https://github.com/psygames/UnityWebSocket) | [WebSocketNetOption](./NetOption.mdx#websocket-netoption) | Supported |
+
+<Highlight color="#00d679">Reminder</Highlight>
+
+- Telepathy, the library behind `TcpNetProvider`, already handles TCP packet framing (fragmentation/sticking) by prepending a **4-byte** length header to every packet.
+- `KcpNetProvider` provides an extra `SendBinary(KcpChannel kcpChannel, byte[] buffer)` overload to send through the `Reliable` / `Unreliable` channel explicitly (obtain the instance via `NetNode.GetNetProvider<KcpNetProvider>()`).
+
+### Member Overview {#overview}
+
+#### Events
+
+| Event | Description |
+| :--- | :--- |
+| [OnOpen](#onopen) | Raised when the connection is successfully opened. |
+| [OnBinary](#onbinary) | Raised when binary data is received. |
+| [OnMessage](#onmessage) | Raised when string data is received. |
+| [OnError](#onerror) | Raised when a communication error occurs. |
+| [OnClose](#onclose) | Raised when the connection is closed. |
+
+#### Methods
+
+| Method | Description |
+| :--- | :--- |
+| [CreateConnect](#createconnect) | Opens a connection based on the connection options. |
+| [IsConnected](#isconnected) | Returns whether the underlying transport is connected. |
+| [SendBinary](#sendbinary) | Sends binary data. |
+| [SendMessage](#sendmessage) | Sends string data. |
+| [OnUpdate](#onupdate) | Drives the polling of the underlying transport. |
+| [Close](#close) | Closes the connection and cleans up resources. |
+
+---
+
+### OnOpen {#onopen}
+
+```csharp
+event EventHandler<object> OnOpen
+```
+
+**Description**
+
+Raised when the connection is successfully opened; the `payload` carries connection information. `NetNode` subscribes to this event to drive `INetTips.OnConnected` and the connected callback.
+
+<Highlight color="#00d679">Reminder</Highlight> Built-in payloads: `TcpNetProvider` / `KcpNetProvider` pass `0`; `WebSocketNetProvider` passes the open event args.
+
+---
+
+### OnBinary {#onbinary}
+
+```csharp
+event EventHandler<byte[]> OnBinary
+```
+
+**Description**
+
+Raised when binary data is received. `NetNode` subscribes to this event and forwards the data to the handler assigned via `SetResponseBinaryHandler`.
+
+---
+
+### OnMessage {#onmessage}
+
+```csharp
+event EventHandler<string> OnMessage
+```
+
+**Description**
+
+Raised when string data is received. `NetNode` subscribes to this event and forwards the data to the handler assigned via `SetResponseMessageHandler`.
+
+<Highlight color="#0373fc">Attention</Highlight> Among the built-in implementations, only `WebSocketNetProvider` raises this event (TCP / KCP always receive as binary).
+
+---
+
+### OnError {#onerror}
+
+```csharp
+event EventHandler<object> OnError
+```
+
+**Description**
+
+Raised when a communication error occurs; the `payload` carries the error information (all built-in implementations pass an error message string). `NetNode` uses it to drive `INetTips.OnConnectionError`.
+
+---
+
+### OnClose {#onclose}
+
+```csharp
+event EventHandler<object> OnClose
+```
+
+**Description**
+
+Raised when the connection is closed; the `payload` carries the close information. `NetNode` uses it to drive `INetTips.OnDisconnected` and, if the close was not requested manually, starts the auto-reconnection procedure.
+
+<Highlight color="#00d679">Reminder</Highlight> Built-in payloads: `TcpNetProvider` / `KcpNetProvider` pass `-1`; `WebSocketNetProvider` passes the close code.
+
+---
+
+### CreateConnect {#createconnect}
+
+```csharp
+void CreateConnect(NetOption netOption)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| netOption | `NetOption` | Connection options. The implementation must cast it to the matching derived class (e.g., `TcpNetOption`) to read the connection parameters. |
+
+**Description**
+
+Creates and opens the connection based on the connection options. Called by `NetNode.Connect` when the connection procedure starts. Once the connection is established, the implementation should raise [OnOpen](#onopen) to notify the upper layer.
+
+---
+
+### IsConnected {#isconnected}
+
+```csharp
+bool IsConnected()
+```
+
+**Returns**
+
+`bool` — `true` if the underlying transport is connected.
+
+**Description**
+
+Returns the current connection state of the underlying transport.
+
+---
+
+### SendBinary {#sendbinary}
+
+```csharp
+bool SendBinary(byte[] buffer)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| buffer | `byte[]` | Binary data to send. |
+
+**Returns**
+
+`bool` — `true` if the data was successfully handed off for sending; `false` if not connected or sending failed.
+
+**Description**
+
+Sends binary data. This is the underlying implementation of `NetFrames.Send(byte[], int)`.
+
+---
+
+### SendMessage {#sendmessage}
+
+```csharp
+bool SendMessage(string text)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| text | `string` | String data to send. |
+
+**Returns**
+
+`bool` — `true` if the message was successfully handed off for sending.
+
+**Description**
+
+Sends string data. This is the underlying implementation of `NetFrames.Send(string, int)`.
+
+<Highlight color="#0373fc">Attention</Highlight> Not every protocol supports sending strings directly — the built-in `TcpNetProvider` and `KcpNetProvider` throw an exception. A custom implementation may either throw as well, or convert the string to UTF-8 bytes and send it via [SendBinary](#sendbinary).
+
+---
+
+### OnUpdate {#onupdate}
+
+```csharp
+void OnUpdate()
+```
+
+**Description**
+
+Drives the polling of the underlying transport. Called through `NetNode` by the `NetManager` updater on every update. Typically used to dequeue packets from the receive queue and raise events; if the underlying library dispatches events by itself (like UnityWebSocket), the implementation may be left empty.
+
+<Highlight color="#ff2f00">Important</Highlight> This method is called at high frequency — keep the polling logic inside it lightweight.
+
+---
+
+### Close {#close}
+
+```csharp
+void Close()
+```
+
+**Description**
+
+Closes the connection and cleans up the underlying resources.
+
+---
+
+### Implementation Example {#implementation-example}
+
+A skeleton for implementing `INetProvider` with a custom transport library:
+
+```csharp
+using System;
+using OxGFrame.NetFrame;
+
+public class CustomNetProvider : INetProvider
+{
     public event EventHandler<object> OnOpen;
     public event EventHandler<byte[]> OnBinary;
     public event EventHandler<string> OnMessage;
@@ -92,48 +269,51 @@ public class TcpNetProvider : INetProvider
 
     public void CreateConnect(NetOption netOption)
     {
-        var opt = netOption as TcpNetOption;
-        this._client = new Client(opt.maxBufferSize);
-        this.processLimitPerTick = opt.processLimitPerTick;
+        // Cast to the matching NetOption derived class to read the connection parameters
+        // var option = netOption as CustomNetOption;
 
-        // Bind low-level events
-        this._client.OnConnected += () => this.OnOpen?.Invoke(this, 0);
-        this._client.OnData += (arrSeg) => {
-            byte[] data = new byte[arrSeg.Count];
-            Buffer.BlockCopy(arrSeg.Array, arrSeg.Offset, data, 0, arrSeg.Count);
-            this.OnBinary?.Invoke(this, data);
-        };
-        this._client.OnDisconnected += () => this.OnClose?.Invoke(this, -1);
-
-        this._client.Connect(opt.host, opt.port);
+        // Create the underlying connection and bind its events:
+        // opened   → this.OnOpen?.Invoke(this, payload)
+        // received → this.OnBinary?.Invoke(this, data)
+        // error    → this.OnError?.Invoke(this, error)
+        // closed   → this.OnClose?.Invoke(this, code)
     }
 
-    public void OnUpdate()
+    public bool IsConnected()
     {
-        // Drive low-level polling to push data to events
-        this._client?.Tick(this.processLimitPerTick);
+        // Return the underlying connection state
+        return false;
     }
 
     public bool SendBinary(byte[] buffer)
     {
-        if (!IsConnected()) return false;
-        return this._client.Send(new ArraySegment<byte>(buffer));
+        // Send binary data; return true when successfully handed off
+        return false;
     }
 
     public bool SendMessage(string text)
     {
-        // TCP typically does not support plain text sending; developers must decide whether to encapsulate UTF8 conversion themselves
-        throw new NotSupportedException("TCP not supports SendMessage, use SendBinary.");
+        // If string sending is not supported, throw to hint callers to use SendBinary
+        throw new NotSupportedException();
     }
 
-    public bool IsConnected() => this._client?.Connected ?? false;
+    public void OnUpdate()
+    {
+        // Called on every update to drive the underlying polling (dequeue packets and raise events)
+    }
 
     public void Close()
     {
-        this._client?.Disconnect();
-        this._client = null;
+        // Close the connection and clean up underlying resources
     }
 }
 ```
 
-<Highlight color="#ff2f00">Important</Highlight> Since OnUpdate is called every frame, ensure the Tick logic within it is lightweight enough.
+Once implemented, pass it in when creating a `NetNode`:
+
+```csharp
+var netNode = new NetNode(new CustomNetProvider(), new NetTipsExample());
+NetFrames.AddNetNode(netNode);
+```
+
+---

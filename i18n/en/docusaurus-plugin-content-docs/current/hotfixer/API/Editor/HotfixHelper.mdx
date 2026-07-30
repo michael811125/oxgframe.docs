@@ -1,19 +1,20 @@
 ---
 sidebar_position: 1
+description: HotfixHelper is the editor helper of Hotfixer, used to compile and collect AOT / Hotfix DLLs and export the hotfix DLL config file (HotfixManifest.dat).
 ---
 
 # HotfixHelper
 
 export const Highlight = ({ children, color }) => (
-  <span
-    style={{
-      backgroundColor: color,
-      borderRadius: '5px',
-      color: '#fff',
-      padding: '2.5px'
-    }}>
-    {children}
-  </span>
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
 );
 
 <Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
@@ -22,47 +23,176 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`HotfixHelper` is the **Hotfixer** editor helper, used to compile and collect the AOT / Hotfix DLLs into the `HotfixCollector` directory and to export the hotfix DLL config file (`HotfixManifest.dat`) read by the auto-config mode of [Hotfixers.CheckHotfix](../Runtime/Hotfixers.mdx#checkhotfix) at runtime.
+
+|  |  |
+| :--- | :--- |
+| **Namespace** | `OxGFrame.Hotfixer.Editor` |
+| **Type** | `public static class` |
+| **Source** | [HotfixHelper.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/Hotfixer/Scripts/Editor/HotfixHelper.cs) |
+
+```csharp
 using OxGFrame.Hotfixer.Editor;
+```
 
-## Methods
+<Highlight color="#0373fc">Attention</Highlight> This class is for the **Unity Editor** environment only.
 
-### ToRelativeAssetPath
-Converts an absolute path to a path relative to the project's `Assets/` directory.
+### Method Overview {#overview}
 
-**Params**
-* `string s`: Full file path
-
----
-
-### CopyAOTDllsAndHotfixDlls
-Executes the copy operation for both AOT and Hotfix assemblies in one click, collecting all relevant files into the `HotfixCollector` directory.
-
----
-
-### CopyAOTAssembliesToDestination
-Copies AOT assemblies (DLLs after IL2CPP stripping) to the target directory. This method automatically changes the extension to `.dll.bytes` to facilitate resource loading.
-
-**Params**
-* `string dstDir`: Custom output directory (if null, outputs to the default `HotfixCollector` directory)
-
-<Highlight color="#ff2f00">Important</Highlight> Stripped AOT DLLs are only generated after **HybridCLR -> Generate All**. If the file is prompted as non-existent, please execute [Generate All](https://www.hybridclr.cn/docs/beginner/quickstart#%E6%89%93%E5%8C%85%E8%BF%90%E8%A1%8C) first.
+| Method | Description |
+| :--- | :--- |
+| [CompileAndCopyToHotfixCollector](#compileandcopytohotfixcollector) | Compiles the hotfix DLLs and collects the AOT / Hotfix DLLs into `HotfixCollector` in one click. |
+| [CopyAOTDllsAndHotfixDlls](#copyaotdllsandhotfixdlls) | Copies both the AOT and Hotfix DLLs into the `HotfixCollector` directory in one click. |
+| [CopyAOTAssembliesToDestination](#copyaotassembliestodestination) | Copies the AOT DLLs (post-IL2CPP-strip) to the destination directory. |
+| [CopyHotfixAssembliesToDestination](#copyhotfixassembliestodestination) | Copies the Hotfix DLLs to the destination directory. |
+| [ExportHotfixDllConfig](#exporthotfixdllconfig) | Exports the hotfix DLL config file (`HotfixManifest.dat`) to `StreamingAssets`. |
+| [ToRelativeAssetPath](#torelativeassetpath) | Converts an absolute path into a relative path starting with `Assets/`. |
 
 ---
 
-### CopyHotfixAssembliesToDestination
-Copies hot-update assemblies (Hotfix DLLs) to the target directory and automatically changes the extension to `.bytes`.
+### CompileAndCopyToHotfixCollector {#compileandcopytohotfixcollector}
 
-**Params**
-* `string dstDir`: Custom output directory (if null, outputs to the default `HotfixCollector` directory)
+```csharp
+public static void CompileAndCopyToHotfixCollector()
+```
+
+**Description**
+
+Compiles the hotfix DLLs for the current build target (`activeBuildTarget`) via HybridCLR's `CompileDllCommand.CompileDll`, then runs [CopyAOTDllsAndHotfixDlls](#copyaotdllsandhotfixdlls) to collect the AOT and Hotfix DLLs into the `HotfixCollector` directory.
+
+<Highlight color="#00d679">Reminder</Highlight> Corresponds to the editor menu **HybridCLR → OxGFrame With HybridCLR → Compile And Copy To HotfixCollector**. After collecting, pack the files with the YooAsset Collector — see the [Collection Example](../../collect_suggest.mdx).
 
 ---
 
-### ExportHotfixDllConfig
-Generates the configuration file for hot-update DLLs (HotfixConfig), supporting JSON or encrypted binary formats.
+### CopyAOTDllsAndHotfixDlls {#copyaotdllsandhotfixdlls}
 
-**Params**
-* `List<string> aotDlls`: List of AOT assemblies that need metadata supplementation
-* `List<string> hotfixDlls`: List of hot-update assemblies
-* `bool cipher`: Whether to enable encryption (outputs as Bytes format if true, otherwise Json)
+```csharp
+public static void CopyAOTDllsAndHotfixDlls()
+```
+
+**Description**
+
+Runs [CopyAOTAssembliesToDestination](#copyaotassembliestodestination) and [CopyHotfixAssembliesToDestination](#copyhotfixassembliestodestination) in sequence (both with their default output directories), collecting all related files into the `Assets/HotfixCollector` directory.
+
+---
+
+### CopyAOTAssembliesToDestination {#copyaotassembliestodestination}
+
+```csharp
+public static void CopyAOTAssembliesToDestination(string dstDir = null)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| dstDir | `string` | Custom output directory.<br/>**Default**: `null` (outputs to `Assets/HotfixCollector/AOTDlls`) |
+
+**Description**
+
+Copies the **post-IL2CPP-strip** AOT DLLs for the current build target (listed by HybridCLR's `SettingsUtil.AOTAssemblyNames`) to the destination directory, writing them as `<assembly name>.dll.bytes` so they can be collected and loaded as assets.
+
+<Highlight color="#0373fc">Attention</Highlight> The destination directory is **deleted and recreated** before copying — do not keep other files in it.
+
+<Highlight color="#ff2f00">Important</Highlight> The stripped AOT DLLs are only generated after **HybridCLR → Generate All** (or a player build). If the Console reports missing files, run [Generate All](https://www.hybridclr.cn/docs/beginner/quickstart#%E6%89%93%E5%8C%85%E8%BF%90%E8%A1%8C) first.
+
+---
+
+### CopyHotfixAssembliesToDestination {#copyhotfixassembliestodestination}
+
+```csharp
+public static void CopyHotfixAssembliesToDestination(string dstDir = null)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| dstDir | `string` | Custom output directory.<br/>**Default**: `null` (outputs to `Assets/HotfixCollector/HotfixDlls`) |
+
+**Description**
+
+Copies the hotfix DLLs compiled by HybridCLR for the current build target (listed by `SettingsUtil.HotUpdateAssemblyFilesExcludePreserved`) to the destination directory, automatically appending the `.bytes` extension (written as `<assembly name>.dll.bytes`).
+
+<Highlight color="#0373fc">Attention</Highlight> The destination directory is **deleted and recreated** before copying — do not keep other files in it.
+
+---
+
+### ExportHotfixDllConfig {#exporthotfixdllconfig}
+
+```csharp
+public static void ExportHotfixDllConfig(List<string> aotDlls, List<string> hotfixDlls, bool cipher)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| aotDlls | `List<string>` | List of AOT assemblies that need metadata supplementation (names include the `.dll` extension). |
+| hotfixDlls | `List<string>` | List of hotfix assemblies (names include the `.dll` extension). |
+| cipher | `bool` | Whether to encrypt. `true` exports the encrypted BYTES format; `false` exports plaintext JSON. |
+
+**Description**
+
+Writes the AOT and hotfix assembly lists into the hotfix DLL config file and exports it to the built-in `StreamingAssets` (the file name follows `HotfixSettings`, `HotfixManifest.dat` by default), to be read by the auto-config mode of [Hotfixers.CheckHotfix](../Runtime/Hotfixers.mdx#checkhotfix) at runtime.
+
+The plaintext JSON format looks like this:
+
+```json
+{
+    "aotDlls": [
+        "mscorlib.dll",
+        "UniTask.dll"
+    ],
+    "hotfixDlls": [
+        "HotfixerDemo.Hotfix.Runtime.dll"
+    ]
+}
+```
+
+The encrypted BYTES format writes a cipher marker into the file header and XOR-encrypts the content with the `cipher` key from `HotfixSettings`; at runtime the format is auto-detected by the file header.
+
+<Highlight color="#00d679">Reminder</Highlight>
+
+- You can also generate the file with the editor window tool via the menu **OxGFrame → Hotfixer → Hotfix Config Generator (HotfixManifest.dat)** (with preset plan management support).
+- An exported config file can be converted between the plaintext and encrypted formats by selecting it in the **Project** window and using the menu **Assets → OxGFrame → Hotfixer → `Convert HotfixManifest.dat (BYTES [Cipher] <-> JSON [Plaintext])`** (only valid for a matching config file located inside `StreamingAssets`).
+
+**Example**
+
+```csharp
+using OxGFrame.Hotfixer.Editor;
+using System.Collections.Generic;
+
+HotfixHelper.ExportHotfixDllConfig(
+    // AOT assemblies that need metadata supplementation
+    new List<string> { "mscorlib.dll", "UniTask.dll" },
+    // Hotfix assemblies
+    new List<string> { "HotfixerDemo.Hotfix.Runtime.dll" },
+    // Encrypted output
+    true
+);
+```
+
+---
+
+### ToRelativeAssetPath {#torelativeassetpath}
+
+```csharp
+public static string ToRelativeAssetPath(string s)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| s | `string` | Full file path (must contain the `Assets/` segment). |
+
+**Returns**
+
+`string` — the project-relative path starting with `Assets/`.
+
+**Description**
+
+Converts an absolute path into a path relative to the project's `Assets/` directory (extracts the substring starting at `Assets/`).
 
 ---

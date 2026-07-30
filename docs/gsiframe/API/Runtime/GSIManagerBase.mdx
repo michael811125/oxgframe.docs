@@ -1,19 +1,20 @@
 ---
 sidebar_position: 1
+description: GSIManagerBase 是 GSIFrame 的遊戲階段管理器抽象基類，負責遊戲階段的註冊、查詢、切換與更新驅動。
 ---
 
 # GSIManagerBase
 
 export const Highlight = ({ children, color }) => (
-  <span
-    style={{
-      backgroundColor: color,
-      borderRadius: '5px',
-      color: '#fff',
-      padding: '2.5px'
-    }}>
-    {children}
-  </span>
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
 );
 
 <Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
@@ -22,64 +23,532 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
-using OxGFrame.GSIFrame;
+`GSIManagerBase<T>` 是 **GSIFrame**（Game Stage Integration）的遊戲階段管理器抽象基類（FSM 概念），統一管理 [GSIBase](./GSIBase.mdx) 階段的**註冊、查詢、切換與更新驅動**。繼承後即可透過靜態 Default API 直接以子類類名操作，通常一個遊戲只需要一個管理器子類。
 
-## 核心設計概念
-
-`GSIManagerBase<T>` 是一個專門管理 `GSIBase` (Game Stage) 的狀態管理器。它負責控制遊戲流程的切換、初始化、更新與釋放。通常一個遊戲只需要一個繼承自此類的實體（如 `GameStageManager` 或 `GSIManager`）。
-
-<Highlight color="#00d679">提醒</Highlight> 如果有熱更工程，建議區分兩個 GameStageManager 進行管理（如 AotGameStageManager 與 HotfixGameStageManager）。
-
----
-
-## Default APIs (靜態全域接口)
-
-開發者通常直接透過繼承後的類別調用以下靜態方法，無需直接存取實例。
-
-### Stage 查詢與獲取
-* **GetCurrentId()**
-    * 取得當前正在執行的階段 ID。
-* **GetStage\<U\>() / GetStage\<U\>(int id)**
-    * 從緩存中搜尋並取得特定的 Stage 實體。
-
-### Stage 註冊 (Add)
-* **AddStage\<U\>() / AddStage\<U\>(int id)**
-    * 將新的 Stage 類別實例化並註冊至管理器。若未指定 ID，則預設使用該類別的 `GetHashCode()` 作為唯一識別碼。
-* **AddStage(int id, GSIBase gameStage)**
-    * 將已存在的實例以指定 ID 進行註冊。
-
-### Stage 切換 (Change)
-* **ChangeStage\<U\>(bool force = false) / ChangeStage(int id, bool force = false)**
-    * **一般切換**: 設定 `incomingId`，將在下一幀進行過渡切換。不允許切換至相同階段。
-    * **強制切換 (force = true)**: 立即觸發 `OnExit` 並執行目標階段的 `OnEnter`。
-
-### 驅動接口 (Driving)
-<Highlight color="#ff2f00">重要</Highlight> 必須在主入口（如 `Main.cs` 繼承 `MonoBehaviour`）調用以下方法以驅動 GSI 運作。
-* **DriveStart()**: 在 `Start()` 中調用，啟動 GSI 運作。
-* **DriveUpdate(float dt)**: 在 `Update()` 中調用，驅動當前階段的 `OnUpdate`。
-
-<Highlight color="#ff2f00">重要</Highlight> 不能於 Constructor 中調用任何 Default APIs 靜態方法，因為會導致 StackOverflow (死循環)，僅能使用成員方法如 AddGameStage 於 Constructor 中進行註冊初始。
-
----
-
-## Public 成員方法 (繼承後使用)
-
-若您在繼承後的子類別內部需要進行更細緻的操作，可以使用以下成員方法：
-
-### 階段管理成員方法
-| 方法名稱 | 說明 |
+|  |  |
 | :--- | :--- |
-| **GetCurrentGameStageId()** | 返回當前 `_currentId`。 |
-| **GetGameStage\<U\>(int id)** | 返回緩存字典 `_dictGameStage` 中的實體。 |
-| **AddGameStage(int id, GSIBase gameStage)** | 執行註冊邏輯，並會自動調用 `gameStage.SetId(id)`。 |
-| **DeleteGameStage(int id)** | 從緩存中移除特定的階段實體。 |
+| **命名空間** | `OxGFrame.GSIFrame` |
+| **類型** | `public abstract class` |
+| **原始碼** | [GSIManagerBase.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/GSIFrame/Scripts/Runtime/GSIManagerBase.cs) |
 
-### 切換與生命週期控制
-* **ChangeGameStage(int id)**: 修改 `_incomingId`，等待 `OnUpdate` 判斷並執行 `ReleaseGameStage` 與 `InitGameStage`。
-* **ChangeGameStageForce(int id)**: 立即序列執行「釋放舊階段 -> 更新 ID -> 初始新階段」。
+```csharp
+using OxGFrame.GSIFrame;
+```
+
+<Highlight color="#00d679">提醒</Highlight> 若專案有熱更新工程，建議區分兩個管理器分別管理（如 `AotGameStageManager` 與 `HotfixGameStageManager`）。
+
+## 宣告 {#declaration}
+
+```csharp
+public abstract class GSIManagerBase<T> where T : GSIManagerBase<T>, new()
+```
+
+**泛型參數**
+
+| 泛型參數 | 說明 |
+| :--- | :--- |
+| T | 管理器子類自身型別（CRTP 自我參照約束），需具備無參數建構子（`new()`）。 |
+
+繼承時將子類自身作為泛型參數傳入：
+
+```csharp
+public class GSIManagerExample : GSIManagerBase<GSIManagerExample> { /* ... */ }
+```
+
+## 運作方式 {#how-it-works}
+
+### 單例與驅動 {#singleton-and-driving}
+
+`GSIManagerBase<T>` 內建**執行緒安全的延遲單例**（Double-Checked Locking）。首次呼叫任一靜態方法時，自動建立 `T` 實例並執行其建構子（基類建構子會初始化階段快取），所有 Default API 皆透過該單例轉呼叫對應的實例成員方法。
+
+<Highlight color="#ff2f00">重要</Highlight>
+
+- `GSIManagerBase<T>` 為純 C# 類（非 `MonoBehaviour`），不會自行更新，必須由主入口的 `MonoBehaviour` 呼叫 [DriveStart](#drivestart)（於 `Start()`）與 [DriveUpdate](#driveupdate)（於 `Update()`）驅動運作。
+- 不可於子類建構子中呼叫任何 Default API 靜態方法，會導致 `GetInstance()` 遞迴而 StackOverflow（死循環）；建構子中請改用實例成員方法（如 [AddGameStage](#addgamestage)）。
+
+### 階段註冊與 ID {#stage-id}
+
+- 每個階段以唯一的 `int` id 註冊至快取。泛型多載**未指定 id** 時，以 `typeof(U).GetHashCode()` 作為 id（同型別僅能註冊一個實例）。
+- **指定 id** 的多載可自訂 id，同型別即可註冊多個實例。
+- 相同 id 重複註冊會輸出警告日誌並**略過**，不會覆蓋既有階段。
+- 註冊時管理器會自動呼叫 `gameStage.SetId(id)` 設定階段辨識碼。
+
+### 切換流程 {#change-flow}
+
+| 模式 | 生效時機 | 行為 |
+| :--- | :--- | :--- |
+| **一般切換**（`force = false`） | 下一次驅動更新 | 僅記錄目標 id，於下一次 [DriveUpdate](#driveupdate) 偵測到 id 變更時，依序執行「舊階段 `OnExit` → 更新當前 id → 新階段初始流程」。**不允許切換至當前階段**（輸出警告且不切換）。 |
+| **強制切換**（`force = true`） | 立即 | 立即依序執行「舊階段 `OnExit` → 更新當前 id → 新階段初始流程」。**不檢查是否為同一階段**，可用於重新進入當前階段。 |
+
+<Highlight color="#0373fc">注意</Highlight>
+
+- 新階段的初始流程（`OnCreate` / `OnEnter` / 開啟刷新）詳見 [GSIBase 生命週期與呼叫時序](./GSIBase.mdx#lifecycle)。
+- 切換至**未註冊**的 id 時，舊階段仍會執行 `OnExit`，接著輸出錯誤日誌，且當前階段會變為空。
+
+## 繼承實作範例 {#inheritance-example}
+
+```csharp
+using OxGFrame.GSIFrame;
+using UnityEngine;
+
+// 自訂遊戲階段管理器：以子類自身作為泛型參數（CRTP）
+public class GSIManagerExample : GSIManagerBase<GSIManagerExample>
+{
+    public GSIManagerExample()
+    {
+        // 建構子中註冊各遊戲階段（僅能使用實例成員方法，不可呼叫 Default API）
+        this.AddGameStage<StartupStageExample>();
+        this.AddGameStage<LogoStageExample>();
+        this.AddGameStage<PatchStageExample>();
+        this.AddGameStage<LoginStageExample>();
+        this.AddGameStage<EnterStageExample>();
+    }
+
+    public override void OnStart()
+    {
+        // 啟動第一個遊戲階段
+        this.ChangeGameStage<StartupStageExample>();
+    }
+
+    public override void OnUpdate(float dt = 0.0f)
+    {
+        base.OnUpdate(dt); // 必須呼叫 base，否則階段不會切換與更新
+    }
+}
+
+// 主入口 MonoBehaviour，驅動管理器運作
+public class Main : MonoBehaviour
+{
+    private void Start()
+    {
+        GSIManagerExample.DriveStart();
+    }
+
+    private void Update()
+    {
+        GSIManagerExample.DriveUpdate(Time.deltaTime);
+    }
+}
+```
+
+之後即可於任意處透過 Default API 操作階段切換：
+
+```csharp
+// 一般切換（下一次驅動更新時執行）
+GSIManagerExample.ChangeStage<LoginStageExample>();
+
+// 強制切換（立即執行）
+GSIManagerExample.ChangeStage<LoginStageExample>(true);
+```
+
+<Highlight color="#00d679">提醒</Highlight> 可透過 Project 視窗右鍵範本快速建立管理器子類：**Create → OxGFrame → GSI Frame → Template Scripts → Template GSIManager.cs (Game Stage Manager)**。
+
+## 成員總覽 {#overview}
+
+#### 靜態方法（Default API）
+
+繼承後直接以子類類名呼叫（如 `GSIManagerExample.ChangeStage<U>()`）。
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [GetCurrentId](#getcurrentid) | 取得當前階段 id。 |
+| [GetStage\<U\>](#getstage) | 取得已註冊的階段實例。 |
+| [AddStage](#addstage) | 建立並註冊遊戲階段。 |
+| [DeleteStage](#deletestage) | 從快取移除已註冊的階段。 |
+| [ChangeStage](#changestage) | 切換遊戲階段（一般／強制）。 |
+| [DriveStart](#drivestart) | 驅動啟動（於主入口 `Start()` 呼叫）。 |
+| [DriveUpdate](#driveupdate) | 驅動更新（於主入口 `Update()` 呼叫）。 |
+| [Start / Update](#obsolete-methods) | 已棄用的舊版驅動介面。 |
+
+#### 可覆寫方法（virtual）
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [OnStart](#onstart) | 由 `DriveStart` 呼叫，覆寫後於此啟動第一個階段。 |
+| [OnUpdate](#onupdate) | 由 `DriveUpdate` 每幀呼叫，預設執行階段切換偵測與刷新。 |
+
+#### 一般方法（實例成員）
+
+供子類內部使用（如建構子註冊、`OnStart` 啟動階段）。
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [GetCurrentGameStageId](#getcurrentgamestageid) | 取得當前階段 id（成員版本）。 |
+| [GetGameStage\<U\>](#getgamestage) | 取得已註冊的階段實例（成員版本）。 |
+| [AddGameStage](#addgamestage) | 註冊遊戲階段（成員版本）。 |
+| [DeleteGameStage](#deletegamestage) | 移除已註冊的階段（成員版本）。 |
+| [ChangeGameStage](#changegamestage) | 一般切換（成員版本）。 |
+| [ChangeGameStageForce](#changegamestageforce) | 立即強制切換（成員版本）。 |
+
+#### 受保護成員（繼承後可用）
+
+| 成員 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| `_dictGameStage` | `Dictionary<int, GSIBase>` | 階段快取。 |
+| `_incomingId` | `int` | 待切換的目標階段 id。 |
+| `_currentId` | `int` | 當前階段 id（唯讀屬性）。 |
+| `_currentGameStage` | `GSIBase` | 當前階段實例（唯讀屬性）。 |
+| `GetInstance()` | `static T` | 取得管理器單例（延遲建立、執行緒安全）。 |
+| `UpdateGameStage(float dt = 0.0f)` | `void` | 偵測階段切換並刷新當前階段（由 [OnUpdate](#onupdate) 呼叫）。 |
+| `InitGameStage()` | `void` | 以當前 id 取出階段並啟動其初始流程。 |
+| `ReleaseGameStage()` | `void` | 呼叫當前階段的 `OnExit`。 |
 
 ---
 
-<Highlight color="#0373fc">注意</Highlight> 當調用 `ChangeStage` 後，舊階段的 `OnExit` 會先被觸發，接著新階段會調用 `BeginInit`（非同步）進入初始化流程。
+### GetCurrentId {#getcurrentid}
+
+```csharp
+public static int GetCurrentId()
+```
+
+**回傳值**
+
+`int` — 當前階段 id；尚未切換過任何階段時為 `0`。
+
+**說明**
+
+取得當前正在執行的階段 id。
+
+---
+
+### GetStage\<U\> {#getstage}
+
+```csharp
+public static U GetStage<U>() where U : GSIBase
+public static U GetStage<U>(int id) where U : GSIBase
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| id | `int` | 階段 id。未指定時，以 `typeof(U).GetHashCode()` 查找。 |
+
+**回傳值**
+
+`U` — 對應的階段實例；查無時回傳 `null`。
+
+**說明**
+
+從快取取得已註冊的階段實例。無參數多載以型別 hash 查找，僅適用於**未指定 id 註冊**的階段；以自訂 id 註冊者請使用 `GetStage<U>(int id)`。
+
+**範例**
+
+```csharp
+var loginStage = GSIManagerExample.GetStage<LoginStageExample>();
+```
+
+---
+
+### AddStage {#addstage}
+
+```csharp
+public static void AddStage<U>() where U : GSIBase, new()
+public static void AddStage<U>(int id) where U : GSIBase, new()
+public static void AddStage(int id, GSIBase gameStage)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| id | `int` | 階段 id。未指定時，以 `typeof(U).GetHashCode()` 作為 id。 |
+| gameStage | `GSIBase` | 已建立的階段實例（以指定 id 註冊）。 |
+
+**說明**
+
+建立（`new U()`）並註冊遊戲階段至管理器快取，或以指定 id 直接註冊既有實例。註冊時自動呼叫 `SetId(id)` 設定階段辨識碼。
+
+<Highlight color="#0373fc">注意</Highlight> 相同 id 重複註冊會輸出警告並略過，不會覆蓋既有階段。
+
+**範例**
+
+```csharp
+// 以型別 hash 作為 id 註冊
+GSIManagerExample.AddStage<FightStageExample>();
+
+// 以自訂 id 註冊既有實例
+GSIManagerExample.AddStage(0x01, new FightStageExample());
+```
+
+---
+
+### DeleteStage {#deletestage}
+
+```csharp
+public static void DeleteStage<U>() where U : GSIBase
+public static void DeleteStage(int id)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| id | `int` | 階段 id。未指定時，以 `typeof(U).GetHashCode()` 查找。 |
+
+**說明**
+
+從快取移除已註冊的階段；查無時不動作。
+
+<Highlight color="#0373fc">注意</Highlight> 僅從快取移除，不會觸發該階段的 `OnExit`。
+
+---
+
+### ChangeStage {#changestage}
+
+```csharp
+public static void ChangeStage<U>(bool force = false) where U : GSIBase
+public static void ChangeStage(int id, bool force = false)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| id | `int` | 目標階段 id。泛型多載以 `typeof(U).GetHashCode()` 作為目標 id。 |
+| force | `bool` | 是否立即強制切換。<br/>**預設值**：`false`（一般切換） |
+
+**說明**
+
+切換遊戲階段：
+
+- **一般切換**（`force = false`）：記錄目標 id，於下一次驅動更新時執行切換；不允許切換至當前階段（輸出警告且不切換）。
+- **強制切換**（`force = true`）：立即依序執行「舊階段 `OnExit` → 更新當前 id → 新階段初始流程」；不檢查是否為同一階段，可用於重新進入當前階段。
+
+切換細節請參考[切換流程](#change-flow)與 [GSIBase 生命週期與呼叫時序](./GSIBase.mdx#lifecycle)。
+
+**範例**
+
+```csharp
+// 一般切換（下一次驅動更新時執行）
+GSIManagerExample.ChangeStage<EnterStageExample>();
+
+// 強制切換（立即執行，亦可重新進入當前階段）
+GSIManagerExample.ChangeStage<EnterStageExample>(true);
+```
+
+---
+
+### DriveStart {#drivestart}
+
+```csharp
+public static void DriveStart()
+```
+
+**說明**
+
+驅動啟動，內部轉呼叫單例的 [OnStart](#onstart)。於主入口 `MonoBehaviour` 的 `Start()` 中呼叫一次；首次呼叫會自動建立管理器單例（執行建構子完成階段註冊）。
+
+**範例**
+
+```csharp
+private void Start()
+{
+    GSIManagerExample.DriveStart();
+}
+```
+
+---
+
+### DriveUpdate {#driveupdate}
+
+```csharp
+public static void DriveUpdate(float dt = 0.0f)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| dt | `float` | 幀間隔時間（一般傳入 `Time.deltaTime`）。<br/>**預設值**：`0.0f` |
+
+**說明**
+
+驅動更新，內部轉呼叫單例的 [OnUpdate](#onupdate)，執行階段切換偵測與當前階段的 `OnUpdate` 刷新。於主入口 `MonoBehaviour` 的 `Update()` 中每幀呼叫。
+
+**範例**
+
+```csharp
+private void Update()
+{
+    GSIManagerExample.DriveUpdate(Time.deltaTime);
+}
+```
+
+---
+
+### Start / Update（已棄用） {#obsolete-methods}
+
+```csharp
+[Obsolete("Use DriveStart instead.")]
+public static void Start()
+
+[Obsolete("Use DriveUpdate instead.")]
+public static void Update(float dt = 0.0f)
+```
+
+**說明**
+
+舊版驅動介面，行為分別同 [DriveStart](#drivestart) 與 [DriveUpdate](#driveupdate)。
+
+<Highlight color="#0373fc">注意</Highlight> 已標記 `[Obsolete]`，請改用 `DriveStart` / `DriveUpdate`。
+
+---
+
+### OnStart {#onstart}
+
+```csharp
+public virtual void OnStart()
+```
+
+**說明**
+
+由 [DriveStart](#drivestart) 呼叫。基類為空實作，覆寫後通常於此呼叫 [ChangeGameStage](#changegamestage) 啟動第一個遊戲階段。
+
+---
+
+### OnUpdate {#onupdate}
+
+```csharp
+public virtual void OnUpdate(float dt)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| dt | `float` | 幀間隔時間，由 [DriveUpdate](#driveupdate) 傳入。 |
+
+**說明**
+
+由 [DriveUpdate](#driveupdate) 每幀呼叫。基類預設實作執行 `UpdateGameStage(dt)`：偵測階段切換（一般切換於此時生效），並於當前階段的 `runUpdate` 開啟時呼叫其 `OnUpdate`。
+
+<Highlight color="#ff2f00">重要</Highlight> 覆寫時必須呼叫 `base.OnUpdate(dt)`，否則階段將不會切換與更新。
+
+---
+
+### GetCurrentGameStageId {#getcurrentgamestageid}
+
+```csharp
+public int GetCurrentGameStageId()
+```
+
+**回傳值**
+
+`int` — 當前階段 id；尚未切換過任何階段時為 `0`。
+
+**說明**
+
+[GetCurrentId](#getcurrentid) 的實例成員版本，供子類內部使用。
+
+---
+
+### GetGameStage\<U\> {#getgamestage}
+
+```csharp
+public U GetGameStage<U>() where U : GSIBase
+public U GetGameStage<U>(int id) where U : GSIBase
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| id | `int` | 階段 id。未指定時，以 `typeof(U).GetHashCode()` 查找。 |
+
+**回傳值**
+
+`U` — 對應的階段實例；查無時回傳 `null`。
+
+**說明**
+
+[GetStage\<U\>](#getstage) 的實例成員版本，供子類內部使用。
+
+---
+
+### AddGameStage {#addgamestage}
+
+```csharp
+public void AddGameStage<U>() where U : GSIBase, new()
+public void AddGameStage<U>(int id) where U : GSIBase, new()
+public void AddGameStage(int id, GSIBase gameStage)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| id | `int` | 階段 id。未指定時，以 `typeof(U).GetHashCode()` 作為 id。 |
+| gameStage | `GSIBase` | 已建立的階段實例（以指定 id 註冊）。 |
+
+**說明**
+
+[AddStage](#addstage) 的實例成員版本，於子類**建構子**中註冊各階段時使用（建構子中不可呼叫靜態 Default API）。註冊時自動呼叫 `gameStage.SetId(id)`；相同 id 重複註冊會輸出警告並略過；傳入 `null` 實例會輸出錯誤並略過。
+
+**範例**
+
+```csharp
+public GSIManagerExample()
+{
+    this.AddGameStage<StartupStageExample>();
+}
+```
+
+---
+
+### DeleteGameStage {#deletegamestage}
+
+```csharp
+public void DeleteGameStage<U>() where U : GSIBase
+public void DeleteGameStage(int id)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| id | `int` | 階段 id。未指定時，以 `typeof(U).GetHashCode()` 查找。 |
+
+**說明**
+
+[DeleteStage](#deletestage) 的實例成員版本；查無時不動作。不允許刪除**當前運行中**的階段（會輸出警告並略過）。
+
+---
+
+### ChangeGameStage {#changegamestage}
+
+```csharp
+public void ChangeGameStage<U>() where U : GSIBase
+public void ChangeGameStage(int id)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| id | `int` | 目標階段 id。泛型多載以 `typeof(U).GetHashCode()` 作為目標 id。 |
+
+**說明**
+
+一般切換的實例成員版本：記錄目標 id，於下一次驅動更新時執行切換；不允許切換至當前階段；目標階段不存在時，會輸出錯誤並取消切換。通常於 [OnStart](#onstart) 中呼叫以啟動第一個階段。
+
+---
+
+### ChangeGameStageForce {#changegamestageforce}
+
+```csharp
+public void ChangeGameStageForce<U>() where U : GSIBase
+public void ChangeGameStageForce(int id)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| id | `int` | 目標階段 id。泛型多載以 `typeof(U).GetHashCode()` 作為目標 id。 |
+
+**說明**
+
+強制切換的實例成員版本：立即依序執行「舊階段 `OnExit` → 更新當前 id → 新階段初始流程」；不檢查是否為同一階段，可用於重新進入當前階段。
 
 ---

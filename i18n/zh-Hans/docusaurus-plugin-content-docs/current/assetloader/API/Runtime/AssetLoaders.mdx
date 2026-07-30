@@ -1,5 +1,6 @@
 ---
 sidebar_position: 4
+description: AssetLoaders 是 AssetLoader 模块的资源加载统一入口，整合 Resources 与 Bundle (YooAsset) 双轨加载，提供场景、资源与原生文件的预加载、加载、实例化、卸载与群组管理接口。
 ---
 
 # AssetLoaders
@@ -22,82 +23,1506 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`AssetLoaders` 是 **AssetLoader** 模块的资源加载统一入口（Facade），整合 Unity 原生 **Resources** 与 **Bundle (YooAsset)** 双轨加载，涵盖**场景、一般资源（Asset）与原生文件（RawFile）**的同步／异步加载、预加载、实例化、卸载与释放，并提供以 `groupId` 为单位的群组（GroupCacher）批量管理，底层皆以**引用计数**管理缓存。
+
+|  |  |
+| :--- | :--- |
+| **命名空间** | `OxGFrame.AssetLoader` |
+| **类型** | `public static class` |
+| **源码** | [AssetLoaders.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/AssetLoader/Scripts/Runtime/AssetLoaders.cs) |
+
+```csharp
 using OxGFrame.AssetLoader;
+```
 
-## 核心机制：路径解析规则
+<Highlight color="#0373fc">注意</Highlight> 使用 Bundle 加载前，须先在场景中创建 `PatchLauncher` 并完成 Package 初始化（参考 [AssetLoader 介绍](../../intro.mdx)与 [AssetPatcher](./AssetPatcher.mdx)）。
 
-`AssetLoaders` 内置自动过滤机制，会根据 `assetName` 的前缀决定加载路径：
-- Asset
-  * **加载自 Resources**: 若路径带有 <Highlight color="#00d679">res#</Highlight> 前缀（例如：`res#Prefabs/Player`），将自动解析并从 Unity 内置 Resources 加载。
-  * **加载自 Bundle**: 若无前缀，则预设从 YooAsset 资源包中加载 (须注意循址规则)。
-- Scene
-  * **加载自 Build Scene**: 若路径带有 <Highlight color="#00d679">build#</Highlight> 前缀（例如：`build#SimpleScene`），将自动解析并从 Unity 内置 Scenes In Build 清单中加载。
+## 快速上手 {#quick-start}
+
+```csharp
+// 加载并实例化 Prefab（Bundle 资源使用 Address 名称）
+var player = await AssetLoaders.InstantiateAssetAsync<GameObject>("PlayerUI");
+
+// 从 Resources 加载资源（res# 前缀 + Resources 相对路径）
+var icon = await AssetLoaders.LoadAssetAsync<Texture2D>("res#Textures/PlayerIcon");
+
+// 批量预加载资源，之后加载直接命中缓存
+await AssetLoaders.PreloadAssetAsync<GameObject>(new string[] { "PlayerUI", "EnemyUI" });
+
+// 加载 Bundle 场景（Additive 叠加）
+await AssetLoaders.LoadAdditiveSceneAsync("BattleScene");
+
+// 加载原生文件内容（仅支持 Bundle）
+string json = await AssetLoaders.LoadRawFileAsync<string>("GameConfig");
+
+// 卸载资源（与加载成对调用，维持引用计数正确）
+AssetLoaders.UnloadAsset("PlayerUI");
+```
+
+## 通用规则 {#general-rules}
+
+### 资源名称前缀 {#asset-name-prefix}
+
+`assetName` 支持前缀解析，依前缀决定资源加载来源：
+
+| 前缀 | 说明 | 示例 |
+| :--- | :--- | :--- |
+| **res#** | 从 Unity 原生 **Resources** 加载资源（依 Resources 相对路径）。 | `res#Prefabs/PlayerUI` |
+| **无前缀** | 默认从 **Asset Bundle (YooAsset)** 加载资源（直接使用可寻址名称 Address）。 | `PlayerUI` |
+
+<Highlight color="#0373fc">注意</Highlight>
+
+- **场景**与**原生文件（RawFile）**方法仅支持 Bundle 加载，不支持 `res#` 前缀（RawFile 传入 `res#` 将输出错误日志）。
+- Build Settings（Scenes In Build）场景的 `build#` 前缀由 `CoreFrames.USFrame` 场景系统处理，`AssetLoaders` 不支持。
+
+### 资源包 (Package) {#package}
+
+Bundle 加载相关方法皆提供 `packageName` 重载：
+
+- **未指定** `packageName`：自动使用默认 Package（`AssetPatcher.GetDefaultPackageName()`）。
+- **指定** `packageName`：从指定的 Package 加载资源，适用于多 Package 分包管理（App／DLC Package 概念与 PlayMode 说明请参考 [AssetPatcher 通用规则](./AssetPatcher.mdx#general-rules)）。
+
+### YooAsset 版本兼容性 {#yooasset-compat}
+
+自 **v3.7.0** 起同时支持 **YooAsset 2.x** 与 **3.x**：依安装版本自动定义 `YOOASSET_2` / `YOOASSET_3`，公开 API 签名完全一致，项目代码无需修改（如原生文件在 v3 内部改以 `RawFileObject` 加载，行为一致）。完整差异对照参考 [AssetPatcher › YooAsset 版本兼容性](./AssetPatcher.mdx#yooasset-compat)。
+
+### 引用计数与卸载 {#ref-counting}
+
+<Highlight color="#0373fc">注意</Highlight>
+
+- 每次 `Load` / `Instantiate` 成功都会使该资源的缓存引用计数 **+1**；`Unload` 使计数 **-1**，计数归零时才实际释放并移出缓存。
+- `Preload` 仅将资源加载至缓存（计数为 0），**不增加**引用计数；已在缓存中的资源会跳过预加载。
+- `forceUnload = true` 时**跳过引用计数**直接释放。
+- `Release` 系列方法（`ReleaseAssets` / `ReleaseScenes` / `ReleaseRawFiles`）强制释放**全部**缓存，仅适合关卡切换或游戏关闭等时机。
+- 若资源正在加载中调用卸载，卸载请求会排入队列，待加载完成后依序执行。
+
+<Highlight color="#ff2f00">重要</Highlight> `Instantiate` 系列产生的实例对象**销毁时不会自动归还引用计数**。对于 Bundle 资源，建议 `Unload` 与 `Destroy` 成对调用，而非只销毁对象，以维持引用计数的正确性。
+
+### 加载重试 {#retry}
+
+加载失败时会自动重试，重试上限由 `maxRetryCount` 参数控制（默认 `MAX_RETRY_COUNT` = `3`）；重试耗尽后输出警告日志并返回 `null`（或 `default`）。场景加载的重试次数固定为 1，不受参数控制。
+
+### 进度回调 (Progression) {#progression}
+
+```csharp
+public delegate void Progression(float progress, float currentCount, float totalCount)
+```
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| progress | `float` | 总进度（`currentCount / totalCount`，0～1）。 |
+| currentCount | `float` | 当前进度数量。批量预加载时为已完成的资源数；单个加载时为加载进度（0～1）。 |
+| totalCount | `float` | 总数量。批量预加载时为资源总数；单个加载时为 `1`。 |
+
+### LoadType 枚举 {#loadtype}
+
+批量释放方法以 `LoadType` 指定处理的缓存来源：
+
+| 值 | 说明 |
+| :--- | :--- |
+| `Any` | 同时处理 Resources 与 Bundle 缓存。 |
+| `Resources` | 仅处理 Resources 缓存。 |
+| `Bundle` | 仅处理 Bundle 缓存。 |
 
 ---
 
-## Scene Methods (场景加载)
+## 场景加载 {#scene}
 
-提供场景的非同步与同步加载，支持 `Single` 与 `Additive` 模式。
+提供 Bundle 场景的同步／异步加载，支持 `Single`（替换当前场景）与 `Additive`（叠加场景）模式；Additive 场景以堆栈计数管理，需手动卸载。
 
-### LoadSceneAsync / LoadScene
-加载指定场景。
-* **Params**:
-    * `string assetName`: 场景名称或路径。
-    * `LoadSceneMode loadSceneMode`: 场景加载模式。
-    * `bool activateOnLoad`: 加载完成后是否自动激活场景。
-    * `Progression progression`: 加载进度回调。
+### 方法总览 {#scene-overview}
 
-### LoadSingleSceneAsync / LoadAdditiveSceneAsync
-快捷方法，分别以 `Single` (替换当前场景) 或 `Additive` (叠加场景) 模式加载。
+#### 场景加载
 
-### UnloadScene
-卸载场景并释放关联资源。
+| 方法 | 说明 |
+| :--- | :--- |
+| [LoadSceneAsync](#loadsceneasync) | 异步加载 Bundle 场景（完整参数版本）。 |
+| [LoadScene](#loadscene) | 同步加载 Bundle 场景。 |
+| [LoadSingleSceneAsync](#loadsinglesceneasync) | 异步以 `Single` 模式加载场景（快捷方法）。 |
+| [LoadSingleScene](#loadsinglescene) | 同步以 `Single` 模式加载场景（快捷方法）。 |
+| [LoadAdditiveSceneAsync](#loadadditivesceneasync) | 异步以 `Additive` 模式叠加加载场景（快捷方法）。 |
+| [LoadAdditiveScene](#loadadditivescene) | 同步以 `Additive` 模式叠加加载场景（快捷方法）。 |
 
----
+#### 场景卸载
 
-## Asset Methods (资源加载与实例化)
-
-处理 Prefab、Texture、AudioClip 等资源的加载与物件生成。
-
-
-
-### PreloadAssetAsync / PreloadAsset
-预载入资源至缓存中，不执行生成（Instantiate），适用于效能优化。
-
-### LoadAssetAsync / LoadAsset
-载入资源并返回资源物件。
-
-### InstantiateAssetAsync / InstantiateAsset
-载入资源并直接进行 `Object.Instantiate` 生成实例。
-* **支持多种 Overloads**: 可指定 `Position`, `Rotation`, `Parent`, `WorldPositionStays` 等参数。
-
-### UnloadAsset
-卸载单个资源缓存。若传入 `forceUnload = true`，则会强制执行释放。
+| 方法 | 说明 |
+| :--- | :--- |
+| [UnloadScene](#unloadscene) | 卸载 Additive 场景（可选择是否递归卸载全部堆栈实例）。 |
+| [ReleaseScenes](#releasescenes) | 强制释放所有 Additive 场景缓存。 |
 
 ---
 
-## RawFile Methods (原生文件加载)
+### LoadSceneAsync {#loadsceneasync}
 
-专门用于加载 **Rawfile** 类型的文件（如 Config, Json, Bin, Mp4 等），仅支持 Bundle 加载。
+```csharp
+public static async UniTask<BundlePack> LoadSceneAsync(string assetName, LoadSceneMode loadSceneMode = LoadSceneMode.Single, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+public static async UniTask<BundlePack> LoadSceneAsync(string assetName, LoadSceneMode loadSceneMode = LoadSceneMode.Single, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+public static async UniTask<BundlePack> LoadSceneAsync(string packageName, string assetName, LoadSceneMode loadSceneMode = LoadSceneMode.Single, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+public static async UniTask<BundlePack> LoadSceneAsync(string packageName, string assetName, LoadSceneMode loadSceneMode = LoadSceneMode.Single, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+```
 
-### GetRawFilePathAsync / GetRawFilePath
-取得 RawFile 在本地缓存中的物理路径，可用于后续的文件读取（FileStream/IO）。
+**参数**
 
-### LoadRawFileAsync / LoadRawFile
-直接加载文件内容并转换为指定类型：
-* 支持泛型 `string` 或 `byte[]`。
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 场景资源名称（Address；仅支持 Bundle 场景）。 |
+| loadSceneMode | `LoadSceneMode` | 场景加载模式（`Single` 替换当前场景／`Additive` 叠加场景）。<br/>**默认值**：`LoadSceneMode.Single` |
+| localPhysicsMode | `LocalPhysicsMode` | 场景的本地物理模式（是否创建独立的 2D／3D 物理场景）。<br/>**默认值**：`LocalPhysicsMode.None` |
+| activateOnLoad | `bool` | 加载完成后是否立即激活场景。`false` 时加载完成后暂缓激活，之后可通过返回的 `BundlePack.UnsuspendScene()` 激活。<br/>**默认值**：`true` |
+| priority | `uint` | YooAsset 异步加载优先级（仅对 Bundle 加载生效）。<br/>**默认值**：`100` |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+
+**返回值**
+
+`UniTask<BundlePack>` — 场景包装对象（内含 YooAsset `SceneHandle`，可通过 `GetScene()` 获取 `Scene`、`UnsuspendScene()` 解除暂缓）；加载失败时返回 `null`。
+
+**说明**
+
+异步加载 Bundle 场景。
+
+<Highlight color="#0373fc">注意</Highlight>
+
+- `Single` 模式加载成功后，内部的 Additive 场景计数缓存会全部清空（先前的场景由 Unity 自动卸载）。
+- `Additive` 模式可重复加载同名场景，内部以堆栈计数（`名称#序号`）管理，需以 [UnloadScene](#unloadscene) 手动卸载。
+- `Single` 模式对同名场景具有防重复加载处理：加载中重复调用会等待同一个加载任务完成。
+
+<Highlight color="#00d679">提醒</Highlight> 此方法的重载仅以第三个参数类型（`bool` 或 `LocalPhysicsMode`）区分，省略后续参数的简短调用可能造成重载解析二义性（编译错误），建议一般情境改用 [LoadSingleSceneAsync](#loadsinglesceneasync)／[LoadAdditiveSceneAsync](#loadadditivesceneasync)，或明确传入足够的参数。
+
+**示例**
+
+```csharp
+// 完整指定参数，加载主场景并暂缓激活
+var pack = await AssetLoaders.LoadSceneAsync("MainScene", LoadSceneMode.Single, LocalPhysicsMode.None, activateOnLoad: false);
+
+// 适当时机再激活场景
+pack.UnsuspendScene();
+```
 
 ---
 
-## Group Cacher (群组缓存管理)
+### LoadScene {#loadscene}
 
-针对需要「批量管理、批量释放」的情境（例如：特定关卡的所有资源），所有的 Load/Preload 方法皆提供带有 `int groupId` 的版本。
+```csharp
+public static BundlePack LoadScene(string assetName, LoadSceneMode loadSceneMode = LoadSceneMode.Single, Progression progression = null)
+public static BundlePack LoadScene(string assetName, LoadSceneMode loadSceneMode = LoadSceneMode.Single, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, Progression progression = null)
+public static BundlePack LoadScene(string packageName, string assetName, LoadSceneMode loadSceneMode = LoadSceneMode.Single, Progression progression = null)
+public static BundlePack LoadScene(string packageName, string assetName, LoadSceneMode loadSceneMode = LoadSceneMode.Single, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, Progression progression = null)
+```
 
-* **HasInCache(int groupId, string assetName)**: 检查资源是否已存在于特定群组缓存中。
-* **UnloadAssets(int groupId, LoadType loadType = LoadType.Any)**: 释放该群组内所有的 Resources & Bundle 资源，不过实际还是依照计数管理。
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 场景资源名称（Address；仅支持 Bundle 场景）。 |
+| loadSceneMode | `LoadSceneMode` | 场景加载模式。<br/>**默认值**：`LoadSceneMode.Single` |
+| localPhysicsMode | `LocalPhysicsMode` | 场景的本地物理模式。<br/>**默认值**：`LocalPhysicsMode.None` |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+
+**返回值**
+
+`BundlePack` — 场景包装对象；加载失败时返回 `null`。
+
+**说明**
+
+同步加载 Bundle 场景，行为同 [LoadSceneAsync](#loadsceneasync)（无 `activateOnLoad` 与 `priority` 参数）。
 
 ---
 
-<Highlight color="#ff2f00">重要</Highlight> 进行资源释放前，务必确认该资源已不再被引用。对于 Bundle 资源，建议成对调用 `Unload` & `Destroy` 而非直接销毁物件，以维持引用计数的正确性。
+### LoadSingleSceneAsync {#loadsinglesceneasync}
+
+```csharp
+public static async UniTask<BundlePack> LoadSingleSceneAsync(string assetName, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+public static async UniTask<BundlePack> LoadSingleSceneAsync(string packageName, string assetName, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 场景资源名称（Address；仅支持 Bundle 场景）。 |
+| activateOnLoad | `bool` | 加载完成后是否立即激活场景。<br/>**默认值**：`true` |
+| priority | `uint` | YooAsset 异步加载优先级。<br/>**默认值**：`100` |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+
+**返回值**
+
+`UniTask<BundlePack>` — 场景包装对象；加载失败时返回 `null`。
+
+**说明**
+
+以 `Single` 模式（替换当前场景）异步加载场景的快捷方法，等同调用 [LoadSceneAsync](#loadsceneasync) 并固定 `loadSceneMode = LoadSceneMode.Single`、`localPhysicsMode = LocalPhysicsMode.None`。
+
+**示例**
+
+```csharp
+await AssetLoaders.LoadSingleSceneAsync("MainScene");
+```
+
+---
+
+### LoadSingleScene {#loadsinglescene}
+
+```csharp
+public static BundlePack LoadSingleScene(string assetName, Progression progression = null)
+public static BundlePack LoadSingleScene(string packageName, string assetName, Progression progression = null)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 场景资源名称（Address；仅支持 Bundle 场景）。 |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+
+**返回值**
+
+`BundlePack` — 场景包装对象；加载失败时返回 `null`。
+
+**说明**
+
+以 `Single` 模式同步加载场景的快捷方法。
+
+---
+
+### LoadAdditiveSceneAsync {#loadadditivesceneasync}
+
+```csharp
+public static async UniTask<BundlePack> LoadAdditiveSceneAsync(string assetName, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+public static async UniTask<BundlePack> LoadAdditiveSceneAsync(string packageName, string assetName, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 场景资源名称（Address；仅支持 Bundle 场景）。 |
+| activateOnLoad | `bool` | 加载完成后是否立即激活场景。<br/>**默认值**：`true` |
+| priority | `uint` | YooAsset 异步加载优先级。<br/>**默认值**：`100` |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+
+**返回值**
+
+`UniTask<BundlePack>` — 场景包装对象；加载失败时返回 `null`。
+
+**说明**
+
+以 `Additive` 模式（叠加场景）异步加载场景的快捷方法。可重复加载同名场景，内部以堆栈计数管理，需以 [UnloadScene](#unloadscene) 手动卸载。
+
+**示例**
+
+```csharp
+// 叠加加载战斗场景
+await AssetLoaders.LoadAdditiveSceneAsync("BattleScene");
+
+// 战斗结束后卸载
+AssetLoaders.UnloadScene("BattleScene");
+```
+
+---
+
+### LoadAdditiveScene {#loadadditivescene}
+
+```csharp
+public static BundlePack LoadAdditiveScene(string assetName, Progression progression = null)
+public static BundlePack LoadAdditiveScene(string packageName, string assetName, Progression progression = null)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 场景资源名称（Address；仅支持 Bundle 场景）。 |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+
+**返回值**
+
+`BundlePack` — 场景包装对象；加载失败时返回 `null`。
+
+**说明**
+
+以 `Additive` 模式同步加载场景的快捷方法。
+
+---
+
+### UnloadScene {#unloadscene}
+
+```csharp
+public static void UnloadScene(string assetName, bool recursively = false)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | 场景资源名称。 |
+| recursively | `bool` | 是否递归卸载同名场景的**所有**堆栈实例。`false` 时仅卸载最后加载的一个（后进先出）。<br/>**默认值**：`false` |
+
+**说明**
+
+卸载 Additive 场景。同名场景的堆栈计数归零时，将联动 YooAsset 尝试释放未使用的资源。
+
+<Highlight color="#0373fc">注意</Highlight> 仅能卸载以 `Additive` 模式加载的场景；对 `Single` 场景或未找到记录的名称调用将输出错误日志（`Single` 场景在切换时由 Unity 自动卸载）。
+
+---
+
+### ReleaseScenes {#releasescenes}
+
+```csharp
+public static void ReleaseScenes()
+```
+
+**说明**
+
+强制卸载**所有** Additive 场景并清空堆栈计数缓存，最后调用 `Resources.UnloadUnusedAssets()` 进行资源回收。
+
+<Highlight color="#ff2f00">重要</Highlight> 此操作会释放全部 Additive 场景，请在确认不再需要时（如关卡整体切换）调用。
+
+---
+
+## 缓存查询 {#cacher}
+
+查询与获取当前缓存中的资源包装对象。
+
+### 方法总览 {#cacher-overview}
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [HasInCache](#hasincache) | 检查资源是否已在缓存中。 |
+| [GetFromCache\<T\>](#getfromcache) | 获取缓存中的资源包装对象（`ResourcePack`／`BundlePack`）。 |
+
+---
+
+### HasInCache {#hasincache}
+
+```csharp
+public static bool HasInCache(string assetName)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | 资源名称（支持 `res#` 前缀）。 |
+
+**返回值**
+
+`bool` — 资源是否已存在于缓存（依前缀自动判断查询 Resources 或 Bundle 缓存）。
+
+**说明**
+
+检查资源是否已在缓存中（已预加载或已加载）。
+
+---
+
+### GetFromCache\<T\> {#getfromcache}
+
+```csharp
+public static T GetFromCache<T>(string assetName) where T : AssetObject
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | 资源名称（支持 `res#` 前缀）。 |
+
+**返回值**
+
+`T` — 缓存中的资源包装对象；未找到时返回 `null`。
+
+**说明**
+
+获取缓存中的资源包装对象。来源为 Resources 时类型为 `ResourcePack`；来源为 Bundle 时类型为 `BundlePack`（可进一步通过 `GetOperationHandle<T>()` 获取 YooAsset 操作句柄）。
+
+**示例**
+
+```csharp
+var pack = AssetLoaders.GetFromCache<BundlePack>("PlayerUI");
+if (pack != null)
+    Debug.Log($"引用计数: {pack.refCount}");
+```
+
+---
+
+## 资源加载 (Asset) {#asset}
+
+一般资源（Prefab、Texture、AudioClip 等 `UnityEngine.Object`）的预加载、加载、实例化与卸载，支持 Resources（`res#`）与 Bundle 双轨。
+
+### 方法总览 {#asset-overview}
+
+#### 预加载
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [PreloadAssetAsync\<T\>](#preloadassetasync) | 异步预加载资源至缓存（支持批量）。 |
+| [PreloadAsset\<T\>](#preloadasset) | 同步预加载资源至缓存（支持批量）。 |
+
+#### 加载
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [LoadAssetAsync\<T\>](#loadassetasync) | 异步加载资源并返回资源对象。 |
+| [LoadAsset\<T\>](#loadasset) | 同步加载资源并返回资源对象。 |
+
+#### 实例化
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [InstantiateAssetAsync\<T\>](#instantiateassetasync) | 异步加载资源并直接实例化（多种位置／父节点重载）。 |
+| [InstantiateAsset\<T\>](#instantiateasset) | 同步加载资源并直接实例化。 |
+
+#### 卸载与释放
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [UnloadAsset](#unloadasset) | 卸载单个资源（引用计数 -1，可强制卸载）。 |
+| [ReleaseAssets](#releaseassets) | 强制释放全部资源缓存（可指定 `LoadType`）。 |
+
+---
+
+### PreloadAssetAsync\<T\> {#preloadassetasync}
+
+```csharp
+public static async UniTask PreloadAssetAsync<T>(string assetName, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask PreloadAssetAsync<T>(string packageName, string assetName, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask PreloadAssetAsync<T>(string[] assetNames, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask PreloadAssetAsync<T>(string packageName, string[] assetNames, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 资源名称（Bundle 使用 Address；支持 `res#` 前缀）。 |
+| assetNames | `string[]` | 资源名称数组（批量预加载，可混用 `res#` 与 Bundle 名称，内部自动分流）。 |
+| priority | `uint` | YooAsset 异步加载优先级（仅对 Bundle 加载生效）。<br/>**默认值**：`0` |
+| progression | `Progression` | 预加载进度回调。<br/>**默认值**：`null` |
+| maxRetryCount | `byte` | 加载失败时的最大重试次数。<br/>**默认值**：`MAX_RETRY_COUNT`（`3`） |
+
+**返回值**
+
+`UniTask` — 可等待的异步操作。
+
+**说明**
+
+预先将资源加载至缓存，之后调用 [LoadAssetAsync](#loadassetasync) 或 [InstantiateAssetAsync](#instantiateassetasync) 时直接命中缓存，避免使用当下产生加载延迟。
+
+<Highlight color="#0373fc">注意</Highlight> 预加载**不会增加**引用计数；已在缓存中的资源会跳过预加载。
+
+**示例**
+
+```csharp
+// 单个预加载
+await AssetLoaders.PreloadAssetAsync<GameObject>("PlayerUI");
+
+// 批量预加载（混用 Bundle 与 Resources），并监听进度
+await AssetLoaders.PreloadAssetAsync<GameObject>(
+    new string[] { "PlayerUI", "res#Prefabs/EnemyUI" },
+    progression: (progress, currentCount, totalCount) =>
+    {
+        Debug.Log($"预加载进度: {progress * 100f}%（{currentCount}/{totalCount}）");
+    });
+```
+
+---
+
+### PreloadAsset\<T\> {#preloadasset}
+
+```csharp
+public static void PreloadAsset<T>(string assetName, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static void PreloadAsset<T>(string packageName, string assetName, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static void PreloadAsset<T>(string[] assetNames, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static void PreloadAsset<T>(string packageName, string[] assetNames, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 资源名称（Bundle 使用 Address；支持 `res#` 前缀）。 |
+| assetNames | `string[]` | 资源名称数组（批量预加载）。 |
+| progression | `Progression` | 预加载进度回调。<br/>**默认值**：`null` |
+| maxRetryCount | `byte` | 加载失败时的最大重试次数。<br/>**默认值**：`MAX_RETRY_COUNT`（`3`） |
+
+**说明**
+
+同步预加载资源至缓存，行为同 [PreloadAssetAsync](#preloadassetasync)。
+
+---
+
+### LoadAssetAsync\<T\> {#loadassetasync}
+
+```csharp
+public static async UniTask<T> LoadAssetAsync<T>(string assetName, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask<T> LoadAssetAsync<T>(string packageName, string assetName, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 资源名称（Bundle 使用 Address；支持 `res#` 前缀）。 |
+| priority | `uint` | YooAsset 异步加载优先级（仅对 Bundle 加载生效）。<br/>**默认值**：`0` |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+| maxRetryCount | `byte` | 加载失败时的最大重试次数。<br/>**默认值**：`MAX_RETRY_COUNT`（`3`） |
+
+**返回值**
+
+`UniTask<T>` — 加载的资源对象（引用计数 +1）；加载失败时返回 `null`。
+
+**说明**
+
+异步加载资源并返回资源对象（不实例化）。
+
+<Highlight color="#0373fc">注意</Highlight>
+
+- 已在缓存中的资源直接返回（仍会使引用计数 +1）。
+- 同名资源正在加载时，会等待现有加载任务完成后共用结果，不会重复加载。
+
+**示例**
+
+```csharp
+// 从 Bundle 加载
+var uiPrefab = await AssetLoaders.LoadAssetAsync<GameObject>("PlayerUI");
+
+// 从指定 Package 加载
+var dlcPrefab = await AssetLoaders.LoadAssetAsync<GameObject>("Dlc01Package", "DlcShopUI");
+
+// 从 Resources 加载
+var icon = await AssetLoaders.LoadAssetAsync<Texture2D>("res#Textures/PlayerIcon");
+```
+
+---
+
+### LoadAsset\<T\> {#loadasset}
+
+```csharp
+public static T LoadAsset<T>(string assetName, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static T LoadAsset<T>(string packageName, string assetName, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 资源名称（Bundle 使用 Address；支持 `res#` 前缀）。 |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+| maxRetryCount | `byte` | 加载失败时的最大重试次数。<br/>**默认值**：`MAX_RETRY_COUNT`（`3`） |
+
+**返回值**
+
+`T` — 加载的资源对象（引用计数 +1）；加载失败时返回 `null`。
+
+**说明**
+
+同步加载资源并返回资源对象，行为同 [LoadAssetAsync](#loadassetasync)。
+
+---
+
+### InstantiateAssetAsync\<T\> {#instantiateassetasync}
+
+```csharp
+public static async UniTask<T> InstantiateAssetAsync<T>(string assetName, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask<T> InstantiateAssetAsync<T>(string packageName, string assetName, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask<T> InstantiateAssetAsync<T>(string assetName, Vector3 position, Quaternion rotation, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask<T> InstantiateAssetAsync<T>(string packageName, string assetName, Vector3 position, Quaternion rotation, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask<T> InstantiateAssetAsync<T>(string assetName, Vector3 position, Quaternion rotation, Transform parent, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask<T> InstantiateAssetAsync<T>(string packageName, string assetName, Vector3 position, Quaternion rotation, Transform parent, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask<T> InstantiateAssetAsync<T>(string assetName, Transform parent, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask<T> InstantiateAssetAsync<T>(string packageName, string assetName, Transform parent, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask<T> InstantiateAssetAsync<T>(string assetName, Transform parent, bool worldPositionStays, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask<T> InstantiateAssetAsync<T>(string packageName, string assetName, Transform parent, bool worldPositionStays, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 资源名称（Bundle 使用 Address；支持 `res#` 前缀）。 |
+| position | `Vector3` | 实例化的位置。 |
+| rotation | `Quaternion` | 实例化的旋转。 |
+| parent | `Transform` | 实例化后挂载的父节点。 |
+| worldPositionStays | `bool` | 挂载至父节点时是否保留世界坐标。 |
+| priority | `uint` | YooAsset 异步加载优先级（仅对 Bundle 加载生效）。<br/>**默认值**：`0` |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+| maxRetryCount | `byte` | 加载失败时的最大重试次数。<br/>**默认值**：`MAX_RETRY_COUNT`（`3`） |
+
+**返回值**
+
+`UniTask<T>` — 实例化后的克隆对象；加载失败时返回 `null`（不执行实例化）。
+
+**说明**
+
+异步加载资源后直接以 `Object.Instantiate` 生成实例，重载对应 Unity 的各种实例化参数（位置、旋转、父节点、世界坐标保留）。
+
+<Highlight color="#ff2f00">重要</Highlight> 每次调用都会使**源资源**的引用计数 +1；销毁实例对象时不会自动归还计数，请搭配 [UnloadAsset](#unloadasset) 成对调用。
+
+**示例**
+
+```csharp
+// 加载并实例化
+var player = await AssetLoaders.InstantiateAssetAsync<GameObject>("PlayerUI");
+
+// 指定位置与旋转
+var enemy = await AssetLoaders.InstantiateAssetAsync<GameObject>("EnemyUI", new Vector3(0, 1, 0), Quaternion.identity);
+
+// 挂载至父节点
+var hpBar = await AssetLoaders.InstantiateAssetAsync<GameObject>("HpBar", this.transform);
+
+// 销毁实例后，成对归还引用计数
+Object.Destroy(player);
+AssetLoaders.UnloadAsset("PlayerUI");
+```
+
+---
+
+### InstantiateAsset\<T\> {#instantiateasset}
+
+```csharp
+public static T InstantiateAsset<T>(string assetName, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static T InstantiateAsset<T>(string packageName, string assetName, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static T InstantiateAsset<T>(string assetName, Vector3 position, Quaternion rotation, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static T InstantiateAsset<T>(string packageName, string assetName, Vector3 position, Quaternion rotation, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static T InstantiateAsset<T>(string assetName, Vector3 position, Quaternion rotation, Transform parent, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static T InstantiateAsset<T>(string packageName, string assetName, Vector3 position, Quaternion rotation, Transform parent, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static T InstantiateAsset<T>(string assetName, Transform parent, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static T InstantiateAsset<T>(string packageName, string assetName, Transform parent, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static T InstantiateAsset<T>(string assetName, Transform parent, bool worldPositionStays, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static T InstantiateAsset<T>(string packageName, string assetName, Transform parent, bool worldPositionStays, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 资源名称（Bundle 使用 Address；支持 `res#` 前缀）。 |
+| position | `Vector3` | 实例化的位置。 |
+| rotation | `Quaternion` | 实例化的旋转。 |
+| parent | `Transform` | 实例化后挂载的父节点。 |
+| worldPositionStays | `bool` | 挂载至父节点时是否保留世界坐标。 |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+| maxRetryCount | `byte` | 加载失败时的最大重试次数。<br/>**默认值**：`MAX_RETRY_COUNT`（`3`） |
+
+**返回值**
+
+`T` — 实例化后的克隆对象；加载失败时返回 `null`。
+
+**说明**
+
+同步加载资源后直接实例化，行为同 [InstantiateAssetAsync](#instantiateassetasync)。
+
+---
+
+### UnloadAsset {#unloadasset}
+
+```csharp
+public static void UnloadAsset(string assetName, bool forceUnload = false)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | 资源名称（支持 `res#` 前缀）。 |
+| forceUnload | `bool` | 是否跳过引用计数强制卸载。<br/>**默认值**：`false` |
+
+**说明**
+
+卸载单个资源：引用计数 -1，计数归零（或 `forceUnload = true`）时实际释放并移出缓存，Bundle 端释放后会联动 YooAsset 尝试卸载未使用的资源。
+
+<Highlight color="#0373fc">注意</Highlight>
+
+- 资源不在缓存时输出警告日志并跳过。
+- 资源正在加载中时，卸载请求会排入队列，待加载完成后依序执行。
+
+**示例**
+
+```csharp
+// 一般卸载（引用计数 -1）
+AssetLoaders.UnloadAsset("PlayerUI");
+
+// 强制卸载（跳过引用计数）
+AssetLoaders.UnloadAsset("PlayerUI", true);
+```
+
+---
+
+### ReleaseAssets {#releaseassets}
+
+```csharp
+public static void ReleaseAssets(LoadType loadType = LoadType.Any)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| loadType | `LoadType` | 释放范围（`Any`／`Resources`／`Bundle`，参考 [LoadType 枚举](#loadtype)）。<br/>**默认值**：`LoadType.Any` |
+
+**说明**
+
+强制释放对应缓存内的**所有**资源（跳过引用计数），并调用 `Resources.UnloadUnusedAssets()` 进行资源回收。
+
+<Highlight color="#ff2f00">重要</Highlight> 进行释放前，务必确认相关资源已不再被引用。
+
+---
+
+## 原生文件加载 (RawFile) {#rawfile}
+
+原生文件（如 Config、Json、Bin、Mp4 等）的加载，可直接获取文本内容、字节数据或本地文件路径。
+
+<Highlight color="#0373fc">注意</Highlight> RawFile 仅支持 **Bundle** 加载（不支持 `res#` 前缀，传入将输出错误日志）。
+
+### 方法总览 {#rawfile-overview}
+
+#### 文件路径
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [GetRawFilePathAsync](#getrawfilepathasync) | 异步获取原生文件在本地的物理路径。 |
+| [GetRawFilePath](#getrawfilepath) | 同步获取原生文件在本地的物理路径。 |
+
+#### 预加载
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [PreloadRawFileAsync](#preloadrawfileasync) | 异步预加载原生文件至缓存（支持批量）。 |
+| [PreloadRawFile](#preloadrawfile) | 同步预加载原生文件至缓存（支持批量）。 |
+
+#### 加载
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [LoadRawFileAsync\<T\>](#loadrawfileasync) | 异步加载原生文件内容（`string` 或 `byte[]`）。 |
+| [LoadRawFile\<T\>](#loadrawfile) | 同步加载原生文件内容（`string` 或 `byte[]`）。 |
+
+#### 卸载与释放
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [UnloadRawFile](#unloadrawfile) | 卸载单个原生文件（引用计数 -1，可强制卸载）。 |
+| [ReleaseRawFiles](#releaserawfiles) | 强制释放全部原生文件缓存。 |
+
+---
+
+### GetRawFilePathAsync {#getrawfilepathasync}
+
+```csharp
+public static async UniTask<string> GetRawFilePathAsync(string assetName)
+public static async UniTask<string> GetRawFilePathAsync(string packageName, string assetName)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 原生文件资源名称（Address；仅支持 Bundle）。 |
+
+**返回值**
+
+`UniTask<string>` — 原生文件在本地的物理路径；加载失败或未找到时返回 `null`。
+
+**说明**
+
+获取原生文件在本地缓存中的物理路径，可供后续的文件读取（`FileStream` / IO）或第三方插件（如视频播放）使用。内部会先预加载文件获取路径，随后**正常卸载一次引用**（不影响其他持有者的引用计数），因此调用后不会残留引用。
+
+**示例**
+
+```csharp
+string videoPath = await AssetLoaders.GetRawFilePathAsync("OpeningVideo");
+if (videoPath != null)
+{
+    // 以路径方式交由 VideoPlayer 播放
+    videoPlayer.url = videoPath;
+}
+```
+
+---
+
+### GetRawFilePath {#getrawfilepath}
+
+```csharp
+public static string GetRawFilePath(string assetName)
+public static string GetRawFilePath(string packageName, string assetName)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 原生文件资源名称（Address；仅支持 Bundle）。 |
+
+**返回值**
+
+`string` — 原生文件在本地的物理路径；加载失败或未找到时返回 `null`。
+
+**说明**
+
+同步获取原生文件的物理路径，行为同 [GetRawFilePathAsync](#getrawfilepathasync)。
+
+---
+
+### PreloadRawFileAsync {#preloadrawfileasync}
+
+```csharp
+public static async UniTask PreloadRawFileAsync(string assetName, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+public static async UniTask PreloadRawFileAsync(string packageName, string assetName, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+public static async UniTask PreloadRawFileAsync(string[] assetNames, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+public static async UniTask PreloadRawFileAsync(string packageName, string[] assetNames, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 原生文件资源名称（Address；仅支持 Bundle）。 |
+| assetNames | `string[]` | 原生文件资源名称数组（批量预加载）。 |
+| priority | `uint` | YooAsset 异步加载优先级。<br/>**默认值**：`0` |
+| progression | `Progression` | 预加载进度回调。<br/>**默认值**：`null` |
+| maxRetryCount | `byte` | 加载失败时的最大重试次数。<br/>**默认值**：`MAX_RETRY_COUNT`（`3`） |
+
+**返回值**
+
+`UniTask` — 可等待的异步操作。
+
+**说明**
+
+预先将原生文件加载至缓存，之后调用 [LoadRawFileAsync](#loadrawfileasync) 时直接命中缓存。预加载不会增加引用计数；已在缓存中的文件会跳过。
+
+---
+
+### PreloadRawFile {#preloadrawfile}
+
+```csharp
+public static void PreloadRawFile(string assetName, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+public static void PreloadRawFile(string packageName, string assetName, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+public static void PreloadRawFile(string[] assetNames, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+public static void PreloadRawFile(string packageName, string[] assetNames, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 原生文件资源名称（Address；仅支持 Bundle）。 |
+| assetNames | `string[]` | 原生文件资源名称数组（批量预加载）。 |
+| progression | `Progression` | 预加载进度回调。<br/>**默认值**：`null` |
+| maxRetryCount | `byte` | 加载失败时的最大重试次数。<br/>**默认值**：`MAX_RETRY_COUNT`（`3`） |
+
+**说明**
+
+同步预加载原生文件至缓存，行为同 [PreloadRawFileAsync](#preloadrawfileasync)。
+
+---
+
+### LoadRawFileAsync\<T\> {#loadrawfileasync}
+
+```csharp
+public static async UniTask<T> LoadRawFileAsync<T>(string assetName, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+public static async UniTask<T> LoadRawFileAsync<T>(string packageName, string assetName, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 原生文件资源名称（Address；仅支持 Bundle）。 |
+| priority | `uint` | YooAsset 异步加载优先级。<br/>**默认值**：`0` |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+| maxRetryCount | `byte` | 加载失败时的最大重试次数。<br/>**默认值**：`MAX_RETRY_COUNT`（`3`） |
+
+**返回值**
+
+`UniTask<T>` — 文件内容（引用计数 +1）；加载失败时返回 `default`。
+
+**说明**
+
+异步加载原生文件内容并转换为指定类型。
+
+<Highlight color="#ff2f00">重要</Highlight> 泛型 `T` 仅支持 `string`（文本内容）与 `byte[]`（字节数据）两种类型。
+
+**示例**
+
+```csharp
+// 以文本读取 Json 配置
+string json = await AssetLoaders.LoadRawFileAsync<string>("GameConfig");
+
+// 以字节读取二进制数据
+byte[] bytes = await AssetLoaders.LoadRawFileAsync<byte[]>("DataTable");
+
+// 使用完毕后卸载
+AssetLoaders.UnloadRawFile("GameConfig");
+```
+
+---
+
+### LoadRawFile\<T\> {#loadrawfile}
+
+```csharp
+public static T LoadRawFile<T>(string assetName, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+public static T LoadRawFile<T>(string packageName, string assetName, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 原生文件资源名称（Address；仅支持 Bundle）。 |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+| maxRetryCount | `byte` | 加载失败时的最大重试次数。<br/>**默认值**：`MAX_RETRY_COUNT`（`3`） |
+
+**返回值**
+
+`T` — 文件内容（引用计数 +1）；加载失败时返回 `default`。
+
+**说明**
+
+同步加载原生文件内容，行为同 [LoadRawFileAsync](#loadrawfileasync)（泛型 `T` 仅支持 `string` 与 `byte[]`）。
+
+---
+
+### UnloadRawFile {#unloadrawfile}
+
+```csharp
+public static void UnloadRawFile(string assetName, bool forceUnload = false)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | 原生文件资源名称。 |
+| forceUnload | `bool` | 是否跳过引用计数强制卸载。<br/>**默认值**：`false` |
+
+**说明**
+
+卸载单个原生文件：引用计数 -1，计数归零（或 `forceUnload = true`）时实际释放并移出缓存。
+
+---
+
+### ReleaseRawFiles {#releaserawfiles}
+
+```csharp
+public static void ReleaseRawFiles()
+```
+
+**说明**
+
+强制释放**全部**原生文件缓存（跳过引用计数），并进行资源回收。
+
+<Highlight color="#ff2f00">重要</Highlight> 进行释放前，务必确认相关文件已不再被使用。
+
+---
+
+## 群组加载 (GroupCacher) {#group}
+
+以自定义的 `groupId` 将加载的资源挂记到群组（**软引用**），适用于「同一关卡／模块的资源批量管理、批量卸载」的情境。加载行为与一般版本相同，仅额外多一层群组记录：
+
+- 通过群组加载成功时，**群组记录计数**与**底层缓存引用计数**各 +1；预加载则两者皆不增加计数。
+- 卸载群组（[UnloadAssets](#group-unloadassets)／[UnloadRawFiles](#group-unloadrawfiles)）会依每条记录的群组计数**逐次递减**底层缓存引用，因此与其他群组（或一般加载）共享的资源，在其他引用仍存在时**不会被强制释放**。
+
+### 方法总览 {#group-overview}
+
+#### 缓存查询
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [HasInCache](#group-hasincache) | 检查资源是否已存在于指定群组的缓存记录中。 |
+
+#### 资源（Asset）
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [PreloadAssetAsync\<T\>](#group-preloadassetasync) | 异步预加载资源并挂记群组。 |
+| [PreloadAsset\<T\>](#group-preloadasset) | 同步预加载资源并挂记群组。 |
+| [LoadAssetAsync\<T\>](#group-loadassetasync) | 异步加载资源并挂记群组。 |
+| [LoadAsset\<T\>](#group-loadasset) | 同步加载资源并挂记群组。 |
+| [InstantiateAssetAsync\<T\>](#group-instantiateassetasync) | 异步加载资源、挂记群组并实例化。 |
+| [InstantiateAsset\<T\>](#group-instantiateasset) | 同步加载资源、挂记群组并实例化。 |
+| [UnloadAsset](#group-unloadasset) | 卸载群组内的单个资源（群组与缓存引用各 -1）。 |
+| [UnloadAssets](#group-unloadassets) | 卸载群组内的全部资源（依计数递减释放）。 |
+
+#### 原生文件（RawFile）
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [PreloadRawFileAsync](#group-preloadrawfileasync) | 异步预加载原生文件并挂记群组。 |
+| [PreloadRawFile](#group-preloadrawfile) | 同步预加载原生文件并挂记群组。 |
+| [LoadRawFileAsync\<T\>](#group-loadrawfileasync) | 异步加载原生文件并挂记群组。 |
+| [LoadRawFile\<T\>](#group-loadrawfile) | 同步加载原生文件并挂记群组。 |
+| [UnloadRawFile](#group-unloadrawfile) | 卸载群组内的单个原生文件。 |
+| [UnloadRawFiles](#group-unloadrawfiles) | 卸载群组内的全部原生文件。 |
+
+---
+
+### HasInCache {#group-hasincache}
+
+```csharp
+public static bool HasInCache(int groupId, string assetName)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组标识 ID（自定义）。 |
+| assetName | `string` | 资源名称（支持 `res#` 前缀）。 |
+
+**返回值**
+
+`bool` — 资源是否已存在于指定群组的缓存记录中。
+
+**说明**
+
+检查资源是否已通过群组加载／预加载并挂记于指定群组。
+
+---
+
+### PreloadAssetAsync\<T\>（群组） {#group-preloadassetasync}
+
+```csharp
+public static async UniTask PreloadAssetAsync<T>(int groupId, string assetName, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask PreloadAssetAsync<T>(int groupId, string packageName, string assetName, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask PreloadAssetAsync<T>(int groupId, string[] assetNames, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask PreloadAssetAsync<T>(int groupId, string packageName, string[] assetNames, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组标识 ID（自定义）。 |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 资源名称（Bundle 使用 Address；支持 `res#` 前缀）。 |
+| assetNames | `string[]` | 资源名称数组（批量预加载）。 |
+| priority | `uint` | YooAsset 异步加载优先级（仅对 Bundle 加载生效）。<br/>**默认值**：`0` |
+| progression | `Progression` | 预加载进度回调。<br/>**默认值**：`null` |
+| maxRetryCount | `byte` | 加载失败时的最大重试次数。<br/>**默认值**：`MAX_RETRY_COUNT`（`3`） |
+
+**返回值**
+
+`UniTask` — 可等待的异步操作。
+
+**说明**
+
+预加载资源至缓存并挂记到指定群组，其余行为同 [PreloadAssetAsync](#preloadassetasync)。
+
+**示例**
+
+```csharp
+const int LEVEL_GROUP = 101;
+
+// 关卡开始前，批量预加载并挂记群组
+await AssetLoaders.PreloadAssetAsync<GameObject>(LEVEL_GROUP, new string[]
+{
+    "EnemyBoss",
+    "LevelProps",
+    "res#Prefabs/LevelEffect"
+});
+```
+
+---
+
+### PreloadAsset\<T\>（群组） {#group-preloadasset}
+
+```csharp
+public static void PreloadAsset<T>(int groupId, string assetName, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static void PreloadAsset<T>(int groupId, string packageName, string assetName, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static void PreloadAsset<T>(int groupId, string[] assetNames, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static void PreloadAsset<T>(int groupId, string packageName, string[] assetNames, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组标识 ID（自定义）。 |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 资源名称（Bundle 使用 Address；支持 `res#` 前缀）。 |
+| assetNames | `string[]` | 资源名称数组（批量预加载）。 |
+| progression | `Progression` | 预加载进度回调。<br/>**默认值**：`null` |
+| maxRetryCount | `byte` | 加载失败时的最大重试次数。<br/>**默认值**：`MAX_RETRY_COUNT`（`3`） |
+
+**说明**
+
+同步预加载资源并挂记群组，行为同 [PreloadAssetAsync（群组）](#group-preloadassetasync)。
+
+---
+
+### LoadAssetAsync\<T\>（群组） {#group-loadassetasync}
+
+```csharp
+public static async UniTask<T> LoadAssetAsync<T>(int groupId, string assetName, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask<T> LoadAssetAsync<T>(int groupId, string packageName, string assetName, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组标识 ID（自定义）。 |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 资源名称（Bundle 使用 Address；支持 `res#` 前缀）。 |
+| priority | `uint` | YooAsset 异步加载优先级（仅对 Bundle 加载生效）。<br/>**默认值**：`0` |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+| maxRetryCount | `byte` | 加载失败时的最大重试次数。<br/>**默认值**：`MAX_RETRY_COUNT`（`3`） |
+
+**返回值**
+
+`UniTask<T>` — 加载的资源对象（群组记录与缓存引用各 +1）；加载失败时返回 `null`。
+
+**说明**
+
+加载资源并挂记到指定群组，其余行为同 [LoadAssetAsync](#loadassetasync)。
+
+**示例**
+
+```csharp
+const int LEVEL_GROUP = 101;
+
+var bossPrefab = await AssetLoaders.LoadAssetAsync<GameObject>(LEVEL_GROUP, "EnemyBoss");
+```
+
+---
+
+### LoadAsset\<T\>（群组） {#group-loadasset}
+
+```csharp
+public static T LoadAsset<T>(int groupId, string assetName, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static T LoadAsset<T>(int groupId, string packageName, string assetName, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组标识 ID（自定义）。 |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 资源名称（Bundle 使用 Address；支持 `res#` 前缀）。 |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+| maxRetryCount | `byte` | 加载失败时的最大重试次数。<br/>**默认值**：`MAX_RETRY_COUNT`（`3`） |
+
+**返回值**
+
+`T` — 加载的资源对象（群组记录与缓存引用各 +1）；加载失败时返回 `null`。
+
+**说明**
+
+同步加载资源并挂记群组，行为同 [LoadAssetAsync（群组）](#group-loadassetasync)。
+
+---
+
+### InstantiateAssetAsync\<T\>（群组） {#group-instantiateassetasync}
+
+```csharp
+public static async UniTask<T> InstantiateAssetAsync<T>(int groupId, string assetName, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask<T> InstantiateAssetAsync<T>(int groupId, string packageName, string assetName, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask<T> InstantiateAssetAsync<T>(int groupId, string assetName, Vector3 position, Quaternion rotation, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask<T> InstantiateAssetAsync<T>(int groupId, string packageName, string assetName, Vector3 position, Quaternion rotation, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask<T> InstantiateAssetAsync<T>(int groupId, string assetName, Vector3 position, Quaternion rotation, Transform parent, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask<T> InstantiateAssetAsync<T>(int groupId, string packageName, string assetName, Vector3 position, Quaternion rotation, Transform parent, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask<T> InstantiateAssetAsync<T>(int groupId, string assetName, Transform parent, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask<T> InstantiateAssetAsync<T>(int groupId, string packageName, string assetName, Transform parent, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask<T> InstantiateAssetAsync<T>(int groupId, string assetName, Transform parent, bool worldPositionStays, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static async UniTask<T> InstantiateAssetAsync<T>(int groupId, string packageName, string assetName, Transform parent, bool worldPositionStays, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组标识 ID（自定义）。 |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 资源名称（Bundle 使用 Address；支持 `res#` 前缀）。 |
+| position | `Vector3` | 实例化的位置。 |
+| rotation | `Quaternion` | 实例化的旋转。 |
+| parent | `Transform` | 实例化后挂载的父节点。 |
+| worldPositionStays | `bool` | 挂载至父节点时是否保留世界坐标。 |
+| priority | `uint` | YooAsset 异步加载优先级（仅对 Bundle 加载生效）。<br/>**默认值**：`0` |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+| maxRetryCount | `byte` | 加载失败时的最大重试次数。<br/>**默认值**：`MAX_RETRY_COUNT`（`3`） |
+
+**返回值**
+
+`UniTask<T>` — 实例化后的克隆对象；加载失败时返回 `null`（不执行实例化）。
+
+**说明**
+
+加载资源、挂记群组后直接实例化，其余行为同 [InstantiateAssetAsync](#instantiateassetasync)。
+
+<Highlight color="#ff2f00">重要</Highlight> 销毁实例对象时不会自动归还计数，请搭配 [UnloadAsset（群组）](#group-unloadasset)或在关卡结束时以 [UnloadAssets](#group-unloadassets) 批量卸载。
+
+---
+
+### InstantiateAsset\<T\>（群组） {#group-instantiateasset}
+
+```csharp
+public static T InstantiateAsset<T>(int groupId, string assetName, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static T InstantiateAsset<T>(int groupId, string packageName, string assetName, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static T InstantiateAsset<T>(int groupId, string assetName, Vector3 position, Quaternion rotation, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static T InstantiateAsset<T>(int groupId, string packageName, string assetName, Vector3 position, Quaternion rotation, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static T InstantiateAsset<T>(int groupId, string assetName, Vector3 position, Quaternion rotation, Transform parent, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static T InstantiateAsset<T>(int groupId, string packageName, string assetName, Vector3 position, Quaternion rotation, Transform parent, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static T InstantiateAsset<T>(int groupId, string assetName, Transform parent, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static T InstantiateAsset<T>(int groupId, string packageName, string assetName, Transform parent, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static T InstantiateAsset<T>(int groupId, string assetName, Transform parent, bool worldPositionStays, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+public static T InstantiateAsset<T>(int groupId, string packageName, string assetName, Transform parent, bool worldPositionStays, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT) where T : UnityEngine.Object
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组标识 ID（自定义）。 |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 资源名称（Bundle 使用 Address；支持 `res#` 前缀）。 |
+| position | `Vector3` | 实例化的位置。 |
+| rotation | `Quaternion` | 实例化的旋转。 |
+| parent | `Transform` | 实例化后挂载的父节点。 |
+| worldPositionStays | `bool` | 挂载至父节点时是否保留世界坐标。 |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+| maxRetryCount | `byte` | 加载失败时的最大重试次数。<br/>**默认值**：`MAX_RETRY_COUNT`（`3`） |
+
+**返回值**
+
+`T` — 实例化后的克隆对象；加载失败时返回 `null`。
+
+**说明**
+
+同步加载资源、挂记群组并实例化，行为同 [InstantiateAssetAsync（群组）](#group-instantiateassetasync)。
+
+---
+
+### UnloadAsset（群组） {#group-unloadasset}
+
+```csharp
+public static void UnloadAsset(int groupId, string assetName)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组标识 ID（自定义）。 |
+| assetName | `string` | 资源名称（支持 `res#` 前缀）。 |
+
+**说明**
+
+卸载群组内的单个资源：群组记录计数与底层缓存引用计数各 **-1**；群组计数归零时移除群组记录，缓存引用归零时实际释放资源。
+
+<Highlight color="#0373fc">注意</Highlight> 群组卸载一律采用**引用计数**模式，无强制卸载参数。
+
+---
+
+### UnloadAssets {#group-unloadassets}
+
+```csharp
+public static void UnloadAssets(int groupId, LoadType loadType = LoadType.Any)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组标识 ID（自定义）。 |
+| loadType | `LoadType` | 释放范围（`Any`／`Resources`／`Bundle`，参考 [LoadType 枚举](#loadtype)）。<br/>**默认值**：`LoadType.Any` |
+
+**说明**
+
+卸载群组内的**全部**资源记录：依每条记录的群组计数逐次递减底层缓存引用，递减完毕后移除群组记录。
+
+<Highlight color="#00d679">提醒</Highlight> 实际释放仍依引用计数判断——与其他群组（或一般加载）共享的资源，在其他引用仍存在时不会被释放。
+
+**示例**
+
+```csharp
+const int LEVEL_GROUP = 101;
+
+// 关卡结束，批量卸载该群组的所有资源
+AssetLoaders.UnloadAssets(LEVEL_GROUP);
+```
+
+---
+
+### PreloadRawFileAsync（群组） {#group-preloadrawfileasync}
+
+```csharp
+public static async UniTask PreloadRawFileAsync(int groupId, string assetName, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+public static async UniTask PreloadRawFileAsync(int groupId, string packageName, string assetName, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+public static async UniTask PreloadRawFileAsync(int groupId, string[] assetNames, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+public static async UniTask PreloadRawFileAsync(int groupId, string packageName, string[] assetNames, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组标识 ID（自定义）。 |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 原生文件资源名称（Address；仅支持 Bundle）。 |
+| assetNames | `string[]` | 原生文件资源名称数组（批量预加载）。 |
+| priority | `uint` | YooAsset 异步加载优先级。<br/>**默认值**：`0` |
+| progression | `Progression` | 预加载进度回调。<br/>**默认值**：`null` |
+| maxRetryCount | `byte` | 加载失败时的最大重试次数。<br/>**默认值**：`MAX_RETRY_COUNT`（`3`） |
+
+**返回值**
+
+`UniTask` — 可等待的异步操作。
+
+**说明**
+
+预加载原生文件并挂记群组，其余行为同 [PreloadRawFileAsync](#preloadrawfileasync)（仅支持 Bundle）。
+
+---
+
+### PreloadRawFile（群组） {#group-preloadrawfile}
+
+```csharp
+public static void PreloadRawFile(int groupId, string assetName, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+public static void PreloadRawFile(int groupId, string packageName, string assetName, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+public static void PreloadRawFile(int groupId, string[] assetNames, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+public static void PreloadRawFile(int groupId, string packageName, string[] assetNames, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组标识 ID（自定义）。 |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 原生文件资源名称（Address；仅支持 Bundle）。 |
+| assetNames | `string[]` | 原生文件资源名称数组（批量预加载）。 |
+| progression | `Progression` | 预加载进度回调。<br/>**默认值**：`null` |
+| maxRetryCount | `byte` | 加载失败时的最大重试次数。<br/>**默认值**：`MAX_RETRY_COUNT`（`3`） |
+
+**说明**
+
+同步预加载原生文件并挂记群组，行为同 [PreloadRawFileAsync（群组）](#group-preloadrawfileasync)。
+
+---
+
+### LoadRawFileAsync\<T\>（群组） {#group-loadrawfileasync}
+
+```csharp
+public static async UniTask<T> LoadRawFileAsync<T>(int groupId, string assetName, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+public static async UniTask<T> LoadRawFileAsync<T>(int groupId, string packageName, string assetName, uint priority = 0, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组标识 ID（自定义）。 |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 原生文件资源名称（Address；仅支持 Bundle）。 |
+| priority | `uint` | YooAsset 异步加载优先级。<br/>**默认值**：`0` |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+| maxRetryCount | `byte` | 加载失败时的最大重试次数。<br/>**默认值**：`MAX_RETRY_COUNT`（`3`） |
+
+**返回值**
+
+`UniTask<T>` — 文件内容（群组记录与缓存引用各 +1）；加载失败时返回 `default`。
+
+**说明**
+
+加载原生文件内容并挂记群组，其余行为同 [LoadRawFileAsync](#loadrawfileasync)（泛型 `T` 仅支持 `string` 与 `byte[]`）。
+
+---
+
+### LoadRawFile\<T\>（群组） {#group-loadrawfile}
+
+```csharp
+public static T LoadRawFile<T>(int groupId, string assetName, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+public static T LoadRawFile<T>(int groupId, string packageName, string assetName, Progression progression = null, byte maxRetryCount = MAX_RETRY_COUNT)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组标识 ID（自定义）。 |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 原生文件资源名称（Address；仅支持 Bundle）。 |
+| progression | `Progression` | 加载进度回调。<br/>**默认值**：`null` |
+| maxRetryCount | `byte` | 加载失败时的最大重试次数。<br/>**默认值**：`MAX_RETRY_COUNT`（`3`） |
+
+**返回值**
+
+`T` — 文件内容（群组记录与缓存引用各 +1）；加载失败时返回 `default`。
+
+**说明**
+
+同步加载原生文件并挂记群组，行为同 [LoadRawFileAsync（群组）](#group-loadrawfileasync)。
+
+---
+
+### UnloadRawFile（群组） {#group-unloadrawfile}
+
+```csharp
+public static void UnloadRawFile(int groupId, string assetName)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组标识 ID（自定义）。 |
+| assetName | `string` | 原生文件资源名称。 |
+
+**说明**
+
+卸载群组内的单个原生文件（**软引用卸载**）：群组记录计数与底层缓存引用计数各 -1，资源在所有引用归零时才实际释放。
+
+---
+
+### UnloadRawFiles {#group-unloadrawfiles}
+
+```csharp
+public static void UnloadRawFiles(int groupId)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupId | `int` | 群组标识 ID（自定义）。 |
+
+**说明**
+
+卸载群组内的**全部**原生文件记录：依每条记录的群组计数逐次递减底层缓存引用，与其他群组共享的文件在其他引用仍存在时不会被释放。
+
+---
+
+## 已弃用方法 {#deprecated}
+
+<Highlight color="#0373fc">注意</Highlight> 以下方法已标记 `[System.Obsolete]`，仅为兼容性保留，请改用对应的替代方法。
+
+| 已弃用方法 | 替代方法 |
+| :--- | :--- |
+| `ReleaseBundleScenes()` | [ReleaseScenes](#releasescenes) |
+| `ReleaseBundleRawFiles()` | [ReleaseRawFiles](#releaserawfiles) |
+| `ReleaseResourceAssets()` | [ReleaseAssets](#releaseassets) |
+| `ReleaseBundleAssets()` | [ReleaseAssets](#releaseassets) |
+| `ReleaseBundleRawFiles(int groupId)` | [UnloadRawFiles](#group-unloadrawfiles) |
+| `ReleaseResourceAssets(int groupId)` | [UnloadAssets](#group-unloadassets) |
+| `ReleaseBundleAssets(int groupId)` | [UnloadAssets](#group-unloadassets) |
 
 ---

@@ -1,19 +1,20 @@
 ---
 sidebar_position: 2
+description: YooAssetBridge is a reflection-based bridge that accesses YooAsset internal members (manifest prefix, cache and built-in root directories) without modifying its source code.
 ---
 
 # YooAssetBridge
 
 export const Highlight = ({ children, color }) => (
-  <span
-    style={{
-      backgroundColor: color,
-      borderRadius: '5px',
-      color: '#fff',
-      padding: '2.5px'
-    }}>
-    {children}
-  </span>
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
 );
 
 <Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
@@ -22,45 +23,160 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`YooAssetBridge` is the bridge from **AssetLoader** to **YooAsset**. It uses reflection to access YooAsset internal members, allowing the framework to obtain the necessary information **without modifying the YooAsset package source code**. It is organized into three nested static classes by bridging target: `YooAssetSettingsData`, `DownloadSystemHelper`, and `DefaultBuildinFileSystemDefine`.
+
+|  |  |
+| :--- | :--- |
+| **Namespace** | `OxGFrame.AssetLoader.Bundle` |
+| **Type** | `public static class` |
+| **Source** | [YooAssetBridge.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/AssetLoader/Scripts/Runtime/Bundle/YooAssets/YooAssetBridge.cs) |
+
+```csharp
 using OxGFrame.AssetLoader.Bundle;
+```
 
-## Classes & Methods
+<Highlight color="#ff2f00">Important</Highlight> `YooAssetBridge` relies heavily on reflection. If a future YooAsset version changes its internal class, property, or field names, this bridge will be maintained accordingly.
 
-`YooAssetBridge` is a bridging tool that uses the reflection (Reflection) mechanism to access protected or private members within `YooAsset`, ensuring the framework can obtain necessary information without modifying the original package source code.
+## YooAssetBridge.YooAssetSettingsData {#yooassetsettingsdata}
 
----
+Bridges YooAsset's global settings data (`YooAssetSettingsData`).
 
-### YooAssetSettingsData
-Handles global configuration data for YooAsset.
+### Method Overview {#settingsdata-overview}
 
-* **GetPackageManifestPrefix()**
-    * Gets the `PackageManifestPrefix` (manifest prefix name).
-* **GetYooDefaultCacheRoot()**
-    * Gets the default cache file root directory for YooAsset (Sandbox).
-* **GetYooDefaultBuildinRoot()**
-    * Gets the default built-in file root directory for YooAsset (StreamingAssets).
-
----
-
-### DownloadSystemHelper
-Helper system for downloading and path conversion.
-
-* **ConvertToWWWPath(string path)**
-    * Converts a general path into a format suitable for `UnityWebRequest` or `WWW`.
-    * **Params**: `string path` (Original path)
-
-<Highlight color="#0373fc">Attention</Highlight> This method automatically handles file protocol prefixes (e.g., `file://`) based on the execution platform.
+| Method | Description |
+| :--- | :--- |
+| [GetPackageManifestPrefix](#getpackagemanifestprefix) | Gets the manifest file prefix (`PackageManifestPrefix`). |
+| [GetYooDefaultCacheRoot](#getyoodefaultcacheroot) | Gets YooAsset's default cache file root directory (sandbox). |
+| [GetYooDefaultBuildinRoot](#getyoodefaultbuildinroot) | Gets YooAsset's default built-in file root directory (StreamingAssets). |
 
 ---
 
-### DefaultBuildinFileSystemDefine
-Defines core file names for the built-in file system.
+### GetPackageManifestPrefix {#getpackagemanifestprefix}
 
-* **BuildinCatalogBinaryFileName()**
-    * Gets the binary file name for the built-in resource catalog list (Catalog Binary File).
+```csharp
+public static string GetPackageManifestPrefix()
+```
+
+**Returns**
+
+`string` — the manifest file prefix.
+
+**Description**
+
+Reads the `PackageManifestPrefix` field from YooAsset's settings (`YooAssetSettingsData.Setting`) via reflection — the prefix name of asset manifest files.
 
 ---
 
-<Highlight color="#ff2f00">Important</Highlight> Since `YooAssetBridge` relies heavily on reflection, if future `YooAsset` package versions are updated and internal class names or field definitions change, this will be maintained accordingly.
+### GetYooDefaultCacheRoot {#getyoodefaultcacheroot}
+
+```csharp
+public static string GetYooDefaultCacheRoot()
+```
+
+**Returns**
+
+`string` — YooAsset's default cache file root directory path.
+
+**Description**
+
+Invokes YooAsset's internal `GetYooDefaultCacheRoot` method via reflection to get the default cache file root directory (sandbox — the local persistent download storage).
+
+<Highlight color="#00d679">Reminder</Highlight> [BundleConfig.GetLocalSandboxRootPath](./BundleConfig.mdx#getlocalsandboxrootpath) obtains its root directory through this method.
+
+**Example**
+
+```csharp
+// Get the local cache root directory (sandbox)
+string cacheRoot = YooAssetBridge.YooAssetSettingsData.GetYooDefaultCacheRoot();
+```
+
+---
+
+### GetYooDefaultBuildinRoot {#getyoodefaultbuildinroot}
+
+```csharp
+public static string GetYooDefaultBuildinRoot()
+```
+
+**Returns**
+
+`string` — YooAsset's default built-in file root directory path.
+
+**Description**
+
+Invokes YooAsset's internal `GetYooDefaultBuildinRoot` method via reflection to get the default built-in file root directory (under `StreamingAssets`).
+
+<Highlight color="#00d679">Reminder</Highlight> [BundleConfig.GetBuiltinRootPath](./BundleConfig.mdx#getbuiltinrootpath) obtains its root directory through this method.
+
+---
+
+## YooAssetBridge.DownloadSystemHelper {#downloadsystemhelper}
+
+Bridges YooAsset's download system helper (`DownloadSystemHelper`) for path conversion.
+
+### Method Overview {#downloadhelper-overview}
+
+| Method | Description |
+| :--- | :--- |
+| [ConvertToWWWPath](#converttowwwpath) | Converts a local path into a WWW / `UnityWebRequest` loadable path. |
+
+---
+
+### ConvertToWWWPath {#converttowwwpath}
+
+```csharp
+public static string ConvertToWWWPath(string path)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| path | `string` | Original local path. |
+
+**Returns**
+
+`string` — the converted load path.
+
+**Description**
+
+Invokes YooAsset's internal `DownloadSystemHelper.ConvertToWWWPath` method via reflection to convert a regular local path into a format suitable for `UnityWebRequest` (WWW) loading.
+
+<Highlight color="#0373fc">Attention</Highlight> This method automatically handles the file protocol prefix (e.g., `file://`) based on the runtime platform.
+
+**Example**
+
+```csharp
+// Convert the StreamingAssets path into a UnityWebRequest-compatible format
+string wwwPath = YooAssetBridge.DownloadSystemHelper.ConvertToWWWPath(Application.streamingAssetsPath);
+```
+
+---
+
+## YooAssetBridge.DefaultBuildinFileSystemDefine {#defaultbuildinfilesystemdefine}
+
+Bridges the defines of YooAsset's built-in file system (`DefaultBuildinFileSystemDefine`).
+
+### Method Overview {#buildindefine-overview}
+
+| Method | Description |
+| :--- | :--- |
+| [BuildinCatalogBinaryFileName](#buildincatalogbinaryfilename) | Gets the binary file name of the built-in asset catalog. |
+
+---
+
+### BuildinCatalogBinaryFileName {#buildincatalogbinaryfilename}
+
+```csharp
+public static string BuildinCatalogBinaryFileName()
+```
+
+**Returns**
+
+`string` — the binary file name of the built-in asset catalog.
+
+**Description**
+
+Reads the value of YooAsset's internal `DefaultBuildinFileSystemDefine.BuildinCatalogBinaryFileName` field via reflection — the file name of the built-in asset catalog (catalog binary file).
 
 ---

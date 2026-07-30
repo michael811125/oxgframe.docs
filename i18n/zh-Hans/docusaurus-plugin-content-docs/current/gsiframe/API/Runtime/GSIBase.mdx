@@ -1,5 +1,6 @@
 ---
 sidebar_position: 2
+description: GSIBase 是 GSIFrame 的游戏阶段抽象基类，定义 OnCreate、OnEnter、OnUpdate、OnExit 的完整阶段生命周期。
 ---
 
 # GSIBase
@@ -22,71 +23,242 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`GSIBase` 是 **GSIFrame**（Game Stage Integration）的游戏阶段抽象基类。每个游戏阶段（如启动、商标、热更、登录、大厅）都以一个子类继承 `GSIBase` 实现，定义了 **OnCreate → OnEnter → OnUpdate → OnExit** 的完整阶段生命周期，由 [GSIManagerBase](./GSIManagerBase.mdx) 子类统一注册、切换与驱动。
+
+|  |  |
+| :--- | :--- |
+| **命名空间** | `OxGFrame.GSIFrame` |
+| **类型** | `public abstract class` |
+| **源码** | [GSIBase.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/GSIFrame/Scripts/Runtime/GSIBase.cs) |
+
+```csharp
 using OxGFrame.GSIFrame;
+```
 
-## 核心设计概念
+## 声明 {#declaration}
 
-`GSIBase` 定义了一个游戏阶段完整的生命周期。透过 `BeginInit` 的自动化流程，确保阶段在进入时会依照「停止更新 -> 执行初始 -> 开启更新」的顺序执行，并支持异步处理（UniTask）。
+```csharp
+public abstract class GSIBase
+```
+
+继承 `GSIBase` 后，必须实现 [OnCreate](#oncreate)、[OnEnter](#onenter)、[OnUpdate](#onupdate)、[OnExit](#onexit) 四个生命周期方法（皆为 `abstract`）。
+
+## 生命周期与调用时序 {#lifecycle}
+
+生命周期方法皆由管理器（[GSIManagerBase](./GSIManagerBase.mdx) 子类）在阶段切换与驱动更新时自动调用，无需手动触发。当管理器切换至该阶段时，内部初始流程依以下顺序执行：
+
+1. **首次检查**：若该阶段从未初始化过，先 `await` [OnCreate](#oncreate)（整个生命周期仅执行一次）。
+2. **Step 1**：调用 [StopUpdate](#stopupdate)，先暂停 `OnUpdate` 刷新。
+3. **Step 2**：`await` [OnEnter](#onenter)，执行进入阶段的初始逻辑。
+4. **Step 3**：调用 [RunUpdate](#runupdate)，开启 `OnUpdate` 刷新。
+
+之后，管理器在每帧驱动更新（`DriveUpdate`）时，若该阶段为当前阶段且 [runUpdate](#prop-runupdate) 为 `true`，将调用 [OnUpdate](#onupdate)；切换至其他阶段时，管理器会先调用该阶段的 [OnExit](#onexit)，再执行新阶段的初始流程。
+
+<Highlight color="#00d679">提醒</Highlight> `OnCreate` 与 `OnEnter` 皆为 `UniTask` 异步方法，可直接 `await` 资源加载等异步操作；初始流程会等 `OnEnter` 完成后才开启 `OnUpdate` 刷新。
+
+<Highlight color="#0373fc">注意</Highlight> 初始流程以 `Forget()`（Fire-and-Forget）方式启动，不会阻塞管理器的驱动更新。
+
+## 继承实现示例 {#inheritance-example}
+
+```csharp
+using Cysharp.Threading.Tasks;
+using OxGFrame.GSIFrame;
+using UnityEngine;
+
+// 自定义游戏阶段：继承 GSIBase 并重写四个生命周期方法
+public class StartupStageExample : GSIBase
+{
+    public async override UniTask OnCreate()
+    {
+        // 首次切换至该阶段时执行一次，适合进行一次性的初始
+        Debug.Log($"StartupStage OnCreate, Id: {this.id}");
+    }
+
+    public async override UniTask OnEnter()
+    {
+        // 每次切换进入该阶段时执行
+        // 可 await 资源预加载等异步操作，完成后才会开启 OnUpdate 刷新
+        Debug.Log("StartupStage OnEnter");
+    }
+
+    public override void OnUpdate(float dt = 0.0f)
+    {
+        // 阶段活跃期间每帧执行（由管理器的驱动更新调用）
+    }
+
+    public override void OnExit()
+    {
+        // 切换至其他阶段时执行，清理该阶段产生的数据
+        Debug.Log("StartupStage OnExit");
+    }
+}
+```
+
+阶段子类需通过 [GSIManagerBase](./GSIManagerBase.mdx) 子类进行注册与切换：
+
+```csharp
+// 在任意处通过管理器切换至该阶段（详见 GSIManagerBase）
+GSIManagerExample.ChangeStage<StartupStageExample>();
+```
+
+<Highlight color="#00d679">提醒</Highlight> 可通过 Project 窗口右键模板快速创建阶段子类：**Create → OxGFrame → GSI Frame → Template Scripts → Template GSI.cs (Game Stage)**。
+
+## 成员总览 {#overview}
+
+#### 属性
+
+| 属性 | 说明 |
+| :--- | :--- |
+| [id](#prop-id) | 阶段识别码（注册时由管理器自动设置）。 |
+| [runUpdate](#prop-runupdate) | 是否运行 `OnUpdate` 刷新的开关。 |
+
+#### 生命周期方法（abstract，继承后必须实现）
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [OnCreate](#oncreate) | 首次进入该阶段时执行一次（异步）。 |
+| [OnEnter](#onenter) | 每次切换进入该阶段时执行（异步）。 |
+| [OnUpdate](#onupdate) | 阶段活跃期间每帧执行。 |
+| [OnExit](#onexit) | 切换离开该阶段时执行。 |
+
+#### 一般方法
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [SetId](#setid) | 设置阶段识别码（注册时由管理器自动调用）。 |
+| [RunUpdate](#runupdate) | 开启 `OnUpdate` 刷新。 |
+| [StopUpdate](#stopupdate) | 停止 `OnUpdate` 刷新。 |
 
 ---
 
-## 属性与状态
+### id {#prop-id}
 
-* **id**
-    * 类型：`int`
-    * 说明：阶段的唯一识别码，由 `GSIManager` 注册时自动分配。
-* **runUpdate**
-    * 类型：`bool`
-    * 说明：控制该阶段的 `OnUpdate` 是否执行的开关。
+```csharp
+public int id { get; private set; }
+```
 
----
+**说明**
 
-## 内置流程控制
-
-### 执行顺序说明
-
-1. **首次检查**: 若尚未初始化，执行 `OnCreate`，仅初始一次。
-2. **Step 1**: 调用 `StopUpdate()` 暂停刷新。
-3. **Step 2**: 调用 `OnEnter()` 进行该阶段的异步初始化逻辑。
-4. **Step 3**: 调用 `RunUpdate()` 开启 `OnUpdate` 刷新。
+阶段的唯一识别码。在管理器注册阶段时自动设置：以泛型重载注册且未指定 id 时，为该类型的 `GetHashCode()`；有指定时则为传入的 id。外部仅可读取，只能通过 [SetId](#setid) 变更。
 
 ---
 
-## 必须实作的方法 (Implementation)
+### runUpdate {#prop-runupdate}
 
-继承 `GSIBase` 后，必须实作以下生命周期方法：
+```csharp
+public bool runUpdate { get; private set; }
+```
 
-### OnCreate()
-* **回传值**: `UniTask`
-* **触发时机**: 该阶段实体「第一次」被切换时。
-* **用途**: 适合进行一次性的资源预载或物件初始化。
+**说明**
 
-### OnEnter()
-* **回传值**: `UniTask`
-* **触发时机**: 每次切换进入该阶段时。
-* **用途**: 处理进入阶段时的逻辑，例如开启 UI 窗口、播放转场动画。
-
-### OnUpdate(float dt)
-* **回传值**: `void`
-* **触发时机**: `runUpdate` 为 true 且阶段活跃时，随游戏帧率刷新。
-* **用途**: 处理阶段内的循环逻辑（如计时器、角色控制等）。
-
-### OnExit()
-* **回传值**: `void`
-* **触发时机**: 切换至下一个阶段前。
-* **用途**: 清理该阶段产生的临时数据、关闭相关 UI 或停止音效。
+是否运行 `OnUpdate` 刷新的开关。为 `true` 时，管理器的驱动更新才会调用该阶段的 [OnUpdate](#onupdate)。外部仅可读取，只能通过 [RunUpdate](#runupdate) / [StopUpdate](#stopupdate) 变更。
 
 ---
 
-## 阶段状态操作
+### OnCreate {#oncreate}
 
-开发者可以在阶段内部透过以下方法手动控制更新行为：
+```csharp
+public abstract UniTask OnCreate()
+```
 
-* **RunUpdate()**: 手动开启 `OnUpdate` 执行。
-* **StopUpdate()**: 手动暂停 `OnUpdate` 执行。
+**返回值**
+
+`UniTask` — 可等待的异步操作，初始流程会 `await` 其完成后才继续执行 `OnEnter`。
+
+**说明**
+
+该阶段**首次**被切换进入时执行，整个生命周期仅执行一次，适合进行一次性的初始或资源预加载。
+
+<Highlight color="#0373fc">注意</Highlight> `OnCreate` 在首次切换进入该阶段时才会执行，并非注册（`AddStage`）当下。
 
 ---
 
-<Highlight color="#00d679">提醒</Highlight> 由于 `OnCreate` 与 `OnEnter` 支持 `UniTask`，您可以方便地在这些方法中使用 `await` 等待资源加载完成，系统会自动在加载完成后才开启 `OnUpdate`。
+### OnEnter {#onenter}
+
+```csharp
+public abstract UniTask OnEnter()
+```
+
+**返回值**
+
+`UniTask` — 可等待的异步操作，初始流程会 `await` 其完成后才开启 `OnUpdate` 刷新。
+
+**说明**
+
+**每次**切换进入该阶段时执行，处理进入阶段的初始逻辑（如打开 UI、播放转场动画、预加载资源）。执行前初始流程会先调用 [StopUpdate](#stopupdate) 暂停刷新，完成后自动调用 [RunUpdate](#runupdate) 开启刷新。
+
+---
+
+### OnUpdate {#onupdate}
+
+```csharp
+public abstract void OnUpdate(float dt = 0.0f)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| dt | `float` | 帧间隔时间，由管理器的驱动更新传入（一般为 `Time.deltaTime`）。<br/>**默认值**：`0.0f` |
+
+**说明**
+
+阶段活跃期间的每帧更新。该阶段为当前阶段且 [runUpdate](#prop-runupdate) 为 `true` 时，由管理器的驱动更新（`DriveUpdate`）每帧调用，处理阶段内的循环逻辑（如计时器、流程判断）。
+
+---
+
+### OnExit {#onexit}
+
+```csharp
+public abstract void OnExit()
+```
+
+**说明**
+
+切换至其他阶段时，由管理器在执行新阶段的初始流程前调用。用于清理该阶段产生的数据、关闭相关 UI 或停止音效等收尾处理。
+
+---
+
+### SetId {#setid}
+
+```csharp
+public void SetId(int id)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| id | `int` | 阶段识别码。 |
+
+**说明**
+
+设置阶段识别码 [id](#prop-id)。
+
+<Highlight color="#00d679">提醒</Highlight> 注册阶段时（`AddStage` / `AddGameStage`）由管理器自动调用，一般无需手动调用。
+
+---
+
+### RunUpdate {#runupdate}
+
+```csharp
+public void RunUpdate()
+```
+
+**说明**
+
+将 [runUpdate](#prop-runupdate) 设为 `true`，开启 `OnUpdate` 刷新。初始流程在 `OnEnter` 完成后会自动调用；也可在阶段内手动调用，恢复先前暂停的刷新。
+
+---
+
+### StopUpdate {#stopupdate}
+
+```csharp
+public void StopUpdate()
+```
+
+**说明**
+
+将 [runUpdate](#prop-runupdate) 设为 `false`，暂停 `OnUpdate` 刷新。可在阶段内手动调用（如过场期间暂停阶段更新），再通过 [RunUpdate](#runupdate) 恢复。
 
 ---

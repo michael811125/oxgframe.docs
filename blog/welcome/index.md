@@ -7,6 +7,8 @@ tags: [作者, hello, michaelo]
 
 歡迎使用 OxGFrame Unity 開發框架。
 
+<!-- truncate -->
+
 **若您的專案使用了 OxGFrame，歡迎聯絡作者，作者很樂意將您的作品展示出來。**
 
 隨時歡迎加入討論 (日積月累)。

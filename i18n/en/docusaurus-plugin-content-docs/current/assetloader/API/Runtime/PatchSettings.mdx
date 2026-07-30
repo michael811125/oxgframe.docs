@@ -1,5 +1,6 @@
 ---
 sidebar_position: 3
+description: PatchSettings is the patch settings class (ScriptableObject) of AssetLoader, defining config file names, extensions, the cipher key, and output folder names.
 ---
 
 # PatchSettings
@@ -22,63 +23,88 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`PatchSettings` is the patch settings class (`ScriptableObject`) of **AssetLoader**. It centralizes global settings related to hot updates and asset packages — **config file names, extensions, the cipher key, and output folder names** — and is accessed at runtime through the static [settings](#settings) property.
+
+|  |  |
+| :--- | :--- |
+| **Namespace** | `OxGFrame.AssetLoader` |
+| **Type** | `public class` (inherits `ScriptableObject`) |
+| **Source** | [PatchSettings.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/AssetLoader/Scripts/Runtime/Settings/PatchSettings.cs) |
+
+```csharp
 using OxGFrame.AssetLoader;
+```
 
-## Settings Fields
+<Highlight color="#00d679">Reminder</Highlight> A custom `PatchSettings.asset` can be created via the editor menu **Assets → Create → OxGFrame → Create Settings → Create Patch Settings in Resources** (it is created inside a `Resources` subfolder of the selected folder automatically); without the asset, the default values are used.
 
-`PatchSettings` inherits from `ScriptableObject` and is used to store global path and file name settings for hot updates and resource packages. Developers can dynamically call them via `PatchSettings.settings.{fieldName}`.
+## Properties {#properties}
 
----
+### settings {#settings}
 
-### App Config Settings
-Defines the basic information for the application base configuration file.
+```csharp
+public static PatchSettings settings { get; }
+```
 
-* **appCfgName**
-    * Type: `string` (Default: `"AppInfo"`)
-    * Description: Defines the file name of the APP configuration file.
-* **appCfgExtension**
-    * Type: `string` (Default: `".json"`)
-    * Description: The file extension of the APP configuration file.
+**Returns**
 
-<Highlight color="#0373fc">Attention</Highlight> The file extension must include the dot (e.g., `.dat`, `.json`).
+`PatchSettings` — the global settings instance (singleton).
 
----
+**Description**
 
-### Patch Config Settings
-Defines the basic information for the patch (version update) configuration file.
+Gets the global settings instance. On first access, it loads the asset named `PatchSettings` from `Resources`; if the asset is not found, an instance with default values is created automatically (a log indicates that default settings are used).
 
-* **patchCfgName**
-    * Type: `string` (Default: `"PatchInfo"`)
-    * Description: Defines the file name of the patch configuration file.
-* **patchCfgExtension**
-    * Type: `string` (Default: `".json"`)
-    * Description: The file extension of the patch configuration file.
+**Example**
 
----
+```csharp
+// Compose the full APP config file name (AppInfo.json by default)
+string appCfgFileName = $"{PatchSettings.settings.appCfgName}{PatchSettings.settings.appCfgExtension}";
+```
 
-### Bundle URL Config Settings
-Defines configurations related to the deployment environment (CDN request endpoint).
+## Fields {#fields}
 
-* **bundleUrlCfgCipher**
-    * Type: `byte`
-    * Description: The encryption/decryption key for the resource request endpoint configuration file.
-* **bundleUrlCfgName**
-    * Type: `string` (Default: `"CdnConfig"`)
-    * Description: The name of the configuration file for resource request endpoints.
-* **bundleUrlCfgExtension**
-    * Type: `string` (Default: `".dat"`)
-    * Description: The file extension for resource request endpoint configuration files.
+#### App Config Settings
 
----
+| Name | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| appCfgName | `string` | `"AppInfo"` | File name of the APP config. |
+| appCfgExtension | `string` | `".json"` | File extension of the APP config. |
 
-### Folder Settings
-Defines the folder classification logic when outputting resource packages.
+#### Patch Config Settings
 
-* **rootFolderName**
-    * Type: `string` (Default: `"CDN"`)
-    * Description: The root folder name for CDN output resources.
-* **dlcFolderName**
-    * Type: `string` (Default: `"DLC"`)
-    * Description: The subdirectory folder name where DLC resource packages are stored.
+| Name | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| patchCfgName | `string` | `"PatchInfo"` | File name of the patch config. |
+| patchCfgExtension | `string` | `".json"` | File extension of the patch config. |
+
+#### Bundle URL Config Settings
+
+| Name | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| bundleUrlCfgCipher | `byte` | *(not disclosed)* | XOR cipher key of the deployment config (bundle request endpoints), used together with the [CIPHER_HEADER](#constants) file header. |
+| bundleUrlCfgName | `string` | `"CdnConfig"` | File name of the deployment config (bundle request endpoints). |
+| bundleUrlCfgExtension | `string` | `".dat"` | File extension of the deployment config (bundle request endpoints). |
+
+#### Folder Settings
+
+| Name | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| rootFolderName | `string` | `"CDN"` | Root folder name of the CDN output. |
+| dlcFolderName | `string` | `"DLC"` | Subfolder name where DLC packages are stored. |
+
+<Highlight color="#0373fc">Attention</Highlight> Extension fields must include the dot (e.g., `.dat`, `.cfg`, `.json`).
+
+## Constants {#constants}
+
+| Constant | Type | Value | Description |
+| :--- | :--- | :--- | :--- |
+| CIPHER_HEADER | `short` | *(not disclosed)* | Cipher header mark of encrypted config files. The 2-byte header is written when the deployment config is encrypted, and detected on read to decide whether decryption is needed. |
+| META_FILE_EXTENSION | `string` | `".meta"` | META file extension. |
+| APP_CFG_BAK_EXTENSION | `string` | `".bak"` | Backup extension of the APP config. |
+| PATCH_CFG_BAK_EXTENSION | `string` | `".bak"` | Backup extension of the patch config. |
+| BUNDLE_IP | `string` | `"bundle_ip"` | Key name of the bundle request endpoint in the deployment config. |
+| BUNDLE_FALLBACK_IP | `string` | `"bundle_fallback_ip"` | Key name of the fallback bundle request endpoint in the deployment config. |
+| STORE_LINK | `string` | `"store_link"` | Key name of the store link in the deployment config. |
+
+<Highlight color="#00d679">Reminder</Highlight> `BUNDLE_IP`, `BUNDLE_FALLBACK_IP`, and `STORE_LINK` can be used as key parameters for [BundleConfig.GetValueFromUrlCfg](./BundleConfig.mdx#getvaluefromurlcfg).
 
 ---

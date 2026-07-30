@@ -1,19 +1,20 @@
 ---
 sidebar_position: 1
+description: BundleConfig 是 AssetLoader 的執行期核心設定與工具類，集中管理資源運行模式與下載載入參數，並提供佈署配置檔解析與 CDN 端點路徑組合等方法。
 ---
 
 # BundleConfig
 
 export const Highlight = ({ children, color }) => (
-  <span
-    style={{
-      backgroundColor: color,
-      borderRadius: '5px',
-      color: '#fff',
-      padding: '2.5px'
-    }}>
-    {children}
-  </span>
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
 );
 
 <Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
@@ -22,69 +23,617 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
-using OxGFrame.AssetLoader.Bundle;
+`BundleConfig` 是 **AssetLoader** 模組的執行期核心設定與工具類，集中管理**資源運行模式（PlayMode）**、下載與載入參數等靜態設定，並提供佈署配置檔（`CdnConfig`）解析、CDN 端點路徑組合與本地／內建路徑定位等工具方法。
 
-## Methods
-
-### GetValueFromUrlCfg
-從 `CdnConfig.dat` 佈署配置文件中取得指定的鍵值（Key-Value）。支持自動偵測加密狀態並解密。
-
-**Params**
-* `string key`：設定檔中的鍵名（如 `BUNDLE_IP`）
-
-<Highlight color="#0373fc">注意</Highlight> 若檔案標頭符合加密標記，將會使用專案設定的 Cipher Key 進行解密。
-
----
-
-### GetAppConfigFromStreamingAssets / HostServer
-獲取應用程式基礎配置（AppConfig）。
-* **StreamingAssets**: 從隨包內置資源讀取。
-* **HostServer**: 從遠端伺服器讀取（支持弱聯網處理，若失敗則嘗試回退至上次成功的緩存版本）。
-
----
-
-### GetHostServerUrl / GetFallbackHostServerUrl
-根據 Package 名稱組合出完整的遠端資源下載地址。
-* **Host**: 主要 CDN 位址。
-* **Fallback**: 備用 CDN 位址。
-
-**Params**
-* `string packageName`：資源包名稱
-
-<Highlight color="#00d679">提醒</Highlight> 路徑組合邏輯會自動根據 `SEMANTIC_RULE`（語義化規則）決定版本資料夾格式（如 `v1.0` 或 `v1.0.0`）。
-
----
-
-### GetDlcHostServerUrl / GetDlcFallbackHostServerUrl
-獲取 DLC 包裹位於遠端伺服器的端點路徑。
-
-**Params**
-* `string packageName`：DLC 包名稱
-* `string dlcVersion`：DLC 版本號
-* `bool withoutPlatform`：是否忽略平台路徑層級（預設為 false）
-
----
-
-### GoToAppStore
-取得 `STORE_LINK` 設置並直接調用系統瀏覽器開啟主程式商店連結（Google Play / App Store）。
-
----
-
-### Local & Builtin Path Operations
-提供資源路徑的定位功能：
-
-| 方法名稱 | 說明 |
+|  |  |
 | :--- | :--- |
-| **GetLocalSandboxRootPath** | 取得本地持久化資源（Sandbox）的根目錄路徑。 |
-| **GetLocalSandboxPackagePath** | 取得特定 Package 在本地的儲存路徑。 |
-| **GetBuiltinRootPath** | 取得內置資源（Built-in）的根目錄路徑。 |
-| **GetRequestStreamingAssetsPath** | 取得適用於 WebRequest 的 StreamingAssets 路徑（自動處理 iOS/OSX 的 `file://` 前綴）。 |
+| **命名空間** | `OxGFrame.AssetLoader.Bundle` |
+| **類型** | `public static class` |
+| **原始碼** | [BundleConfig.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/AssetLoader/Scripts/Runtime/Bundle/BundleConfig.cs) |
+
+```csharp
+using OxGFrame.AssetLoader.Bundle;
+```
+
+<Highlight color="#00d679">提醒</Highlight> 一般情況下，運行模式與 Preset Packages 由場景中 `PatchLauncher` 元件的 Inspector 設定配置，並於啟動時自動寫入 `BundleConfig` 的對應欄位，無需手動指派。
+
+## 列舉 {#enums}
+
+### PlayMode {#playmode}
+
+```csharp
+public enum PlayMode
+{
+    EditorSimulateMode,
+    OfflineMode,
+    HostMode,
+    WeakHostMode,
+    WebGLMode,
+    WebGLRemoteMode,
+    CustomMode
+}
+```
+
+資源運行模式。
+
+| 名稱 | 值 | 說明 |
+| :--- | :--- | :--- |
+| EditorSimulateMode | `0` | 編輯器模擬模式。無需實際建置 Bundles，於編輯器中直接模擬資源運行（僅供開發階段使用）。 |
+| OfflineMode | `1` | 離線模式。僅使用隨包內建資源運行，不進行遠端更新。 |
+| HostMode | `2` | 聯機模式。自 Host Server（CDN）檢查版本並下載更新資源。 |
+| WeakHostMode | `3` | 弱聯網模式。基於聯機模式，支援斷網時退回本地最後記錄的版本繼續運行（搭配 `enableLastLocalVersionsCheckInWeakNetwork` 參數）。 |
+| WebGLMode | `4` | WebGL 模式。僅使用 Web 伺服器上的內建資源運行。 |
+| WebGLRemoteMode | `5` | WebGL 遠端模式。支援自遠端伺服器（CDN）下載更新資源。 |
+| CustomMode | `6` | 自定義模式。由開發者透過 YooAsset 初始化參數自行配置運行方式（不支援 Preset Packages 的自動初始化）。 |
 
 ---
 
-### GetHostServerAppConfigPath / PatchConfigPath
-獲取遠端伺服器上配置文件（AppConfig / PatchConfig）的完整 URL 路徑。
+### BuildMode {#buildmode}
 
-<Highlight color="#ff2f00">重要</Highlight> 此方法會優先讀取內置的 AppConfig 以確定當前產品名稱與平台，再向遠端請求對應路徑下的配置文件。
+```csharp
+public enum BuildMode
+{
+    BuiltinBuildPipeline = 1,
+    ScriptableBuildPipeline = 0,
+    RawFileBuildPipeline = 2,
+#if YOOASSET_3
+    ArchiveFileBuildPipeline = 3
+#endif
+}
+```
+
+資源建置管線模式。
+
+| 名稱 | 值 | 說明 |
+| :--- | :--- | :--- |
+| ScriptableBuildPipeline | `0` | 可程式化建置管線（SBP, Scriptable Build Pipeline）。 |
+| BuiltinBuildPipeline | `1` | 內建建置管線（Built-in Build Pipeline）。 |
+| RawFileBuildPipeline | `2` | 原生檔案建置管線（Raw File Build Pipeline）。 |
+| ArchiveFileBuildPipeline | `3` | 歸檔檔案建置管線（Archive File Build Pipeline）。**限 YooAsset v3**（`YOOASSET_3`）。 |
+
+<Highlight color="#00d679">提醒</Highlight> `YOOASSET_2` / `YOOASSET_3` 由框架依安裝的 YooAsset 版本自動定義（無需手動設定），完整差異對照參考 [YooAsset 版本相容性](./AssetPatcher.mdx#yooasset-compat)。
+
+<Highlight color="#00d679">提醒</Highlight> Preset Package 上的 `buildMode` 設定僅在 `EditorSimulateMode` 下生效。
+
+## CryptogramType 常數 {#cryptogramtype}
+
+```csharp
+public class CryptogramType
+{
+    public const string NONE = "NONE";
+    public const string OFFSET = "OFFSET";
+    public const string XOR = "XOR";
+    public const string HT2XOR = "HT2XOR";
+    public const string HT2XORPLUS = "HT2XORPLUS";
+    public const string AES = "AES";
+    public const string CHACHA20 = "CHACHA20";
+    public const string XXTEA = "XXTEA";
+    public const string OFFSETXOR = "OFFSETXOR";
+}
+```
+
+加解密類型識別字，用於組合解密參數字串（如 `PatchLauncher` 的 Decrypt Info 設定，識別字**大小寫不敏感**）：
+
+| 常數 | 值 | 解密參數格式 |
+| :--- | :--- | :--- |
+| NONE | `"NONE"` | `NONE`（無加密） |
+| OFFSET | `"OFFSET"` | `OFFSET, dummySize` |
+| XOR | `"XOR"` | `XOR, key` |
+| HT2XOR | `"HT2XOR"` | `HT2XOR, hKey, tKey, jKey` |
+| HT2XORPLUS | `"HT2XORPLUS"` | `HT2XORPLUS, hKey, tKey, j1Key, j2Key` |
+| AES | `"AES"` | `AES, key, iv` |
+| CHACHA20 | `"CHACHA20"` | `CHACHA20, key, nonce, counter` |
+| XXTEA | `"XXTEA"` | `XXTEA, key` |
+| OFFSETXOR | `"OFFSETXOR"` | `OFFSETXOR, key, dummySize` |
+
+## 靜態欄位 {#fields}
+
+#### 運行模式與 Preset Packages
+
+| 名稱 | 型別 | 預設值 | 說明 |
+| :--- | :--- | :--- | :--- |
+| playMode | `PlayMode` | `PlayMode.EditorSimulateMode` | 當前資源運行模式。由 `PatchLauncher` 於啟動時依 Inspector 設定寫入。 |
+| playModeParameters | `PlayModeParameters` | `null` | 當前運行模式的參數配置。由 `PatchLauncher` 依運行模式指派對應的參數物件。 |
+| listAppPackages | `List<AppPackageInfoWithBuild>` | `null` | App Preset Package 清單（預設包裹）。由 `PatchLauncher` 寫入。 |
+| listDlcPackages | `List<DlcPackageInfoWithBuild>` | `null` | DLC Preset Package 清單（預設包裹）。由 `PatchLauncher` 寫入。 |
+
+#### 下載選項 (Download Options)
+
+| 名稱 | 型別 | 預設值 | 說明 |
+| :--- | :--- | :--- | :--- |
+| maxConcurrencyDownloadCount | `int` | `10` | 同時併發下載數量。於建立下載器時作為預設併發數。 |
+| failedRetryCount | `int` | `3` | 下載失敗重新嘗試次數。於建立下載器時作為預設重試數。 |
+| breakpointFileSizeThreshold | `uint` | `20971520`<br/>（20 MB） | 斷點續傳門檻（bytes）。檔案大小達門檻時啟用斷點續傳（對應 YooAsset 檔案系統參數 `RESUME_DOWNLOAD_MINMUM_SIZE`）。 |
+| DEFAULT_DOWNLOAD_WATCHDOG_TIMEOUT | `int` | `30` | `downloadWatchdogTimeout` 的預設值。 |
+| downloadWatchdogTimeout | `int` | `30` | 下載器看門狗監控逾時時間。監控時間範圍內未接收到任何下載數據時，直接終止該下載任務（對應 YooAsset 檔案系統參數 `DOWNLOAD_WATCH_DOG_TIME`）。 |
+
+#### 載入選項 (Load Options)
+
+| 名稱 | 型別 | 預設值 | 說明 |
+| :--- | :--- | :--- | :--- |
+| bundleLoadReadBufferSize | `uint` | `32768`<br/>（32 KB） | 資源讀取緩衝大小（`AssetBundle.LoadFromStream`）。 |
+| bundleDecryptReadBufferSize | `uint` | `32768`<br/>（32 KB） | 資源解密讀取緩衝大小。 |
+| autoUnloadBundleWhenUnused | `bool` | `false` | 資源引用計數歸零時，自動釋放資源包（對應 YooAsset `AutoUnloadBundleWhenUnused`）。 |
+
+#### 處理選項 (Process Options)
+
+| 名稱 | 型別 | 預設值 | 說明 |
+| :--- | :--- | :--- | :--- |
+| operationSystemMaxTimeSlice | `long` | `30` | 非同步作業系統每幀執行消耗的最大時間切片（毫秒，透過 `YooAssets.SetOperationSystemMaxTimeSlice` 套用）。 |
+
+<Highlight color="#0373fc">注意</Highlight>
+
+- `autoUnloadBundleWhenUnused`、`breakpointFileSizeThreshold`、`downloadWatchdogTimeout` 與 `operationSystemMaxTimeSlice` 於 **Package 初始化階段**套用至 YooAsset，如需調整請於初始化流程前設定。
+- `maxConcurrencyDownloadCount` 與 `failedRetryCount` 於**每次建立下載器**時讀取。
+
+## 方法總覽 {#overview}
+
+#### 佈署配置檔 (Bundle URL Config)
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [GetValueFromUrlCfg](#getvaluefromurlcfg) | 自佈署配置檔（`CdnConfig`）取得指定鍵的值（自動偵測加密並解密）。 |
+| [GetAppStoreLink](#getappstorelink) | 取得主程式商店連結（`store_link`）。 |
+| [GoToAppStore](#gotoappstore) | 以系統瀏覽器開啟主程式商店頁面。 |
+
+#### AppConfig 取得
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [GetAppConfigFromStreamingAssets](#getappconfigfromstreamingassets) | 自內建 `StreamingAssets` 讀取 AppConfig。 |
+| [GetAppConfigFromHostServer](#getappconfigfromhostserver) | 自 Host Server 下載 AppConfig（支援弱聯網回退）。 |
+
+#### Host Server 端點
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [GetHostServerUrl](#gethostserverurl) | 組合 App Package 的遠端下載端點 URL。 |
+| [GetFallbackHostServerUrl](#getfallbackhostserverurl) | 組合 App Package 的備援下載端點 URL。 |
+| [GetDlcHostServerUrl](#getdlchostserverurl) | 組合 DLC Package 的遠端下載端點 URL。 |
+| [GetDlcFallbackHostServerUrl](#getdlcfallbackhostserverurl) | 組合 DLC Package 的備援下載端點 URL。 |
+| [GetHostServerAppConfigPath](#gethostserverappconfigpath) | 取得遠端伺服器上 AppConfig 的完整 URL。 |
+| [GetHostServerPatchConfigPath](#gethostserverpatchconfigpath) | 取得遠端伺服器上 PatchConfig 的完整 URL。 |
+
+#### 本地與內建路徑
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [GetLocalSandboxRootPath](#getlocalsandboxrootpath) | 取得本地持久化資源（Sandbox）根目錄路徑。 |
+| [GetLocalSandboxPackagePath](#getlocalsandboxpackagepath) | 取得指定 Package 的本地持久化路徑。 |
+| [GetBuiltinRootPath](#getbuiltinrootpath) | 取得內建資源（Built-in）根目錄路徑。 |
+| [GetBuiltinPackagePath](#getbuiltinpackagepath) | 取得指定 Package 的內建路徑。 |
+| [GetLocalSandboxAppConfigPath](#getlocalsandboxappconfigpath) | 取得本地持久化路徑中的 AppConfig 完整路徑。 |
+| [GetStreamingAssetsAppConfigPath](#getstreamingassetsappconfigpath) | 取得 `StreamingAssets` 中的 AppConfig 完整路徑。 |
+| [GetRequestStreamingAssetsPath](#getrequeststreamingassetspath) | 取得適用於 `UnityWebRequest` 的 `StreamingAssets` 路徑。 |
+
+#### 位元組讀寫工具 (Header Helper)
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [WriteInt16](#writeint16) | 將 16 位元整數寫入緩衝區（little-endian）。 |
+| [ReadInt16](#readint16) | 自緩衝區讀取 16 位元整數。 |
+
+---
+
+### GetValueFromUrlCfg {#getvaluefromurlcfg}
+
+```csharp
+public static async UniTask<string> GetValueFromUrlCfg(string key)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| key | `string` | 佈署配置檔中的鍵名。可使用 `PatchSettings.BUNDLE_IP`、`PatchSettings.BUNDLE_FALLBACK_IP`、`PatchSettings.STORE_LINK` 常數。 |
+
+**回傳值**
+
+`UniTask<string>` — 鍵對應的值；配置檔內容為空時回傳 `string.Empty`；查無鍵值時回傳 `null`。
+
+**說明**
+
+自內建 `StreamingAssets` 讀取佈署配置檔（檔名由 [PatchSettings](./PatchSettings.mdx) 設定決定，預設 `CdnConfig.dat`）並解析鍵值資料，首次讀取後會快取解析結果。
+
+<Highlight color="#0373fc">注意</Highlight> 讀取時自動偵測檔頭：若前 2 位元組符合加密標記 `PatchSettings.CIPHER_HEADER`，將使用 `PatchSettings.settings.bundleUrlCfgCipher` 金鑰自動解密後再解析。
+
+**範例**
+
+```csharp
+// 取得主要 CDN 位址（bundle_ip）
+string host = await BundleConfig.GetValueFromUrlCfg(PatchSettings.BUNDLE_IP);
+```
+
+---
+
+### GetAppStoreLink {#getappstorelink}
+
+```csharp
+public static async UniTask<string> GetAppStoreLink()
+```
+
+**回傳值**
+
+`UniTask<string>` — 主程式商店連結（佈署配置檔中 `store_link` 鍵的值）；查無時回傳 `null`。
+
+**說明**
+
+自佈署配置檔取得主程式商店連結（`PatchSettings.STORE_LINK`）。
+
+---
+
+### GoToAppStore {#gotoappstore}
+
+```csharp
+public static async UniTaskVoid GoToAppStore()
+```
+
+**說明**
+
+取得商店連結（[GetAppStoreLink](#getappstorelink)）後，直接呼叫 `Application.OpenURL` 以系統瀏覽器開啟主程式商店頁面（Google Play / App Store），常用於強制更新流程。回傳 `UniTaskVoid`（射後不理，無需等待）。
+
+**範例**
+
+```csharp
+// 檢測到主程式版本過舊，引導玩家前往商店更新
+BundleConfig.GoToAppStore().Forget();
+```
+
+---
+
+### GetAppConfigFromStreamingAssets {#getappconfigfromstreamingassets}
+
+```csharp
+public static async UniTask<AppConfig> GetAppConfigFromStreamingAssets()
+```
+
+**回傳值**
+
+`UniTask<AppConfig>` — 內建的 AppConfig；讀取失敗時回傳 `null`。
+
+**說明**
+
+自內建 `StreamingAssets` 讀取 AppConfig（預設 `AppInfo.json`），內容包含 `PLATFORM`（平台）、`PRODUCT_NAME`（產品名稱）、`APP_VERSION`（主程式版本）與 `SEMANTIC_RULE`（版號規則）。首次讀取後會快取。
+
+---
+
+### GetAppConfigFromHostServer {#getappconfigfromhostserver}
+
+```csharp
+public static async UniTask<AppConfig> GetAppConfigFromHostServer()
+```
+
+**回傳值**
+
+`UniTask<AppConfig>` — Host Server 上的 AppConfig；無法取得時回傳 `null`。
+
+**說明**
+
+自 Host Server 下載最新的 AppConfig（用於版本比對與組合最新版本路徑）。首次讀取後會快取。
+
+<Highlight color="#0373fc">注意</Highlight> 下載失敗時，若啟用弱聯網處理（`playModeParameters.enableLastLocalVersionsCheckInWeakNetwork`，僅弱聯網模式適用），將退回使用本地儲存的上次成功版本資料。
+
+---
+
+### GetHostServerUrl {#gethostserverurl}
+
+```csharp
+public static async UniTask<string> GetHostServerUrl(string packageName)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 資源包（Package）名稱。 |
+
+**回傳值**
+
+`UniTask<string>` — App Package 的遠端下載端點 URL。
+
+**說明**
+
+依 Host Server 的最新 AppConfig 組合 App Package 的下載端點，格式如下：
+
+```text
+<bundle_ip>/<rootFolderName>/<PRODUCT_NAME>/<PLATFORM>/<vX.Y[.Z]>/<packageName>
+```
+
+<Highlight color="#00d679">提醒</Highlight> 版本資料夾格式由 AppConfig 的 `SEMANTIC_RULE` 決定：`PATCH` 啟用時為 `v<Major>.<Minor>.<Patch>`（如 `v1.0.0`），否則為 `v<Major>.<Minor>`（如 `v1.0`）。
+
+**範例**
+
+```csharp
+string url = await BundleConfig.GetHostServerUrl("DefaultPackage");
+// 例：http://127.0.0.1/CDN/MyProduct/StandaloneWindows64/v1.0/DefaultPackage
+```
+
+---
+
+### GetFallbackHostServerUrl {#getfallbackhostserverurl}
+
+```csharp
+public static async UniTask<string> GetFallbackHostServerUrl(string packageName)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 資源包（Package）名稱。 |
+
+**回傳值**
+
+`UniTask<string>` — App Package 的備援下載端點 URL。
+
+**說明**
+
+行為同 [GetHostServerUrl](#gethostserverurl)，改以備援位址（`bundle_fallback_ip`）組合路徑。
+
+---
+
+### GetDlcHostServerUrl {#getdlchostserverurl}
+
+```csharp
+public static async UniTask<string> GetDlcHostServerUrl(string packageName, string dlcVersion, bool withoutPlatform = false)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packageName | `string` | DLC 資源包名稱。 |
+| dlcVersion | `string` | DLC 版本號（DLC 具有獨立版本，不隨主程式版本路徑）。 |
+| withoutPlatform | `bool` | 是否省略平台層級路徑。<br/>**預設值**：`false` |
+
+**回傳值**
+
+`UniTask<string>` — DLC Package 的遠端下載端點 URL。
+
+**說明**
+
+組合 DLC Package 的下載端點，格式如下：
+
+```text
+<bundle_ip>/<rootFolderName>/<PRODUCT_NAME>/<PLATFORM>/<dlcFolderName>/<packageName>/<dlcVersion>
+```
+
+`withoutPlatform` 為 `true` 時省略 `<PLATFORM>` 層級。
+
+**範例**
+
+```csharp
+string url = await BundleConfig.GetDlcHostServerUrl("Dlc01Package", "1.0.0");
+// 例：http://127.0.0.1/CDN/MyProduct/StandaloneWindows64/DLC/Dlc01Package/1.0.0
+```
+
+---
+
+### GetDlcFallbackHostServerUrl {#getdlcfallbackhostserverurl}
+
+```csharp
+public static async UniTask<string> GetDlcFallbackHostServerUrl(string packageName, string dlcVersion, bool withoutPlatform = false)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packageName | `string` | DLC 資源包名稱。 |
+| dlcVersion | `string` | DLC 版本號。 |
+| withoutPlatform | `bool` | 是否省略平台層級路徑。<br/>**預設值**：`false` |
+
+**回傳值**
+
+`UniTask<string>` — DLC Package 的備援下載端點 URL。
+
+**說明**
+
+行為同 [GetDlcHostServerUrl](#getdlchostserverurl)，改以備援位址（`bundle_fallback_ip`）組合路徑。
+
+---
+
+### GetHostServerAppConfigPath {#gethostserverappconfigpath}
+
+```csharp
+public static async UniTask<string> GetHostServerAppConfigPath()
+```
+
+**回傳值**
+
+`UniTask<string>` — 遠端伺服器上 AppConfig 的完整 URL。
+
+**說明**
+
+組合資源伺服器上 AppConfig 配置檔的 URL（`<bundle_ip>/<rootFolderName>/<PRODUCT_NAME>/<PLATFORM>/` 加上 AppConfig 檔名，預設 `AppInfo.json`）。
+
+<Highlight color="#ff2f00">重要</Highlight> 會先讀取**內建**（`StreamingAssets`）的 AppConfig 以確定當前產品名稱與平台，再組合遠端請求路徑。
+
+---
+
+### GetHostServerPatchConfigPath {#gethostserverpatchconfigpath}
+
+```csharp
+public static async UniTask<string> GetHostServerPatchConfigPath()
+```
+
+**回傳值**
+
+`UniTask<string>` — 遠端伺服器上 PatchConfig 的完整 URL。
+
+**說明**
+
+組合資源伺服器上 PatchConfig 配置檔的 URL（`<bundle_ip>/<rootFolderName>/<PRODUCT_NAME>/<PLATFORM>/` 加上 PatchConfig 檔名，預設 `PatchInfo.json`）。
+
+<Highlight color="#ff2f00">重要</Highlight> 會先讀取**內建**（`StreamingAssets`）的 AppConfig 以確定當前產品名稱與平台，再組合遠端請求路徑。
+
+---
+
+### GetLocalSandboxRootPath {#getlocalsandboxrootpath}
+
+```csharp
+public static string GetLocalSandboxRootPath()
+```
+
+**回傳值**
+
+`string` — 本地持久化資源（Sandbox）的根目錄路徑。
+
+**說明**
+
+取得本地持久化（下載儲存）的根目錄，即 YooAsset 預設的快取檔案根目錄（透過 [YooAssetBridge](./YooAssetBridge.mdx#getyoodefaultcacheroot) 反射取得）。
+
+---
+
+### GetLocalSandboxPackagePath {#getlocalsandboxpackagepath}
+
+```csharp
+public static string GetLocalSandboxPackagePath(string packageName)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 資源包（Package）名稱。 |
+
+**回傳值**
+
+`string` — 指定 Package 的本地持久化路徑（下載內容的儲存位置）。
+
+**說明**
+
+以 [GetLocalSandboxRootPath](#getlocalsandboxrootpath) 為根目錄，組合指定 Package 的本地儲存路徑。
+
+---
+
+### GetBuiltinRootPath {#getbuiltinrootpath}
+
+```csharp
+public static string GetBuiltinRootPath()
+```
+
+**回傳值**
+
+`string` — 內建資源（Built-in）的根目錄路徑。
+
+**說明**
+
+取得 YooAsset 預設的內建檔案根目錄（位於 `StreamingAssets` 下，透過 [YooAssetBridge](./YooAssetBridge.mdx#getyoodefaultbuildinroot) 反射取得）。
+
+---
+
+### GetBuiltinPackagePath {#getbuiltinpackagepath}
+
+```csharp
+public static string GetBuiltinPackagePath(string packageName)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 資源包（Package）名稱。 |
+
+**回傳值**
+
+`string` — 指定 Package 的內建路徑。
+
+**說明**
+
+以 [GetBuiltinRootPath](#getbuiltinrootpath) 為根目錄，組合指定 Package 的內建資源路徑。
+
+---
+
+### GetLocalSandboxAppConfigPath {#getlocalsandboxappconfigpath}
+
+```csharp
+public static string GetLocalSandboxAppConfigPath()
+```
+
+**回傳值**
+
+`string` — 本地持久化路徑中的 AppConfig 完整路徑。
+
+**說明**
+
+取得本地持久化（Sandbox）路徑中 AppConfig 配置檔的完整路徑（下載的儲存路徑，檔名預設 `AppInfo.json`）。
+
+---
+
+### GetStreamingAssetsAppConfigPath {#getstreamingassetsappconfigpath}
+
+```csharp
+public static string GetStreamingAssetsAppConfigPath()
+```
+
+**回傳值**
+
+`string` — `StreamingAssets` 中的 AppConfig 完整路徑。
+
+**說明**
+
+取得內建 `StreamingAssets` 中 AppConfig 配置檔的完整路徑（基於 [GetRequestStreamingAssetsPath](#getrequeststreamingassetspath) 組合，適用於 `UnityWebRequest` 讀取）。
+
+---
+
+### GetRequestStreamingAssetsPath {#getrequeststreamingassetspath}
+
+```csharp
+public static string GetRequestStreamingAssetsPath()
+```
+
+**回傳值**
+
+`string` — 適用於 `UnityWebRequest` 的 `StreamingAssets` 路徑。
+
+**說明**
+
+取得適用於 `UnityWebRequest` 請求的 `StreamingAssets` 路徑。
+
+<Highlight color="#0373fc">注意</Highlight> OSX（Standalone）與 iOS 平台會自動附加 `file://` 協定前綴。
+
+---
+
+### WriteInt16 {#writeint16}
+
+```csharp
+public static void WriteInt16(short value, byte[] buffer, ref int pos)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| value | `short` | 要寫入的 16 位元整數。 |
+| buffer | `byte[]` | 目標緩衝區。 |
+| pos | `ref int` | 寫入位置（寫入後自動前移 2）。 |
+
+**說明**
+
+以 **little-endian** 位元組序將 16 位元整數寫入緩衝區。主要用於佈署配置檔加密檔頭（`PatchSettings.CIPHER_HEADER`）的寫入。
+
+---
+
+### ReadInt16 {#readint16}
+
+```csharp
+public static short ReadInt16(byte[] buffer, ref int pos)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| buffer | `byte[]` | 來源緩衝區。 |
+| pos | `ref int` | 讀取位置（讀取後自動前移 2）。 |
+
+**回傳值**
+
+`short` — 讀取的 16 位元整數。
+
+**說明**
+
+自緩衝區目前位置讀取 16 位元整數（位元組序依 `BitConverter.IsLittleEndian` 判斷）。主要用於佈署配置檔加密檔頭的偵測。
 
 ---
