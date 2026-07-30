@@ -188,13 +188,17 @@ OxGFrame 支援使用 **AI 編碼代理**（Claude Code、OpenAI Codex CLI、Cur
 **匯入與安裝：**
 
 1. 透過 **Package Manager → OxGFrame → Samples → AI Agent Skills** 匯入，檔案會複製到 `Assets/Samples/OxGFrame/<version>/AI Agent Skills/`。
-2. 將 `oxgframe-unity-skill` 資料夾複製（或建立符號連結）到你的 AI 代理讀取技能的位置——**放入 skills 目錄，代理才會自動發現技能，並於任務相關時自動觸發**（按需載入 references，無需每次對話提醒）；若僅留在 `Assets/Samples/` 內，代理不會知道它的存在，且該路徑含版本號、升級後即失效。建議將 skills 目錄一併提交到版本控制，全團隊即可自動生效：
+2. 將 `oxgframe-unity-skill` 資料夾複製（或建立符號連結）到你的 AI 代理讀取技能的位置：
 
 | 代理 | 位置 |
 | :--- | :--- |
 | Claude Code | `<project>/.claude/skills/oxgframe-unity-skill/`（或 `~/.claude/skills/` 供所有專案共用） |
 | OpenAI Codex CLI | `<project>/.agents/skills/oxgframe-unity-skill/`（或 `~/.codex/skills/`） |
 | 其他代理（Cursor、Copilot 等） | 於代理的上下文檔（`AGENTS.md`、`CLAUDE.md`、`.cursorrules` 等）引用該資料夾，例如：「使用 OxGFrame API 前先閱讀 `oxgframe-unity-skill/SKILL.md`」。 |
+
+<Highlight color="#0373fc">注意</Highlight> 技能**放入 skills 目錄，代理才會自動發現，並於任務相關時自動觸發**（按需載入 references，無需每次對話提醒）；若僅留在 `Assets/Samples/` 內，代理不會知道它的存在，且該路徑含版本號、升級後即失效。
+
+<Highlight color="#00d679">提醒</Highlight> 建議將 skills 目錄一併提交到版本控制，全團隊即可自動生效。
 
 3. 複製完成後，`Assets/Samples/` 下匯入的副本可自行刪除（技能檔為純 Markdown，不需要留在 Unity 專案內；保留也無妨，會以 TextAsset 匯入）。
 
