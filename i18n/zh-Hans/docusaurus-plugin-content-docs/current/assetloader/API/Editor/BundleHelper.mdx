@@ -1,5 +1,6 @@
 ---
 sidebar_position: 1
+description: BundleHelper 是 AssetLoader 的编辑器辅助工具，用于输出 AppConfig、PatchConfig、Bundles 与 CDN 部署配置文件（CdnConfig）。
 ---
 
 # BundleHelper
@@ -22,110 +23,346 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`BundleHelper` 是 **AssetLoader** 的编辑器（Editor）辅助工具，用于输出 App 配置文件（AppConfig）、补丁配置文件（PatchConfig）、资源包（Bundles）与 CDN 部署配置文件（CdnConfig），并提供群组／DLC 参数字符串的解析与转换，便于命令行（CI/CD）集成。
+
+|  |  |
+| :--- | :--- |
+| **命名空间** | `OxGFrame.AssetLoader.Editor` |
+| **类型** | `public static class` |
+| **源码** | [BundleHelper.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/AssetLoader/Scripts/Editor/Bundle/BundleHelper.cs) |
+
+```csharp
 using OxGFrame.AssetLoader.Editor;
+```
 
-## Methods
+<Highlight color="#0373fc">注意</Highlight> 本类仅供 **Unity Editor** 环境使用。
 
-### ExportAppConfig
-输出 App 基础配置文件至指定路径，通常用于内置的 `StreamingAssets`。
+### 方法总览 {#overview}
 
-**Params**
-* `string productName`：产品名称
-* `string appVersion`：应用程序版本
-* `string outputPath`：输出目标路径
-* `bool activeBuildTarget`：是否使用当前编辑器设定的平台
-* `BuildTarget buildTarget`：若不使用编辑器设定，指定的目标平台
+#### 输出 (Exporter)
 
----
+| 方法 | 说明 |
+| :--- | :--- |
+| [ExportAppConfig](#exportappconfig) | 输出 App 配置文件（默认 `AppInfo.json`）至指定路径（通常为 `StreamingAssets`）。 |
+| [ExportConfigsAndAppBundles](#exportconfigsandappbundles) | 输出配置文件（AppConfig / PatchConfig）与最新 App Bundles 至 CDN 输出路径。 |
+| [ExportAppBundles](#exportappbundles) | 仅输出最新 App Bundles（不含配置文件）。 |
+| [ExportIndividualDlcBundles](#exportindividualdlcbundles) | 输出独立版本管控的 DLC Bundles。 |
+| [ExportBundleUrlConfig](#exportbundleurlconfig) | 输出 CDN 部署配置文件（默认 `CdnConfig.dat`），支持加密。 |
 
-### ExportConfigsAndAppBundles
-输出完整的资源包与配置文件（AppConfig & PatchConfig）至 CDN 输出路径。
+#### 解析与转换 (Parser & Converter)
 
-**Params**
-* `string inputPath`：原始资源输入路径
-* `string outputPath`：CDN 资源输出路径
-* `string productName`：产品名称
-* `SemanticRule semanticRule`：版本语义化规则（影响数据夹命名逻辑）
-* `string appVersion`：应用程序版本
-* `string[] exportPackages`：要输出的 Package 名称清单
-* `List<GroupInfo> groupInfos`：资源分组信息清单
-* `string[] packageInfos`：Package 相关信息
-* `bool activeBuildTarget`：是否使用当前编辑器设定的平台
-* `BuildTarget buildTarget`：指定的目标平台
-* `bool isClearOutputPath`：是否在输出前清空目标数据夹（预设为 true）
+| 方法 | 说明 |
+| :--- | :--- |
+| [ParsingGroupInfosByArgs](#parsinggroupinfosbyargs) | 将字符串参数解析为 `GroupInfo` 列表。 |
+| [ConvertGroupInfosToArgs](#convertgroupinfostoargs) | 将 `GroupInfo` 列表转换回字符串参数。 |
+| [ParsingDlcInfosByArgs](#parsingdlcinfosbyargs) | 将字符串参数解析为 `DlcInfo` 列表。 |
+| [ConvertDlcInfosToArgs](#convertdlcinfostoargs) | 将 `DlcInfo` 列表转换回字符串参数。 |
+
+<Highlight color="#00d679">提醒</Highlight> 上述输出作业亦可通过编辑器菜单 **OxGFrame → AssetLoader → Export Bundle And Config Generator** 打开窗口工具执行（对应 `ExportAppConfigToStreamingAssets`、`ExportConfigsAndAppBundlesForCDN`、`ExportAppBundlesWithoutConfigsForCDN`、`ExportIndividualDLCBundlesForCDN` 四种作业类型）。
 
 ---
 
-### ExportAppBundles
-仅输出最新的资源包（Bundles），不更新配置文件。
+### ExportAppConfig {#exportappconfig}
 
-**Params**
-* `string inputPath`：资源输入路径
-* `string outputPath`：资源输出路径
-* `string productName`：产品名称
-* `SemanticRule semanticRule`：语义化规则
-* `string appVersion`：应用程序版本
-* `string[] exportPackages`：要输出的 Package 清单
-* `bool activeBuildTarget`：是否使用编辑器设定平台
-* `BuildTarget buildTarget`：指定的目标平台
-* `bool isClearOutputPath`：是否清空目标数据夹
+```csharp
+public static void ExportAppConfig(string productName, string appVersion, string outputPath, bool activeBuildTarget, BuildTarget buildTarget)
+```
 
----
+**参数**
 
-### ExportIndividualDlcBundles
-输出独立的 DLC 资源包。
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| productName | `string` | 产品名称（写入 AppConfig 的 `PRODUCT_NAME`）。 |
+| appVersion | `string` | 主程序版本。空值时自动使用 `Application.version`。 |
+| outputPath | `string` | 输出目录路径（通常为 `Application.streamingAssetsPath`）。 |
+| activeBuildTarget | `bool` | 是否使用当前编辑器的目标平台作为 `PLATFORM`。 |
+| buildTarget | `BuildTarget` | 当 `activeBuildTarget` 为 `false` 时采用的目标平台。 |
 
-**Params**
-* `string inputPath`：资源输入路径
-* `string outputPath`：资源输出路径
-* `string productName`：产品名称
-* `List<DlcInfo> dlcInfos`：DLC 信息清单（包含名称与版本）
-* `bool activeBuildTarget`：是否使用编辑器设定平台
-* `BuildTarget buildTarget`：指定的目标平台
-* `bool isClearOutputPath`：是否清空目标数据夹
+**说明**
 
----
+生成 AppConfig（`PLATFORM`、`PRODUCT_NAME`、`APP_VERSION`）并以 JSON 格式写入配置文件至指定路径，文件名由 [PatchSettings](../Runtime/PatchSettings.mdx) 决定（默认 `AppInfo.json`）。通常输出至内置的 `StreamingAssets`，供客户端启动时读取比对版本。
 
-### ExportBundleUrlConfig
-输出包含 CDN 位址与商店链接的设定档，支持加密功能。
+**示例**
 
-**Params**
-* `string bundleIp`：主要 CDN 服务器 IP 或域名
-* `string bundleFallbackIp`：备用 CDN 服务器 IP 或域名
-* `string storeLink`：商店（Google Play / App Store）链接
-* `string outputPath`：输出路径
-* `bool cipher`：是否启用加密（启用后将进行加密）
+```csharp
+using OxGFrame.AssetLoader.Editor;
+using UnityEditor;
+using UnityEngine;
+
+BundleHelper.ExportAppConfig(
+    "MyProduct",
+    "1.0.0",
+    Application.streamingAssetsPath,
+    true,                  // 使用当前编辑器的目标平台
+    BuildTarget.NoTarget   // activeBuildTarget 为 true 时此参数不采用
+);
+```
 
 ---
 
-### ParsingGroupInfosByArgs
-将字符串格式的参数解析为 `GroupInfo` 物件清单。
+### ExportConfigsAndAppBundles {#exportconfigsandappbundles}
 
-**Params**
-* `string groupInfoArgs`：字符串参数（格式：`g1,t1#g2,t1,t2`）
+```csharp
+public static void ExportConfigsAndAppBundles(string inputPath, string outputPath, string productName, SemanticRule semanticRule, string appVersion, string[] exportPackages, List<GroupInfo> groupInfos, string[] packageInfos, bool activeBuildTarget, BuildTarget buildTarget, bool isClearOutputPath = true)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| inputPath | `string` | 原始 Bundles 输入路径。空值时自动使用 YooAsset 默认构建输出根目录。 |
+| outputPath | `string` | CDN 资源输出路径。 |
+| productName | `string` | 产品名称。 |
+| semanticRule | `SemanticRule` | 版本语义化规则（`AppConfig.SemanticRule`）。`PATCH` 启用时版本文件夹为 `v<Major>.<Minor>.<Patch>`，否则为 `v<Major>.<Minor>`。 |
+| appVersion | `string` | 主程序版本。空值时自动使用 `Application.version`。 |
+| exportPackages | `string[]` | 要输出 Bundles 的 Package 名称列表。 |
+| groupInfos | `List<GroupInfo>` | 资源群组信息列表（写入 PatchConfig 的 `GROUP_INFOS`，供补丁流程的群组下载选择）。 |
+| packageInfos | `string[]` | 要记录于 PatchConfig 的 Package 名称列表（为每个 Package 统计总大小与版本信息，写入 `PACKAGES`）。 |
+| activeBuildTarget | `bool` | 是否使用当前编辑器的目标平台。 |
+| buildTarget | `BuildTarget` | 当 `activeBuildTarget` 为 `false` 时采用的目标平台。 |
+| isClearOutputPath | `bool` | 输出前是否先清空输出文件夹。<br/>**默认值**：`true` |
+
+**说明**
+
+一次完成 CDN 部署所需的完整输出：
+
+- 从输入路径的各 Package 中筛选**输出时间最新**的版本文件夹，复制至 `<outputPath>/<productName>/<platform>/<v版本>/<packageName>`。
+- 写入 AppConfig（默认 `AppInfo.json`，并在版本文件夹内附 `AppInfo.bak` 备份）与 PatchConfig（默认 `PatchInfo.json`，并附 `PatchInfo.bak` 备份）。
+
+<Highlight color="#ff2f00">重要</Highlight> `isClearOutputPath` 为 `true` 时会**先删除整个输出文件夹**，请确认输出路径下无其他重要数据。
+
+**示例**
+
+```csharp
+using OxGFrame.AssetLoader.Bundle;
+using OxGFrame.AssetLoader.Editor;
+using UnityEditor;
+
+var semanticRule = new AppConfig.SemanticRule(); // 默认 MAJOR.MINOR（PATCH 关闭）
+var groupInfos = BundleHelper.ParsingGroupInfosByArgs("g1,t1#g2,t1,t2");
+
+BundleHelper.ExportConfigsAndAppBundles(
+    null,                                // 使用 YooAsset 默认构建输出路径
+    "D:/CDN_Output",
+    "MyProduct",
+    semanticRule,
+    "1.0.0",
+    new string[] { "DefaultPackage" },
+    groupInfos,
+    new string[] { "DefaultPackage" },
+    true,
+    BuildTarget.NoTarget
+);
+```
 
 ---
 
-### ConvertGroupInfosToArgs
-将 `GroupInfo` 物件清单转换回字符串格式，便于命令行传递。
+### ExportAppBundles {#exportappbundles}
 
-**Params**
-* `List<GroupInfo> groupInfos`：群组信息清单
+```csharp
+public static void ExportAppBundles(string inputPath, string outputPath, string productName, SemanticRule semanticRule, string appVersion, string[] exportPackages, bool activeBuildTarget, BuildTarget buildTarget, bool isClearOutputPath = true)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| inputPath | `string` | 原始 Bundles 输入路径。空值时自动使用 YooAsset 默认构建输出根目录。 |
+| outputPath | `string` | CDN 资源输出路径。 |
+| productName | `string` | 产品名称。 |
+| semanticRule | `SemanticRule` | 版本语义化规则（决定版本文件夹格式）。 |
+| appVersion | `string` | 主程序版本。空值时自动使用 `Application.version`。 |
+| exportPackages | `string[]` | 要输出 Bundles 的 Package 名称列表。 |
+| activeBuildTarget | `bool` | 是否使用当前编辑器的目标平台。 |
+| buildTarget | `BuildTarget` | 当 `activeBuildTarget` 为 `false` 时采用的目标平台。 |
+| isClearOutputPath | `bool` | 输出前是否先清空输出文件夹。<br/>**默认值**：`true` |
+
+**说明**
+
+仅输出最新的 App Bundles 至 CDN 输出路径，**不写入**配置文件（AppConfig / PatchConfig）。适用于仅更新资源、无需变动配置的情况。
+
+<Highlight color="#ff2f00">重要</Highlight> `isClearOutputPath` 为 `true` 时会**先删除整个输出文件夹**。
 
 ---
 
-### ParsingDlcInfosByArgs
-将字符串格式的参数解析为 `DlcInfo` 物件清单。
+### ExportIndividualDlcBundles {#exportindividualdlcbundles}
 
-**Params**
-* `string dlcInfoArgs`：字符串参数（格式：`dlc1,1.0.0#dlc2,1.1.0`）
+```csharp
+public static void ExportIndividualDlcBundles(string inputPath, string outputPath, string productName, List<DlcInfo> dlcInfos, bool activeBuildTarget, BuildTarget buildTarget, bool isClearOutputPath = true)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| inputPath | `string` | 原始 Bundles 输入路径。空值时自动使用 YooAsset 默认构建输出根目录。 |
+| outputPath | `string` | CDN 资源输出路径。 |
+| productName | `string` | 产品名称。 |
+| dlcInfos | `List<DlcInfo>` | DLC 信息列表（`packageName`、`dlcVersion`、`withoutPlatform`）。`dlcVersion` 为空时，自动采用该 Package 最新的版本号；`withoutPlatform` 为 `true` 时，输出路径省略平台层级。 |
+| activeBuildTarget | `bool` | 是否使用当前编辑器的目标平台。 |
+| buildTarget | `BuildTarget` | 当 `activeBuildTarget` 为 `false` 时采用的目标平台。 |
+| isClearOutputPath | `bool` | 输出前是否先清空输出文件夹。<br/>**默认值**：`true` |
+
+**说明**
+
+输出独立版本管控的 DLC Bundles 至 `<outputPath>/<productName>/<platform>/<dlcFolderName>/<packageName>/<dlcVersion>`（`withoutPlatform` 时省略 `<platform>` 层级；`dlcFolderName` 由 [PatchSettings](../Runtime/PatchSettings.mdx) 决定，默认 `DLC`）。
+
+<Highlight color="#00d679">提醒</Highlight> DLC 具有独立版本路径，客户端通过 [BundleConfig.GetDlcHostServerUrl](../Runtime/BundleConfig.mdx#getdlchostserverurl) 组合对应的下载端点。
 
 ---
 
-### ConvertDlcInfosToArgs
-将 `DlcInfo` 物件清单转换回字符串格式。
+### ExportBundleUrlConfig {#exportbundleurlconfig}
 
-**Params**
-* `List<DlcInfo> dlcInfos`：DLC 信息清单
+```csharp
+public static void ExportBundleUrlConfig(string bundleIp, string bundleFallbackIp, string storeLink, string outputPath, bool cipher)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| bundleIp | `string` | 主要 CDN 服务器 IP 或域名。空值时使用默认值 `http://127.0.0.1`。 |
+| bundleFallbackIp | `string` | 备用 CDN 服务器 IP 或域名。空值时使用默认值 `http://127.0.0.1`。 |
+| storeLink | `string` | 商店链接（Google Play / App Store）。空值时使用默认值 `http://`。 |
+| outputPath | `string` | 输出目录路径（输出文件名由 [PatchSettings](../Runtime/PatchSettings.mdx) 决定，默认 `CdnConfig.dat`）。 |
+| cipher | `bool` | 是否加密输出。 |
+
+**说明**
+
+将 CDN 地址与商店链接输出成部署配置文件至指定路径，通常输出至内置的 `StreamingAssets`，供客户端解析资源请求端点。明文输出内容如下：
+
+```text
+# bundle_ip = First CDN Server IP or Domain (Plan A)
+# bundle_fallback_ip = Second CDN Server IP or Domain (Plan B)
+# store_link = GooglePlay Store Link (https://play.google.com/store/apps/details?id=YOUR_ID)
+# store_link = Apple Store Link (https://apps.apple.com/app/idYOUR_ID)
+
+bundle_ip http://127.0.0.1
+bundle_fallback_ip http://127.0.0.1
+store_link http://
+```
+
+<Highlight color="#0373fc">注意</Highlight> 启用 `cipher` 时，仅保留键值行（去除 `#` 注释行），内容以 `PatchSettings.settings.bundleUrlCfgCipher` 密钥进行 XOR 加密，并在文件头写入 2 字节的 `PatchSettings.CIPHER_HEADER` 标记；客户端由 [BundleConfig.GetValueFromUrlCfg](../Runtime/BundleConfig.mdx#getvaluefromurlcfg) 读取时自动检测并解密。
+
+<Highlight color="#00d679">提醒</Highlight> 亦可通过编辑器菜单 **OxGFrame → AssetLoader → Bundle Url Config Generator (CdnConfig.dat)** 打开窗口工具生成。
+
+**示例**
+
+```csharp
+using OxGFrame.AssetLoader.Editor;
+using UnityEngine;
+
+BundleHelper.ExportBundleUrlConfig(
+    "https://cdn.example.com",
+    "https://backup-cdn.example.com",
+    "https://play.google.com/store/apps/details?id=com.example.game",
+    Application.streamingAssetsPath,
+    true
+);
+```
+
+---
+
+### ParsingGroupInfosByArgs {#parsinggroupinfosbyargs}
+
+```csharp
+public static List<GroupInfo> ParsingGroupInfosByArgs(string groupInfoArgs)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupInfoArgs | `string` | 群组参数字符串。格式：`<群组名>,<标签1>,<标签2>...`，多个群组以 `#` 分隔（如 `g1,t1#g2,t1,t2`）。 |
+
+**返回值**
+
+`List<GroupInfo>` — 解析后的群组信息列表；传入空值或解析失败时返回空列表。
+
+**说明**
+
+将字符串格式的参数解析为 `GroupInfo` 对象列表（每组第一个元素为 `groupName`，其余为 `tags`），便于命令行（CI/CD）以字符串传递群组设置。
+
+**示例**
+
+```csharp
+var groupInfos = BundleHelper.ParsingGroupInfosByArgs("g1,t1#g2,t1,t2");
+// groupInfos[0].groupName = "g1"，tags = ["t1"]
+// groupInfos[1].groupName = "g2"，tags = ["t1", "t2"]
+```
+
+---
+
+### ConvertGroupInfosToArgs {#convertgroupinfostoargs}
+
+```csharp
+public static string ConvertGroupInfosToArgs(List<GroupInfo> groupInfos)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| groupInfos | `List<GroupInfo>` | 群组信息列表。 |
+
+**返回值**
+
+`string` — 转换后的参数字符串（如 `g1,t1#g2,t1,t2`）；空列表返回空字符串。
+
+**说明**
+
+将 `GroupInfo` 对象列表转换回字符串格式，便于命令行传递（与 [ParsingGroupInfosByArgs](#parsinggroupinfosbyargs) 互为反向操作）。
+
+---
+
+### ParsingDlcInfosByArgs {#parsingdlcinfosbyargs}
+
+```csharp
+public static List<DlcInfo> ParsingDlcInfosByArgs(string dlcInfoArgs)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| dlcInfoArgs | `string` | DLC 参数字符串。格式：`<包名>,<版本>`，多组以 `#` 分隔（如 `dlc1,1.0.0#dlc2,1.1.0`）。 |
+
+**返回值**
+
+`List<DlcInfo>` — 解析后的 DLC 信息列表；传入空值或解析失败时返回空列表。
+
+**说明**
+
+将字符串格式的参数解析为 `DlcInfo` 对象列表（每组依序为 `packageName` 与 `dlcVersion`），便于命令行（CI/CD）以字符串传递 DLC 设置。
+
+**示例**
+
+```csharp
+var dlcInfos = BundleHelper.ParsingDlcInfosByArgs("dlc1,1.0.0#dlc2,1.1.0");
+// dlcInfos[0].packageName = "dlc1"，dlcVersion = "1.0.0"
+// dlcInfos[1].packageName = "dlc2"，dlcVersion = "1.1.0"
+```
+
+---
+
+### ConvertDlcInfosToArgs {#convertdlcinfostoargs}
+
+```csharp
+public static string ConvertDlcInfosToArgs(List<DlcInfo> dlcInfos)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| dlcInfos | `List<DlcInfo>` | DLC 信息列表。 |
+
+**返回值**
+
+`string` — 转换后的参数字符串（如 `dlc1,1.0.0#dlc2,1.1.0`）；空列表返回空字符串。
+
+**说明**
+
+将 `DlcInfo` 对象列表转换回字符串格式，便于命令行传递（与 [ParsingDlcInfosByArgs](#parsingdlcinfosbyargs) 互为反向操作）。
 
 ---

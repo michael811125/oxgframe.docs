@@ -1,5 +1,6 @@
 ---
 sidebar_position: 11
+description: MediaFrames 是 MediaFrame 模块的统一调用入口，提供 AudioFrame 与 VideoFrame 的预加载、播放、暂停、停止与卸载等接口。
 ---
 
 # MediaFrames
@@ -22,86 +23,850 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`MediaFrames` 是 **MediaFrame** 模块的统一调用入口（Facade），以嵌套静态类提供 `AudioFrame`（音频）与 `VideoFrame`（视频）两组接口，涵盖媒体资源的**预加载、播放、暂停、恢复、停止与卸载**，底层皆具备引用计数管理。
+
+|  |  |
+| :--- | :--- |
+| **命名空间** | `OxGFrame.MediaFrame` |
+| **类型** | `public static class` |
+| **源码** | [MediaFrames.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/MediaFrame/Scripts/Runtime/Core/MediaFrames.cs) |
+
+```csharp
 using OxGFrame.MediaFrame;
+```
 
-## AudioFrame
+<Highlight color="#0373fc">注意</Highlight> 调用前需确保场景中已创建对应的 `AudioManager` / `VideoManager` 对象，相关设置请参考 [MediaFrame 介绍](../../intro.mdx)。
 
-`AudioFrame` 专门负责管理游戏中的所有音效与音乐（如 BGM, SFX），并与 Unity 的 `AudioMixer` 深度整合。
+## 快速上手 {#quick-start}
 
-### 基础方法
-* **InitInstance()**
-    * 初始化 `AudioManager` 实例。
-* **GetComponent\<T\>(string assetName)**
-    * 取得已载入音讯物件上的 `AudioBase` 组件。
-    * **Params**: `assetName` (资源名称)
-* **GetComponents\<T\>(string assetName)**
-    * 取得复数个同名称音讯物件上的组件。
+```csharp
+// 预加载 BGM
+await MediaFrames.AudioFrame.Preload("TitleBgm");
 
-### AudioMixer 控制
-用于实现环境音效变化或全局音量控制。
+// 播放 BGM（-1 = 无限循环）
+var bgm = await MediaFrames.AudioFrame.Play("TitleBgm", null, -1);
 
-* **SetMixerExposedParam(AudioMixer mixer, string expParam, float val)**
-    * 设置 Mixer 暴露出的参数（Exposed Parameters）。
-    * **Params**: `mixer` (混音器), `expParam` (参数名), `val` (数值)
-* **ClearMixerExposedParam(AudioMixer mixer, string expParam)**
-    * 清除特定暴露参数的自定义设置，恢复预设值。
-* **AutoClearMixerExposedParams / AutoRestoreMixerExposedParams**
-    * 自动化管理全局 Mixer 参数的清除与还原。
-* **SetMixerSnapshot(AudioMixer mixer, string snapshotName)**
-    * 立即切换 Mixer 快照。
-* **SetMixerTransitionToSnapshot(AudioMixer mixer, AudioMixerSnapshot[] snapshots, float[] weights, float timeToReach)**
-    * 在指定时间内平滑过渡至多个快照的混合状态。
-    * **Params**: `timeToReach` (过渡时间，预设 0.02s)
+// 播放音效（使用 res# 前缀，改由 Resources 加载）
+await MediaFrames.AudioFrame.Play("res#Audio/Sound/ClickSfx");
 
-### 音讯播放与管理
-支持从 Resources 或 Asset Bundle 加载资源。
+// 播放过场视频
+var video = await MediaFrames.VideoFrame.Play("OpeningCutscene");
 
-* **Preload(string assetName / string[] assetNames)**
-    * 预加载音讯资源，避免播放时产生延迟。
-* **Play(string assetName, Transform parent, int loops, float volume)**
-    * 播放指定的音讯。
-    * **Params**: 
-        * `assetName`: 资源名称 (带有 `res#` 前缀则从 Resources 加载)。
-        * `parent`: 挂载的父节点 (用于 3D 音讯)。
-        * `loops`: 循环次数 (-1 为无限循环)。
-        * `volume`: 音量大小 (0 为使用 AudioSource 预设值)。
-* **Stop(string assetName, bool disabledEndEvent, bool forceDestroy)**
-    * 停止播放特定音讯。
-    * **Params**: `disabledEndEvent` (是否禁用结束事件回调), `forceDestroy` (是否直接销毁物件)。
-* **ResumeAll / PauseAll / StopAll**
-    * 全局控制所有音讯的暂停、恢复与停止。
+// 停止 BGM
+MediaFrames.AudioFrame.Stop("TitleBgm");
 
----
+// 视频确定不再使用时，强制卸载释放内存
+MediaFrames.VideoFrame.ForceUnload("OpeningCutscene");
+```
 
-## VideoFrame
+## 通用规则 {#general-rules}
 
-`VideoFrame` 用于控制影片的载入与播放，适用于过场动画或 UI 动态背景。
+### 资源名称前缀 {#asset-name-prefix}
 
-### 基础方法
-* **InitInstance()**
-    * 初始化 `VideoManager` 实例。
-* **GetComponent\<T\> / GetComponents\<T\>**
-    * 获取对应影片资源上的 `VideoBase` 组件。
+`assetName` 支持前缀解析，依前缀决定资源加载来源：
 
-### 影片播放与管理
+| 前缀 | 说明 | 示例 |
+| :--- | :--- | :--- |
+| **res#** | 从 Unity 原生 **Resources** 加载资源（依 Resources 相对路径）。 | `res#Audio/Sound/ClickSfx` |
+| **无前缀** | 默认从 **Asset Bundle (YooAsset)** 加载资源（直接使用可寻址名称 Address）。 | `TitleBgm` |
 
-* **Preload(string assetName / string[] assetNames)**
-    * 异步预载影片文件至缓存。
-* **Play(string assetName, VideoClip sourceClip, Transform parent, int loops, float volume)**
-    * 执行影片播放。
-    * **Params**:
-        * `assetName`: 资源路径。
-        * `sourceClip`: 可选，直接传入 `VideoClip` 资源。
-        * `parent`: 挂载点。
-        * `loops`: 循环模式。
-        * `volume`: 播放音量。
-* **Stop / Pause / ResumeAll**
-    * 针对特定影片或全局影片进行播放控制。
-* **ForceUnload(string assetName)**
-    * <Highlight color="#ff2f00">重要</Highlight> 影片文件通常较大，当确定不再需要该影片时，应手动调用此方法强制释放内存。
+### 资源包 (Package) {#package}
+
+`Preload` 与 `Play` 皆提供 `packageName` 重载：
+
+- **未指定** `packageName`：自动使用默认 Package（`AssetPatcher.GetDefaultPackageName()`）。
+- **指定** `packageName`：从指定的 Package 加载资源，适用于多 Package 分包管理。
+
+### 引用计数与生命周期 {#ref-counting}
+
+<Highlight color="#0373fc">注意</Highlight> `MediaFrames` 底层皆具备**引用计数管理**。媒体实例销毁时，若该资源已无其他同名实例存在（引用归零），且启用 `onDestroyAndUnload` 设置，将自动联动 AssetLoader 卸载资源。
+
+<Highlight color="#00d679">提醒</Highlight> 媒体实例的销毁时机，可由 Prefab 上 `AudioBase` / `VideoBase` 组件的 `onStopAndDestroy`（停止时销毁）与 `onDestroyAndUnload`（销毁时卸载）设置控制，也可在调用 `Stop` 时传入 `forceDestroy` 强制销毁。
 
 ---
 
-<Highlight color="#0373fc">注意</Highlight> `MediaFrames` 底层皆具备引用计数管理。
+## MediaFrames.AudioFrame {#audioframe}
+
+音频的统一调用接口。专门负责管理游戏中的所有音频（如 BGM、环境音、语音、音效），支持依 `SoundType` 分类管理，并与 Unity 的 `AudioMixer` 深度整合。
+
+### 方法总览 {#audio-overview}
+
+#### 初始化与组件获取
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [InitInstance](#audio-initinstance) | 初始化 `AudioManager` 单例实例。 |
+| [GetComponent\<T\>](#audio-getcomponent) | 获取指定名称的音频实例组件（首个匹配）。 |
+| [GetComponents\<T\>](#audio-getcomponents) | 获取指定名称的所有音频实例组件。 |
+
+#### Mixer 控制
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [GetMixerByName](#audio-getmixerbyname) | 依名称获取已注册于 `AudioManager` 的 `AudioMixer`。 |
+| [SetMixerExposedParam](#audio-setmixerexposedparam) | 设置 Mixer 的 Exposed Parameter 数值（自动记录）。 |
+| [ClearMixerExposedParam](#audio-clearmixerexposedparam) | 清除 Mixer 的 Exposed Parameter 设置（恢复默认值）。 |
+| [AutoClearMixerExposedParams](#audio-autoclearmixerexposedparams) | 批量清除已记录的 Exposed Parameters。 |
+| [AutoRestoreMixerExposedParams](#audio-autorestoremixerexposedparams) | 批量还原已记录的 Exposed Parameters。 |
+| [GetMixerSnapshot](#audio-getmixersnapshot) | 获取 Mixer 中指定名称的 Snapshot。 |
+| [SetMixerSnapshot](#audio-setmixersnapshot) | 立即切换至指定的 Snapshot。 |
+| [SetMixerTransitionToSnapshot](#audio-setmixertransitiontosnapshot) | 在指定时间内加权混合过渡至多个 Snapshots。 |
+
+#### 播放与资源管理
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [Preload](#audio-preload) | 预加载音频资源至缓存。 |
+| [Play](#audio-play) | 播放音频，返回 `AudioBase` 实例。 |
+| [Pause](#audio-pause) | 暂停指定名称的音频。 |
+| [PauseAll](#audio-pauseall) | 暂停所有音频。 |
+| [ResumeAll](#audio-resumeall) | 恢复所有处于暂停状态的音频。 |
+| [Stop](#audio-stop) | 停止指定名称的音频。 |
+| [StopAll](#audio-stopall) | 停止所有音频。 |
+| [ForceUnload](#audio-forceunload) | 强制卸载指定名称的音频资源。 |
+
+---
+
+### InitInstance {#audio-initinstance}
+
+```csharp
+public static void InitInstance()
+```
+
+**说明**
+
+主动初始化 `AudioManager` 单例实例。建议在游戏启动阶段调用一次，确保管理器提前就绪。
+
+<Highlight color="#0373fc">注意</Highlight> 若场景中不存在 `AudioManager` 对象，将输出错误日志。
+
+---
+
+### GetComponent\<T\> {#audio-getcomponent}
+
+```csharp
+public static T GetComponent<T>(string assetName) where T : AudioBase
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | 音频资源名称。 |
+
+**返回值**
+
+`T` — 首个名称匹配的音频实例组件；未找到时返回 `null`。
+
+**说明**
+
+获取指定名称的音频实例上的 `AudioBase` 组件。仅能获取**已进入播放管理列表**的实例（即调用过 `Play` 之后），仅预加载的资源尚未实例化，无法获取。
+
+**示例**
+
+```csharp
+var audBase = MediaFrames.AudioFrame.GetComponent<AudioBase>("TitleBgm");
+if (audBase != null && audBase.IsPlaying())
+{
+    // 对实例进行高级操作
+}
+```
+
+---
+
+### GetComponents\<T\> {#audio-getcomponents}
+
+```csharp
+public static T[] GetComponents<T>(string assetName) where T : AudioBase
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | 音频资源名称。 |
+
+**返回值**
+
+`T[]` — 所有名称匹配的音频实例组件数组；未找到时返回空数组。
+
+**说明**
+
+获取指定名称的**所有**音频实例组件。当同名音频同时存在多个实例时（如多次播放的音效），可通过此方法批量获取。
+
+---
+
+### GetMixerByName {#audio-getmixerbyname}
+
+```csharp
+public static AudioMixer GetMixerByName(string mixerName)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| mixerName | `string` | Mixer 名称。 |
+
+**返回值**
+
+`AudioMixer` — 名称匹配的 Mixer；未注册或未找到时返回 `null`。
+
+**说明**
+
+依名称获取 `AudioMixer`。
+
+<Highlight color="#ff2f00">重要</Highlight> 必须先将 `AudioMixer` 挂载至场景中 `AudioManager` 的 **Audio Mixer** 列表（Inspector），才能通过此方法获取。
+
+**示例**
+
+```csharp
+var mixer = MediaFrames.AudioFrame.GetMixerByName("MasterMixer");
+```
+
+---
+
+### SetMixerExposedParam {#audio-setmixerexposedparam}
+
+```csharp
+public static void SetMixerExposedParam(AudioMixer mixer, string expParam, float val)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| mixer | `AudioMixer` | 目标 Mixer。 |
+| expParam | `string` | Exposed Parameter 名称。 |
+| val | `float` | 设置数值。 |
+
+**说明**
+
+设置 Mixer 的 Exposed Parameter 数值（如分组音量控制）。设置成功时会**自动记录**该参数值，供 [AutoRestoreMixerExposedParams](#audio-autorestoremixerexposedparams) 还原使用。
+
+**示例**
+
+```csharp
+var mixer = MediaFrames.AudioFrame.GetMixerByName("MasterMixer");
+// 将 BGM 分组音量调低至 -20 dB
+MediaFrames.AudioFrame.SetMixerExposedParam(mixer, "BgmVol", -20f);
+```
+
+---
+
+### ClearMixerExposedParam {#audio-clearmixerexposedparam}
+
+```csharp
+public static void ClearMixerExposedParam(AudioMixer mixer, string expParam)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| mixer | `AudioMixer` | 目标 Mixer。 |
+| expParam | `string` | Exposed Parameter 名称。 |
+
+**说明**
+
+清除指定 Exposed Parameter 的自定义设置，恢复为 Mixer 的默认值。
+
+---
+
+### AutoClearMixerExposedParams {#audio-autoclearmixerexposedparams}
+
+```csharp
+public static void AutoClearMixerExposedParams(AudioMixer mixer)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| mixer | `AudioMixer` | 目标 Mixer。 |
+
+**说明**
+
+将**该 Mixer** 先前通过 [SetMixerExposedParam](#audio-setmixerexposedparam) 记录过的参数**批量清除**（恢复 Mixer 默认值；其他 Mixer 的记录不受影响），记录值仍会保留，可再通过 [AutoRestoreMixerExposedParams](#audio-autorestoremixerexposedparams) 还原。
+
+---
+
+### AutoRestoreMixerExposedParams {#audio-autorestoremixerexposedparams}
+
+```csharp
+public static void AutoRestoreMixerExposedParams(AudioMixer mixer)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| mixer | `AudioMixer` | 目标 Mixer。 |
+
+**说明**
+
+将**该 Mixer** 先前记录过的参数值**批量还原**。常用于清除后的参数恢复。
+
+---
+
+### GetMixerSnapshot {#audio-getmixersnapshot}
+
+```csharp
+public static AudioMixerSnapshot GetMixerSnapshot(AudioMixer mixer, string snapshotName)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| mixer | `AudioMixer` | 目标 Mixer。 |
+| snapshotName | `string` | Snapshot 名称。 |
+
+**返回值**
+
+`AudioMixerSnapshot` — 名称匹配的 Snapshot；未找到时返回 `null`。
+
+**说明**
+
+获取 Mixer 中指定名称的 Snapshot。
+
+---
+
+### SetMixerSnapshot {#audio-setmixersnapshot}
+
+```csharp
+public static void SetMixerSnapshot(AudioMixer mixer, string snapshotName)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| mixer | `AudioMixer` | 目标 Mixer。 |
+| snapshotName | `string` | Snapshot 名称。 |
+
+**说明**
+
+立即切换至指定的 Snapshot（内部以 0.02 秒极短时间过渡）。未找到 Snapshot 时不动作。
+
+**示例**
+
+```csharp
+var mixer = MediaFrames.AudioFrame.GetMixerByName("MasterMixer");
+// 进入洞穴场景，切换至洞穴声场
+MediaFrames.AudioFrame.SetMixerSnapshot(mixer, "Cave");
+```
+
+---
+
+### SetMixerTransitionToSnapshot {#audio-setmixertransitiontosnapshot}
+
+```csharp
+public static void SetMixerTransitionToSnapshot(AudioMixer mixer, AudioMixerSnapshot[] snapshots, float[] weights, float timeToReach = 0.02f)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| mixer | `AudioMixer` | 目标 Mixer。 |
+| snapshots | `AudioMixerSnapshot[]` | 参与混合的 Snapshots。 |
+| weights | `float[]` | 各 Snapshot 的混合权重（与 `snapshots` 一一对应）。 |
+| timeToReach | `float` | 过渡时间（秒）。<br/>**默认值**：`0.02f` |
+
+**说明**
+
+在指定时间内，依权重**平滑过渡**至多个 Snapshots 的混合状态，适用于渐进式的环境声场变化。
+
+**示例**
+
+```csharp
+var mixer = MediaFrames.AudioFrame.GetMixerByName("MasterMixer");
+var normal = MediaFrames.AudioFrame.GetMixerSnapshot(mixer, "Normal");
+var cave = MediaFrames.AudioFrame.GetMixerSnapshot(mixer, "Cave");
+
+// 2 秒内过渡至 30% Normal + 70% Cave 的混合声场
+MediaFrames.AudioFrame.SetMixerTransitionToSnapshot(
+    mixer,
+    new AudioMixerSnapshot[] { normal, cave },
+    new float[] { 0.3f, 0.7f },
+    2f
+);
+```
+
+---
+
+### Preload {#audio-preload}
+
+```csharp
+public static async UniTask Preload(string assetName)
+public static async UniTask Preload(string[] assetNames)
+public static async UniTask Preload(string packageName, string assetName)
+public static async UniTask Preload(string packageName, string[] assetNames)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 音频资源名称（Bundle 资源使用 Address 名称；支持 `res#` 前缀）。 |
+| assetNames | `string[]` | 音频资源名称数组（批量预加载）。 |
+
+**返回值**
+
+`UniTask` — 可等待的异步操作。
+
+**说明**
+
+预先将音频资源加载至缓存。之后调用 [Play](#audio-play) 时可直接从缓存取用，避免播放当下产生加载延迟。
+
+**示例**
+
+```csharp
+// 单个预加载
+await MediaFrames.AudioFrame.Preload("TitleBgm");
+
+// 批量预加载
+await MediaFrames.AudioFrame.Preload(new string[]
+{
+    "TitleBgm",
+    "res#Audio/Sound/ClickSfx"
+});
+```
+
+---
+
+### Play {#audio-play}
+
+```csharp
+public static async UniTask<AudioBase> Play(string assetName, Transform parent = null, int loops = 0, float volume = 0f)
+public static async UniTask<AudioBase> Play(string packageName, string assetName, Transform parent = null, int loops = 0, float volume = 0f)
+public static async UniTask<AudioBase> Play(string assetName, AudioClip sourceClip, Transform parent = null, int loops = 0, float volume = 0f)
+public static async UniTask<AudioBase> Play(string packageName, string assetName, AudioClip sourceClip, Transform parent = null, int loops = 0, float volume = 0f)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 音频资源名称（Bundle 资源使用 Address 名称；支持 `res#` 前缀）。 |
+| sourceClip | `AudioClip` | 音频剪辑来源。指定时，将直接覆写实例上的 `audioClip`（适用于动态指定音频内容）。 |
+| parent | `Transform` | 挂载的父节点（用于 3D 音频定位）。<br/>**默认值**：`null`（依 `SoundType` 自动挂载至 `AudioManager` 下的对应节点） |
+| loops | `int` | 循环次数。`-1` = 无限循环；`> 0` = 指定循环次数。<br/>**默认值**：`0`（使用 Prefab 上 `AudioBase` 的循环设置） |
+| volume | `float` | 音量。`> 0` 时覆写音量。<br/>**默认值**：`0f`（使用 `AudioSource` 上的默认音量） |
+
+**返回值**
+
+`UniTask<AudioBase>` — 播放中的音频实例组件；加载失败时返回 `null`。
+
+**说明**
+
+加载并播放指定的音频。
+
+<Highlight color="#0373fc">注意</Highlight>
+
+- 若同名音频**已在播放中**，且其 `SoundType` 为 `Sole`（如 BGM），不会重复播放，将直接返回现有实例。
+- 若同名音频处于**暂停状态**，调用后会恢复播放。
+
+**示例**
+
+```csharp
+// 播放 BGM（无限循环）
+var bgm = await MediaFrames.AudioFrame.Play("TitleBgm", null, -1);
+
+// 从 Resources 播放音效
+await MediaFrames.AudioFrame.Play("res#Audio/Sound/ClickSfx");
+
+// 指定 Package 并以 0.8 音量播放
+await MediaFrames.AudioFrame.Play("OtherPackage", "Npc01Voice", volume: 0.8f);
+
+// 动态指定 AudioClip 播放
+await MediaFrames.AudioFrame.Play("SfxTemplate", downloadedClip);
+```
+
+---
+
+### Pause {#audio-pause}
+
+```csharp
+public static void Pause(string assetName)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | 音频资源名称。 |
+
+**说明**
+
+暂停指定名称的所有音频实例。可通过 [Play](#audio-play) 或 [ResumeAll](#audio-resumeall) 恢复播放。
+
+---
+
+### PauseAll {#audio-pauseall}
+
+```csharp
+public static void PauseAll()
+```
+
+**说明**
+
+暂停**所有**播放中的音频。
+
+---
+
+### ResumeAll {#audio-resumeall}
+
+```csharp
+public static void ResumeAll()
+```
+
+**说明**
+
+恢复**所有**处于暂停状态的音频，对播放中的音频不产生影响。
+
+---
+
+### Stop {#audio-stop}
+
+```csharp
+public static void Stop(string assetName, bool disableEndEvent = false, bool forceDestroy = false)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | 音频资源名称。 |
+| disableEndEvent | `bool` | 是否禁用结束事件回调（`EndEvent`），停止时将不触发播放结束的后续处理。<br/>**默认值**：`false` |
+| forceDestroy | `bool` | 是否强制销毁实例对象。未强制时，依 Prefab 上 `onStopAndDestroy` 设置决定。<br/>**默认值**：`false` |
+
+**说明**
+
+停止指定名称的所有音频实例。实例销毁时将联动引用计数，决定是否自动卸载资源（参考[引用计数与生命周期](#ref-counting)）。
+
+**示例**
+
+```csharp
+// 一般停止（依 Prefab 设置决定是否销毁）
+MediaFrames.AudioFrame.Stop("TitleBgm");
+
+// 停止 + 不触发结束事件 + 强制销毁
+MediaFrames.AudioFrame.Stop("TitleBgm", true, true);
+```
+
+---
+
+### StopAll {#audio-stopall}
+
+```csharp
+public static void StopAll(bool disableEndEvent = false, bool forceDestroy = false)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| disableEndEvent | `bool` | 是否禁用结束事件回调。<br/>**默认值**：`false` |
+| forceDestroy | `bool` | 是否强制销毁实例对象。<br/>**默认值**：`false` |
+
+**说明**
+
+停止**所有**音频实例，参数行为同 [Stop](#audio-stop)。
+
+---
+
+### ForceUnload {#audio-forceunload}
+
+```csharp
+public static void ForceUnload(string assetName)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | 音频资源名称。 |
+
+**说明**
+
+**跳过引用计数**，强制停止销毁播放中的实例，并直接卸载源头资源。
+
+<Highlight color="#ff2f00">重要</Highlight> 此操作会强制释放资源，调用前请确认该资源已无使用需求。
+
+---
+
+## MediaFrames.VideoFrame {#videoframe}
+
+视频的统一调用接口。用于控制视频的加载与播放（支持 `RenderTexture` 与 `Camera` 渲染方式），适用于过场动画、片头 CG 或 UI 动态背景等应用。
+
+### 方法总览 {#video-overview}
+
+#### 初始化与组件获取
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [InitInstance](#video-initinstance) | 初始化 `VideoManager` 单例实例。 |
+| [GetComponent\<T\>](#video-getcomponent) | 获取指定名称的视频实例组件（首个匹配）。 |
+| [GetComponents\<T\>](#video-getcomponents) | 获取指定名称的所有视频实例组件。 |
+
+#### 播放与资源管理
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [Preload](#video-preload) | 预加载视频资源至缓存。 |
+| [Play](#video-play) | 播放视频，返回 `VideoBase` 实例。 |
+| [Pause](#video-pause) | 暂停指定名称的视频。 |
+| [PauseAll](#video-pauseall) | 暂停所有视频。 |
+| [ResumeAll](#video-resumeall) | 恢复所有处于暂停状态的视频。 |
+| [Stop](#video-stop) | 停止指定名称的视频。 |
+| [StopAll](#video-stopall) | 停止所有视频。 |
+| [ForceUnload](#video-forceunload) | 强制卸载指定名称的视频资源。 |
+
+---
+
+### InitInstance {#video-initinstance}
+
+```csharp
+public static void InitInstance()
+```
+
+**说明**
+
+主动初始化 `VideoManager` 单例实例。建议在游戏启动阶段调用一次，确保管理器提前就绪。
+
+<Highlight color="#0373fc">注意</Highlight> 若场景中不存在 `VideoManager` 对象，将输出错误日志。
+
+---
+
+### GetComponent\<T\> {#video-getcomponent}
+
+```csharp
+public static T GetComponent<T>(string assetName) where T : VideoBase
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | 视频资源名称。 |
+
+**返回值**
+
+`T` — 首个名称匹配的视频实例组件；未找到时返回 `null`。
+
+**说明**
+
+获取指定名称的视频实例上的 `VideoBase` 组件。仅能获取**已进入播放管理列表**的实例（即调用过 `Play` 之后），仅预加载的资源尚未实例化，无法获取。
+
+---
+
+### GetComponents\<T\> {#video-getcomponents}
+
+```csharp
+public static T[] GetComponents<T>(string assetName) where T : VideoBase
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | 视频资源名称。 |
+
+**返回值**
+
+`T[]` — 所有名称匹配的视频实例组件数组；未找到时返回空数组。
+
+**说明**
+
+获取指定名称的**所有**视频实例组件。
+
+---
+
+### Preload {#video-preload}
+
+```csharp
+public static async UniTask Preload(string assetName)
+public static async UniTask Preload(string[] assetNames)
+public static async UniTask Preload(string packageName, string assetName)
+public static async UniTask Preload(string packageName, string[] assetNames)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 视频资源名称（Bundle 资源使用 Address 名称；支持 `res#` 前缀）。 |
+| assetNames | `string[]` | 视频资源名称数组（批量预加载）。 |
+
+**返回值**
+
+`UniTask` — 可等待的异步操作。
+
+**说明**
+
+预先将视频资源加载至缓存。之后调用 [Play](#video-play) 时可直接从缓存取用，避免播放当下产生加载延迟。
+
+**示例**
+
+```csharp
+await MediaFrames.VideoFrame.Preload("OpeningCutscene");
+```
+
+---
+
+### Play {#video-play}
+
+```csharp
+public static async UniTask<VideoBase> Play(string assetName, Transform parent = null, int loops = 0, float volume = 0f)
+public static async UniTask<VideoBase> Play(string packageName, string assetName, Transform parent = null, int loops = 0, float volume = 0f)
+public static async UniTask<VideoBase> Play(string assetName, VideoClip sourceClip, Transform parent = null, int loops = 0, float volume = 0f)
+public static async UniTask<VideoBase> Play(string packageName, string assetName, VideoClip sourceClip, Transform parent = null, int loops = 0, float volume = 0f)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | 资源包名称。未指定时，使用默认 Package。 |
+| assetName | `string` | 视频资源名称（Bundle 资源使用 Address 名称；支持 `res#` 前缀）。 |
+| sourceClip | `VideoClip` | 视频剪辑来源。指定时，将直接覆写实例上的 `videoClip`（适用于动态指定视频内容）。 |
+| parent | `Transform` | 挂载的父节点。<br/>**默认值**：`null`（挂载至 `VideoManager` 节点下） |
+| loops | `int` | 循环次数。`-1` = 无限循环；`> 0` = 指定循环次数。<br/>**默认值**：`0`（使用 Prefab 上 `VideoBase` 的循环设置） |
+| volume | `float` | 音量。`> 0` 时覆写音量。<br/>**默认值**：`0f`（使用 `VideoPlayer` 上的默认音量） |
+
+**返回值**
+
+`UniTask<VideoBase>` — 播放中的视频实例组件；加载失败时返回 `null`。
+
+**说明**
+
+加载并播放指定的视频。
+
+<Highlight color="#0373fc">注意</Highlight>
+
+- 若同名视频**已在播放中**，不会重复播放，将直接返回现有实例。
+- 若同名视频处于**暂停状态**，调用后会恢复播放。
+
+**示例**
+
+```csharp
+// 播放过场视频
+var video = await MediaFrames.VideoFrame.Play("OpeningCutscene");
+
+// 动态指定 VideoClip 播放
+await MediaFrames.VideoFrame.Play("VideoTemplate", downloadedClip);
+```
+
+---
+
+### Pause {#video-pause}
+
+```csharp
+public static void Pause(string assetName)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | 视频资源名称。 |
+
+**说明**
+
+暂停指定名称的所有视频实例。可通过 [Play](#video-play) 或 [ResumeAll](#video-resumeall) 恢复播放。
+
+---
+
+### PauseAll {#video-pauseall}
+
+```csharp
+public static void PauseAll()
+```
+
+**说明**
+
+暂停**所有**播放中的视频。
+
+---
+
+### ResumeAll {#video-resumeall}
+
+```csharp
+public static void ResumeAll()
+```
+
+**说明**
+
+恢复**所有**处于暂停状态的视频，对播放中的视频不产生影响。
+
+---
+
+### Stop {#video-stop}
+
+```csharp
+public static void Stop(string assetName, bool disableEndEvent = false, bool forceDestroy = false)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | 视频资源名称。 |
+| disableEndEvent | `bool` | 是否禁用结束事件回调（`EndEvent`），停止时将不触发播放结束的后续处理。<br/>**默认值**：`false` |
+| forceDestroy | `bool` | 是否强制销毁实例对象。未强制时，依 Prefab 上 `onStopAndDestroy` 设置决定。<br/>**默认值**：`false` |
+
+**说明**
+
+停止指定名称的所有视频实例。实例销毁时将联动引用计数，决定是否自动卸载资源（参考[引用计数与生命周期](#ref-counting)）。
+
+---
+
+### StopAll {#video-stopall}
+
+```csharp
+public static void StopAll(bool disableEndEvent = false, bool forceDestroy = false)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| disableEndEvent | `bool` | 是否禁用结束事件回调。<br/>**默认值**：`false` |
+| forceDestroy | `bool` | 是否强制销毁实例对象。<br/>**默认值**：`false` |
+
+**说明**
+
+停止**所有**视频实例，参数行为同 [Stop](#video-stop)。
+
+---
+
+### ForceUnload {#video-forceunload}
+
+```csharp
+public static void ForceUnload(string assetName)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assetName | `string` | 视频资源名称。 |
+
+**说明**
+
+**跳过引用计数**，强制停止销毁播放中的实例，并直接卸载源头资源。
+
+<Highlight color="#ff2f00">重要</Highlight> 视频文件通常较大，当确定不再需要该视频时，应手动调用此方法强制释放内存。
+
+**示例**
+
+```csharp
+// 过场视频播放完毕，确定不再使用
+MediaFrames.VideoFrame.ForceUnload("OpeningCutscene");
+```
 
 ---

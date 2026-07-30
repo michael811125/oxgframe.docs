@@ -77,7 +77,7 @@ Used for instantiating **Prefab Template Objects**, using CPManager to manage Pr
 - OnCreate: For initial parameters.
 - OnBind: For initial events.
 - OnPreShow: Can be handled here when there is asynchronous processing or subordinate object control. For example: TopUI sub-link opens LeftUI & RightUI, then you can implement Show LeftUI & RightUI in the OnPreShow method of TopUI.
-  - <Highlight color="#00d679">Reminder</Highlight> **It is not recommended to handle related Show operations in OnPreClose. If done, it's okay because the CloseAll API provides a disabledPreClose parameter switch.**
+  - <Highlight color="#00d679">Reminder</Highlight> **It is not recommended to handle related Show operations in OnPreClose. If done, it's okay because the CloseAll API provides a disableOnPreClose parameter switch.**
 - OnShow: This method is activated when Show is called, and data can be transmitted through the passed object.
 - OnClose: This method is activated when Close is called.
 - OnRelease: This method is activated when the object is destroyed.

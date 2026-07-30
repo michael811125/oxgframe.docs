@@ -1,5 +1,6 @@
 ---
 sidebar_position: 3
+description: PatchSettings 是 AssetLoader 的補丁設定類（ScriptableObject），集中定義配置檔名稱、副檔名、加密金鑰與輸出資料夾名稱。
 ---
 
 # PatchSettings
@@ -22,63 +23,88 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`PatchSettings` 是 **AssetLoader** 的補丁設定類（`ScriptableObject`），集中定義熱更新與資源包相關的**配置檔名稱、副檔名、加密金鑰與輸出資料夾名稱**等全域設定，執行期透過靜態屬性 [settings](#settings) 存取。
+
+|  |  |
+| :--- | :--- |
+| **命名空間** | `OxGFrame.AssetLoader` |
+| **類型** | `public class`（繼承 `ScriptableObject`） |
+| **原始碼** | [PatchSettings.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/AssetLoader/Scripts/Runtime/Settings/PatchSettings.cs) |
+
+```csharp
 using OxGFrame.AssetLoader;
+```
 
-## Settings Fields
+<Highlight color="#00d679">提醒</Highlight> 可透過編輯器選單 **Assets → Create → OxGFrame → Create Settings → Create Patch Settings in Resources** 建立 `PatchSettings.asset` 自訂設定資產（將自動建立於所選資料夾的 `Resources` 子資料夾內）；未建立時一律使用預設值。
 
-`PatchSettings` 繼承自 `ScriptableObject`，用於儲存熱更新與資源包的全局路徑與檔案名稱設定。開發者可透過 `PatchSettings.settings.{fieldName}` 進行動態調用。
+## 屬性 {#properties}
 
----
+### settings {#settings}
 
-### App Config Settings
-定義應用程式基礎配置文件的基本資訊。
+```csharp
+public static PatchSettings settings { get; }
+```
 
-* **appCfgName**
-    * 類型：`string` (預設: `"AppInfo"`)
-    * 說明：定義 APP 配置文件的名稱。
-* **appCfgExtension**
-    * 類型：`string` (預設: `".json"`)
-    * 說明：APP 配置文件的擴展名。
+**回傳值**
 
-<Highlight color="#0373fc">注意</Highlight> 擴展名必須包含點號（例如：`.conf`, `.json`）。
+`PatchSettings` — 全域設定實例（單例）。
 
----
+**說明**
 
-### Patch Config Settings
-定義補丁（版本更新）配置文件的基本資訊。
+取得全域設定實例。首次存取時自 `Resources` 載入名為 `PatchSettings` 的設定資產；查無資產時，自動以預設值建立實例（並輸出使用預設設定的日誌）。
 
-* **patchCfgName**
-    * 類型：`string` (預設: `"PatchInfo"`)
-    * 說明：定義補丁配置文件的名稱。
-* **patchCfgExtension**
-    * 類型：`string` (預設: `".json"`)
-    * 說明：補丁配置文件的擴展名。
+**範例**
 
----
+```csharp
+// 組合 APP 配置檔的完整檔名（預設 AppInfo.json）
+string appCfgFileName = $"{PatchSettings.settings.appCfgName}{PatchSettings.settings.appCfgExtension}";
+```
 
-### Bundle URL Config Settings
-定義部署環境（CDN 請求端點）的相關配置。
+## 欄位 {#fields}
 
-* **bundleUrlCfgCipher**
-    * 類型：`byte`
-    * 說明：資源請求端點配置文件的加解密金鑰。
-* **bundleUrlCfgName**
-    * 類型：`string` (預設: `"CdnConfig"`)
-    * 說明：資源請求端點的配置文件名稱。
-* **bundleUrlCfgExtension**
-    * 類型：`string` (預設: `".dat"`)
-    * 說明：資源請求端點配置文件的擴展名。
+#### App Config Settings
 
----
+| 名稱 | 型別 | 預設值 | 說明 |
+| :--- | :--- | :--- | :--- |
+| appCfgName | `string` | `"AppInfo"` | APP 配置檔的名稱。 |
+| appCfgExtension | `string` | `".json"` | APP 配置檔的副檔名。 |
 
-### Folder Settings
-定義輸出資源包時的資料夾歸類邏輯。
+#### Patch Config Settings
 
-* **rootFolderName**
-    * 類型：`string` (預設: `"CDN"`)
-    * 說明：CDN 輸出資源的根目錄資料夾名稱。
-* **dlcFolderName**
-    * 類型：`string` (預設: `"DLC"`)
-    * 說明：DLC 資源包存放的子目錄資料夾名稱。
+| 名稱 | 型別 | 預設值 | 說明 |
+| :--- | :--- | :--- | :--- |
+| patchCfgName | `string` | `"PatchInfo"` | 補丁配置檔的名稱。 |
+| patchCfgExtension | `string` | `".json"` | 補丁配置檔的副檔名。 |
+
+#### Bundle URL Config Settings
+
+| 名稱 | 型別 | 預設值 | 說明 |
+| :--- | :--- | :--- | :--- |
+| bundleUrlCfgCipher | `byte` | *（不公開）* | 佈署配置檔（資源請求端點）的 XOR 加解密金鑰（配合 [CIPHER_HEADER](#constants) 檔頭使用）。 |
+| bundleUrlCfgName | `string` | `"CdnConfig"` | 佈署配置檔（資源請求端點）的名稱。 |
+| bundleUrlCfgExtension | `string` | `".dat"` | 佈署配置檔（資源請求端點）的副檔名。 |
+
+#### Folder Settings
+
+| 名稱 | 型別 | 預設值 | 說明 |
+| :--- | :--- | :--- | :--- |
+| rootFolderName | `string` | `"CDN"` | CDN 輸出資源的根資料夾名稱。 |
+| dlcFolderName | `string` | `"DLC"` | DLC 資源包存放的子資料夾名稱。 |
+
+<Highlight color="#0373fc">注意</Highlight> 副檔名欄位必須包含點號（如 `.dat`、`.cfg`、`.json`）。
+
+## 常數 {#constants}
+
+| 常數 | 型別 | 值 | 說明 |
+| :--- | :--- | :--- | :--- |
+| CIPHER_HEADER | `short` | *（不公開）* | 加密配置檔的檔頭標記。佈署配置檔加密時會寫入此 2 位元組檔頭，讀取時據此判斷是否需解密。 |
+| META_FILE_EXTENSION | `string` | `".meta"` | META 檔案副檔名。 |
+| APP_CFG_BAK_EXTENSION | `string` | `".bak"` | APP 配置檔備份（Backup）副檔名。 |
+| PATCH_CFG_BAK_EXTENSION | `string` | `".bak"` | 補丁配置檔備份（Backup）副檔名。 |
+| BUNDLE_IP | `string` | `"bundle_ip"` | 佈署配置檔中「資源請求端點」的鍵名。 |
+| BUNDLE_FALLBACK_IP | `string` | `"bundle_fallback_ip"` | 佈署配置檔中「資源備援請求端點」的鍵名。 |
+| STORE_LINK | `string` | `"store_link"` | 佈署配置檔中「商店連結」的鍵名。 |
+
+<Highlight color="#00d679">提醒</Highlight> `BUNDLE_IP`、`BUNDLE_FALLBACK_IP`、`STORE_LINK` 可作為 [BundleConfig.GetValueFromUrlCfg](./BundleConfig.mdx#getvaluefromurlcfg) 的鍵名參數使用。
 
 ---

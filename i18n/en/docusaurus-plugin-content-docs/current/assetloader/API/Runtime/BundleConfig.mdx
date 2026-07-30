@@ -1,19 +1,20 @@
 ---
 sidebar_position: 1
+description: BundleConfig is the runtime core settings and utility class of AssetLoader, managing play modes and download/load options, and providing deployment config parsing and CDN endpoint URL composition.
 ---
 
 # BundleConfig
 
 export const Highlight = ({ children, color }) => (
-  <span
-    style={{
-      backgroundColor: color,
-      borderRadius: '5px',
-      color: '#fff',
-      padding: '2.5px'
-    }}>
-    {children}
-  </span>
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
 );
 
 <Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
@@ -22,69 +23,617 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
-using OxGFrame.AssetLoader.Bundle;
+`BundleConfig` is the runtime core settings and utility class of the **AssetLoader** module. It centralizes static settings such as the **play mode (PlayMode)** and download/load options, and provides utility methods for parsing the deployment config (`CdnConfig`), composing CDN endpoint URLs, and locating local/built-in paths.
 
-## Methods
-
-### GetValueFromUrlCfg
-Gets the specified key-value pair from the `CdnConfig.dat` deployment configuration file. Supports automatic detection of encryption status and decryption.
-
-**Params**
-* `string key`: Key name in the configuration file (e.g., `BUNDLE_IP`)
-
-<Highlight color="#0373fc">Attention</Highlight> If the file header matches the encryption mark, it will be decrypted using the Cipher Key set in the project.
-
----
-
-### GetAppConfigFromStreamingAssets / HostServer
-Gets the application basic configuration (AppConfig).
-* **StreamingAssets**: Read from built-in resources included with the package.
-* **HostServer**: Read from a remote server (supports weak network handling; if it fails, it attempts to fall back to the last successfully cached version).
-
----
-
-### GetHostServerUrl / GetFallbackHostServerUrl
-Combines the complete remote resource download address based on the Package name.
-* **Host**: Main CDN address.
-* **Fallback**: Backup CDN address.
-
-**Params**
-* `string packageName`: Resource package name
-
-<Highlight color="#00d679">Reminder</Highlight> The path combination logic automatically determines the version folder format (e.g., `v1.0` or `v1.0.0`) based on `SEMANTIC_RULE` (semantic rules).
-
----
-
-### GetDlcHostServerUrl / GetDlcFallbackHostServerUrl
-Gets the endpoint path for DLC packages located on the remote server.
-
-**Params**
-* `string packageName`: DLC package name
-* `string dlcVersion`: DLC version number
-* `bool withoutPlatform`: Whether to ignore the platform path level (default is false)
-
----
-
-### GoToAppStore
-Gets the `STORE_LINK` setting and directly calls the system browser to open the main app store link (Google Play / App Store).
-
----
-
-### Local & Builtin Path Operations
-Provides resource path localization functions:
-
-| Method Name | Description |
+|  |  |
 | :--- | :--- |
-| **GetLocalSandboxRootPath** | Gets the root directory path for local persistent resources (Sandbox). |
-| **GetLocalSandboxPackagePath** | Gets the local storage path for a specific Package. |
-| **GetBuiltinRootPath** | Gets the root directory path for built-in resources. |
-| **GetRequestStreamingAssetsPath** | Gets the StreamingAssets path suitable for WebRequest (automatically handles `file://` prefix for iOS/OSX). |
+| **Namespace** | `OxGFrame.AssetLoader.Bundle` |
+| **Type** | `public static class` |
+| **Source** | [BundleConfig.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/AssetLoader/Scripts/Runtime/Bundle/BundleConfig.cs) |
+
+```csharp
+using OxGFrame.AssetLoader.Bundle;
+```
+
+<Highlight color="#00d679">Reminder</Highlight> In most cases, the play mode and preset packages are configured on the `PatchLauncher` component in the scene (Inspector) and written into the corresponding `BundleConfig` fields automatically at startup — no manual assignment is needed.
+
+## Enums {#enums}
+
+### PlayMode {#playmode}
+
+```csharp
+public enum PlayMode
+{
+    EditorSimulateMode,
+    OfflineMode,
+    HostMode,
+    WeakHostMode,
+    WebGLMode,
+    WebGLRemoteMode,
+    CustomMode
+}
+```
+
+Asset runtime play mode.
+
+| Name | Value | Description |
+| :--- | :--- | :--- |
+| EditorSimulateMode | `0` | Editor simulate mode. Simulates asset loading directly in the editor without actually building bundles (development only). |
+| OfflineMode | `1` | Offline mode. Runs with the built-in assets shipped in the player only; no remote updates. |
+| HostMode | `2` | Host mode. Checks versions and downloads updated assets from the host server (CDN). |
+| WeakHostMode | `3` | Weak-host (weak network) mode. Based on host mode; when the network is unavailable, it can fall back to the last locally recorded versions and keep running (works with the `enableLastLocalVersionsCheckInWeakNetwork` parameter). |
+| WebGLMode | `4` | WebGL mode. Runs with the built-in assets hosted on the web server only. |
+| WebGLRemoteMode | `5` | WebGL remote mode. Supports downloading updated assets from a remote server (CDN). |
+| CustomMode | `6` | Custom mode. Configure the runtime pipeline yourself via YooAsset initialize parameters (automatic preset-package initialization is not supported). |
 
 ---
 
-### GetHostServerAppConfigPath / PatchConfigPath
-Gets the complete URL path for configuration files (AppConfig / PatchConfig) on the remote server.
+### BuildMode {#buildmode}
 
-<Highlight color="#ff2f00">Important</Highlight> This method prioritizes reading the built-in AppConfig to determine the current product name and platform, then requests the configuration file under the corresponding path from the remote server.
+```csharp
+public enum BuildMode
+{
+    BuiltinBuildPipeline = 1,
+    ScriptableBuildPipeline = 0,
+    RawFileBuildPipeline = 2,
+#if YOOASSET_3
+    ArchiveFileBuildPipeline = 3
+#endif
+}
+```
+
+Asset build pipeline mode.
+
+| Name | Value | Description |
+| :--- | :--- | :--- |
+| ScriptableBuildPipeline | `0` | Scriptable Build Pipeline (SBP). |
+| BuiltinBuildPipeline | `1` | Built-in Build Pipeline. |
+| RawFileBuildPipeline | `2` | Raw File Build Pipeline. |
+| ArchiveFileBuildPipeline | `3` | Archive File Build Pipeline. **YooAsset v3 only** (`YOOASSET_3`). |
+
+<Highlight color="#00d679">Reminder</Highlight> `YOOASSET_2` / `YOOASSET_3` are defined automatically by the framework from the installed YooAsset version (no manual setup). See [YooAsset Version Compatibility](./AssetPatcher.mdx#yooasset-compat) for the full comparison.
+
+<Highlight color="#00d679">Reminder</Highlight> The `buildMode` setting on preset packages only takes effect in `EditorSimulateMode`.
+
+## CryptogramType Constants {#cryptogramtype}
+
+```csharp
+public class CryptogramType
+{
+    public const string NONE = "NONE";
+    public const string OFFSET = "OFFSET";
+    public const string XOR = "XOR";
+    public const string HT2XOR = "HT2XOR";
+    public const string HT2XORPLUS = "HT2XORPLUS";
+    public const string AES = "AES";
+    public const string CHACHA20 = "CHACHA20";
+    public const string XXTEA = "XXTEA";
+    public const string OFFSETXOR = "OFFSETXOR";
+}
+```
+
+Cryptogram type identifiers, used to compose decryption argument strings (e.g., the Decrypt Info settings on `PatchLauncher`; identifiers are **case-insensitive**):
+
+| Constant | Value | Decrypt Args Format |
+| :--- | :--- | :--- |
+| NONE | `"NONE"` | `NONE` (no encryption) |
+| OFFSET | `"OFFSET"` | `OFFSET, dummySize` |
+| XOR | `"XOR"` | `XOR, key` |
+| HT2XOR | `"HT2XOR"` | `HT2XOR, hKey, tKey, jKey` |
+| HT2XORPLUS | `"HT2XORPLUS"` | `HT2XORPLUS, hKey, tKey, j1Key, j2Key` |
+| AES | `"AES"` | `AES, key, iv` |
+| CHACHA20 | `"CHACHA20"` | `CHACHA20, key, nonce, counter` |
+| XXTEA | `"XXTEA"` | `XXTEA, key` |
+| OFFSETXOR | `"OFFSETXOR"` | `OFFSETXOR, key, dummySize` |
+
+## Static Fields {#fields}
+
+#### Play Mode & Preset Packages
+
+| Name | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| playMode | `PlayMode` | `PlayMode.EditorSimulateMode` | Current play mode. Written by `PatchLauncher` at startup based on its Inspector settings. |
+| playModeParameters | `PlayModeParameters` | `null` | Parameter configuration of the current play mode. Assigned by `PatchLauncher` according to the play mode. |
+| listAppPackages | `List<AppPackageInfoWithBuild>` | `null` | App preset package list. Written by `PatchLauncher`. |
+| listDlcPackages | `List<DlcPackageInfoWithBuild>` | `null` | DLC preset package list. Written by `PatchLauncher`. |
+
+#### Download Options
+
+| Name | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| maxConcurrencyDownloadCount | `int` | `10` | Maximum concurrent download count. Used as the default concurrency when creating downloaders. |
+| failedRetryCount | `int` | `3` | Retry count on download failure. Used as the default retry count when creating downloaders. |
+| breakpointFileSizeThreshold | `uint` | `20971520`<br/>(20 MB) | Breakpoint-resume threshold (bytes). Files reaching this size are downloaded with resumable download (maps to the YooAsset file system parameter `RESUME_DOWNLOAD_MINMUM_SIZE`). |
+| DEFAULT_DOWNLOAD_WATCHDOG_TIMEOUT | `int` | `30` | Default value of `downloadWatchdogTimeout`. |
+| downloadWatchdogTimeout | `int` | `30` | Downloader watchdog timeout. If no download data is received within the monitored time range, the download task is terminated (maps to the YooAsset file system parameter `DOWNLOAD_WATCH_DOG_TIME`). |
+
+#### Load Options
+
+| Name | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| bundleLoadReadBufferSize | `uint` | `32768`<br/>(32 KB) | Read buffer size for bundle loading (`AssetBundle.LoadFromStream`). |
+| bundleDecryptReadBufferSize | `uint` | `32768`<br/>(32 KB) | Read buffer size for bundle decryption. |
+| autoUnloadBundleWhenUnused | `bool` | `false` | Automatically releases asset bundles when their reference count reaches zero (maps to YooAsset `AutoUnloadBundleWhenUnused`). |
+
+#### Process Options
+
+| Name | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| operationSystemMaxTimeSlice | `long` | `30` | Maximum time slice consumed per frame by the async operation system (milliseconds; applied via `YooAssets.SetOperationSystemMaxTimeSlice`). |
+
+<Highlight color="#0373fc">Attention</Highlight>
+
+- `autoUnloadBundleWhenUnused`, `breakpointFileSizeThreshold`, `downloadWatchdogTimeout`, and `operationSystemMaxTimeSlice` are applied to YooAsset during the **package initialization phase** — set them before the initialization flow if you need to adjust them.
+- `maxConcurrencyDownloadCount` and `failedRetryCount` are read **each time a downloader is created**.
+
+## Method Overview {#overview}
+
+#### Bundle URL Config
+
+| Method | Description |
+| :--- | :--- |
+| [GetValueFromUrlCfg](#getvaluefromurlcfg) | Gets the value of a key from the deployment config (`CdnConfig`), with automatic encryption detection and decryption. |
+| [GetAppStoreLink](#getappstorelink) | Gets the app store link (`store_link`). |
+| [GoToAppStore](#gotoappstore) | Opens the app store page in the system browser. |
+
+#### AppConfig Access
+
+| Method | Description |
+| :--- | :--- |
+| [GetAppConfigFromStreamingAssets](#getappconfigfromstreamingassets) | Reads the AppConfig from the built-in `StreamingAssets`. |
+| [GetAppConfigFromHostServer](#getappconfigfromhostserver) | Downloads the AppConfig from the host server (with weak-network fallback). |
+
+#### Host Server Endpoints
+
+| Method | Description |
+| :--- | :--- |
+| [GetHostServerUrl](#gethostserverurl) | Composes the remote download endpoint URL of an app package. |
+| [GetFallbackHostServerUrl](#getfallbackhostserverurl) | Composes the fallback download endpoint URL of an app package. |
+| [GetDlcHostServerUrl](#getdlchostserverurl) | Composes the remote download endpoint URL of a DLC package. |
+| [GetDlcFallbackHostServerUrl](#getdlcfallbackhostserverurl) | Composes the fallback download endpoint URL of a DLC package. |
+| [GetHostServerAppConfigPath](#gethostserverappconfigpath) | Gets the full URL of the AppConfig on the remote server. |
+| [GetHostServerPatchConfigPath](#gethostserverpatchconfigpath) | Gets the full URL of the PatchConfig on the remote server. |
+
+#### Local & Built-in Paths
+
+| Method | Description |
+| :--- | :--- |
+| [GetLocalSandboxRootPath](#getlocalsandboxrootpath) | Gets the root path of local persistent assets (sandbox). |
+| [GetLocalSandboxPackagePath](#getlocalsandboxpackagepath) | Gets the local persistent path of a specific package. |
+| [GetBuiltinRootPath](#getbuiltinrootpath) | Gets the root path of built-in assets. |
+| [GetBuiltinPackagePath](#getbuiltinpackagepath) | Gets the built-in path of a specific package. |
+| [GetLocalSandboxAppConfigPath](#getlocalsandboxappconfigpath) | Gets the full AppConfig path inside the local sandbox. |
+| [GetStreamingAssetsAppConfigPath](#getstreamingassetsappconfigpath) | Gets the full AppConfig path inside `StreamingAssets`. |
+| [GetRequestStreamingAssetsPath](#getrequeststreamingassetspath) | Gets the `StreamingAssets` path suitable for `UnityWebRequest`. |
+
+#### Header Helper
+
+| Method | Description |
+| :--- | :--- |
+| [WriteInt16](#writeint16) | Writes a 16-bit integer into a buffer (little-endian). |
+| [ReadInt16](#readint16) | Reads a 16-bit integer from a buffer. |
+
+---
+
+### GetValueFromUrlCfg {#getvaluefromurlcfg}
+
+```csharp
+public static async UniTask<string> GetValueFromUrlCfg(string key)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| key | `string` | Key name in the deployment config. The constants `PatchSettings.BUNDLE_IP`, `PatchSettings.BUNDLE_FALLBACK_IP`, and `PatchSettings.STORE_LINK` can be used. |
+
+**Returns**
+
+`UniTask<string>` — the value of the key; `string.Empty` if the config content is empty; `null` if the key is not found.
+
+**Description**
+
+Reads the deployment config from the built-in `StreamingAssets` (the file name is determined by [PatchSettings](./PatchSettings.mdx), `CdnConfig.dat` by default) and parses its key-value data. The parsed result is cached after the first read.
+
+<Highlight color="#0373fc">Attention</Highlight> The file header is detected automatically: if the first 2 bytes match the cipher mark `PatchSettings.CIPHER_HEADER`, the content is decrypted with the `PatchSettings.settings.bundleUrlCfgCipher` key before parsing.
+
+**Example**
+
+```csharp
+// Get the primary CDN address (bundle_ip)
+string host = await BundleConfig.GetValueFromUrlCfg(PatchSettings.BUNDLE_IP);
+```
+
+---
+
+### GetAppStoreLink {#getappstorelink}
+
+```csharp
+public static async UniTask<string> GetAppStoreLink()
+```
+
+**Returns**
+
+`UniTask<string>` — the app store link (the value of the `store_link` key in the deployment config); `null` if not found.
+
+**Description**
+
+Gets the app store link from the deployment config (`PatchSettings.STORE_LINK`).
+
+---
+
+### GoToAppStore {#gotoappstore}
+
+```csharp
+public static async UniTaskVoid GoToAppStore()
+```
+
+**Description**
+
+Gets the store link ([GetAppStoreLink](#getappstorelink)) and opens the app store page (Google Play / App Store) in the system browser via `Application.OpenURL`. Commonly used in force-update flows. Returns `UniTaskVoid` (fire-and-forget, no need to await).
+
+**Example**
+
+```csharp
+// The app version is outdated — guide the player to the store to update
+BundleConfig.GoToAppStore().Forget();
+```
+
+---
+
+### GetAppConfigFromStreamingAssets {#getappconfigfromstreamingassets}
+
+```csharp
+public static async UniTask<AppConfig> GetAppConfigFromStreamingAssets()
+```
+
+**Returns**
+
+`UniTask<AppConfig>` — the built-in AppConfig; `null` if it cannot be read.
+
+**Description**
+
+Reads the AppConfig (default `AppInfo.json`) from the built-in `StreamingAssets`. It contains `PLATFORM`, `PRODUCT_NAME`, `APP_VERSION`, and `SEMANTIC_RULE`. The result is cached after the first read.
+
+---
+
+### GetAppConfigFromHostServer {#getappconfigfromhostserver}
+
+```csharp
+public static async UniTask<AppConfig> GetAppConfigFromHostServer()
+```
+
+**Returns**
+
+`UniTask<AppConfig>` — the AppConfig from the host server; `null` if it cannot be obtained.
+
+**Description**
+
+Downloads the latest AppConfig from the host server (used for version comparison and composing the latest version path). The result is cached after the first read.
+
+<Highlight color="#0373fc">Attention</Highlight> If the download fails and weak-network handling is enabled (`playModeParameters.enableLastLocalVersionsCheckInWeakNetwork`, weak-host mode only), it falls back to the last successfully stored version data on the local device.
+
+---
+
+### GetHostServerUrl {#gethostserverurl}
+
+```csharp
+public static async UniTask<string> GetHostServerUrl(string packageName)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. |
+
+**Returns**
+
+`UniTask<string>` — the remote download endpoint URL of the app package.
+
+**Description**
+
+Composes the download endpoint of an app package based on the latest AppConfig from the host server, in the following format:
+
+```text
+<bundle_ip>/<rootFolderName>/<PRODUCT_NAME>/<PLATFORM>/<vX.Y[.Z]>/<packageName>
+```
+
+<Highlight color="#00d679">Reminder</Highlight> The version folder format is determined by the `SEMANTIC_RULE` of the AppConfig: with `PATCH` enabled it is `v<Major>.<Minor>.<Patch>` (e.g., `v1.0.0`); otherwise `v<Major>.<Minor>` (e.g., `v1.0`).
+
+**Example**
+
+```csharp
+string url = await BundleConfig.GetHostServerUrl("DefaultPackage");
+// e.g., http://127.0.0.1/CDN/MyProduct/StandaloneWindows64/v1.0/DefaultPackage
+```
+
+---
+
+### GetFallbackHostServerUrl {#getfallbackhostserverurl}
+
+```csharp
+public static async UniTask<string> GetFallbackHostServerUrl(string packageName)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. |
+
+**Returns**
+
+`UniTask<string>` — the fallback download endpoint URL of the app package.
+
+**Description**
+
+Same as [GetHostServerUrl](#gethostserverurl), but composes the path with the fallback address (`bundle_fallback_ip`).
+
+---
+
+### GetDlcHostServerUrl {#getdlchostserverurl}
+
+```csharp
+public static async UniTask<string> GetDlcHostServerUrl(string packageName, string dlcVersion, bool withoutPlatform = false)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | DLC package name. |
+| dlcVersion | `string` | DLC version (DLC packages have their own version path, independent from the app version). |
+| withoutPlatform | `bool` | Whether to omit the platform level in the path.<br/>**Default**: `false` |
+
+**Returns**
+
+`UniTask<string>` — the remote download endpoint URL of the DLC package.
+
+**Description**
+
+Composes the download endpoint of a DLC package in the following format:
+
+```text
+<bundle_ip>/<rootFolderName>/<PRODUCT_NAME>/<PLATFORM>/<dlcFolderName>/<packageName>/<dlcVersion>
+```
+
+When `withoutPlatform` is `true`, the `<PLATFORM>` level is omitted.
+
+**Example**
+
+```csharp
+string url = await BundleConfig.GetDlcHostServerUrl("Dlc01Package", "1.0.0");
+// e.g., http://127.0.0.1/CDN/MyProduct/StandaloneWindows64/DLC/Dlc01Package/1.0.0
+```
+
+---
+
+### GetDlcFallbackHostServerUrl {#getdlcfallbackhostserverurl}
+
+```csharp
+public static async UniTask<string> GetDlcFallbackHostServerUrl(string packageName, string dlcVersion, bool withoutPlatform = false)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | DLC package name. |
+| dlcVersion | `string` | DLC version. |
+| withoutPlatform | `bool` | Whether to omit the platform level in the path.<br/>**Default**: `false` |
+
+**Returns**
+
+`UniTask<string>` — the fallback download endpoint URL of the DLC package.
+
+**Description**
+
+Same as [GetDlcHostServerUrl](#getdlchostserverurl), but composes the path with the fallback address (`bundle_fallback_ip`).
+
+---
+
+### GetHostServerAppConfigPath {#gethostserverappconfigpath}
+
+```csharp
+public static async UniTask<string> GetHostServerAppConfigPath()
+```
+
+**Returns**
+
+`UniTask<string>` — the full URL of the AppConfig on the remote server.
+
+**Description**
+
+Composes the URL of the AppConfig on the asset server (`<bundle_ip>/<rootFolderName>/<PRODUCT_NAME>/<PLATFORM>/` plus the AppConfig file name, `AppInfo.json` by default).
+
+<Highlight color="#ff2f00">Important</Highlight> The **built-in** AppConfig (`StreamingAssets`) is read first to determine the current product name and platform, then the remote request path is composed.
+
+---
+
+### GetHostServerPatchConfigPath {#gethostserverpatchconfigpath}
+
+```csharp
+public static async UniTask<string> GetHostServerPatchConfigPath()
+```
+
+**Returns**
+
+`UniTask<string>` — the full URL of the PatchConfig on the remote server.
+
+**Description**
+
+Composes the URL of the PatchConfig on the asset server (`<bundle_ip>/<rootFolderName>/<PRODUCT_NAME>/<PLATFORM>/` plus the PatchConfig file name, `PatchInfo.json` by default).
+
+<Highlight color="#ff2f00">Important</Highlight> The **built-in** AppConfig (`StreamingAssets`) is read first to determine the current product name and platform, then the remote request path is composed.
+
+---
+
+### GetLocalSandboxRootPath {#getlocalsandboxrootpath}
+
+```csharp
+public static string GetLocalSandboxRootPath()
+```
+
+**Returns**
+
+`string` — the root path of local persistent assets (sandbox).
+
+**Description**
+
+Gets the root directory for local persistence (download storage), i.e., YooAsset's default cache file root (obtained via [YooAssetBridge](./YooAssetBridge.mdx#getyoodefaultcacheroot) reflection).
+
+---
+
+### GetLocalSandboxPackagePath {#getlocalsandboxpackagepath}
+
+```csharp
+public static string GetLocalSandboxPackagePath(string packageName)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. |
+
+**Returns**
+
+`string` — the local persistent path of the specified package (where downloaded content is stored).
+
+**Description**
+
+Combines [GetLocalSandboxRootPath](#getlocalsandboxrootpath) with the package name to form the local storage path of the package.
+
+---
+
+### GetBuiltinRootPath {#getbuiltinrootpath}
+
+```csharp
+public static string GetBuiltinRootPath()
+```
+
+**Returns**
+
+`string` — the root path of built-in assets.
+
+**Description**
+
+Gets YooAsset's default built-in file root directory (under `StreamingAssets`, obtained via [YooAssetBridge](./YooAssetBridge.mdx#getyoodefaultbuildinroot) reflection).
+
+---
+
+### GetBuiltinPackagePath {#getbuiltinpackagepath}
+
+```csharp
+public static string GetBuiltinPackagePath(string packageName)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. |
+
+**Returns**
+
+`string` — the built-in path of the specified package.
+
+**Description**
+
+Combines [GetBuiltinRootPath](#getbuiltinrootpath) with the package name to form the built-in asset path of the package.
+
+---
+
+### GetLocalSandboxAppConfigPath {#getlocalsandboxappconfigpath}
+
+```csharp
+public static string GetLocalSandboxAppConfigPath()
+```
+
+**Returns**
+
+`string` — the full AppConfig path inside the local sandbox.
+
+**Description**
+
+Gets the full path of the AppConfig inside the local sandbox (the download storage path; file name `AppInfo.json` by default).
+
+---
+
+### GetStreamingAssetsAppConfigPath {#getstreamingassetsappconfigpath}
+
+```csharp
+public static string GetStreamingAssetsAppConfigPath()
+```
+
+**Returns**
+
+`string` — the full AppConfig path inside `StreamingAssets`.
+
+**Description**
+
+Gets the full path of the AppConfig inside the built-in `StreamingAssets` (composed from [GetRequestStreamingAssetsPath](#getrequeststreamingassetspath), suitable for `UnityWebRequest` reads).
+
+---
+
+### GetRequestStreamingAssetsPath {#getrequeststreamingassetspath}
+
+```csharp
+public static string GetRequestStreamingAssetsPath()
+```
+
+**Returns**
+
+`string` — the `StreamingAssets` path suitable for `UnityWebRequest`.
+
+**Description**
+
+Gets the `StreamingAssets` path suitable for `UnityWebRequest` requests.
+
+<Highlight color="#0373fc">Attention</Highlight> On OSX (Standalone) and iOS, the `file://` protocol prefix is appended automatically.
+
+---
+
+### WriteInt16 {#writeint16}
+
+```csharp
+public static void WriteInt16(short value, byte[] buffer, ref int pos)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| value | `short` | The 16-bit integer to write. |
+| buffer | `byte[]` | Target buffer. |
+| pos | `ref int` | Write position (advanced by 2 after writing). |
+
+**Description**
+
+Writes a 16-bit integer into the buffer in **little-endian** byte order. Mainly used to write the cipher header (`PatchSettings.CIPHER_HEADER`) of the deployment config.
+
+---
+
+### ReadInt16 {#readint16}
+
+```csharp
+public static short ReadInt16(byte[] buffer, ref int pos)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| buffer | `byte[]` | Source buffer. |
+| pos | `ref int` | Read position (advanced by 2 after reading). |
+
+**Returns**
+
+`short` — the 16-bit integer read from the buffer.
+
+**Description**
+
+Reads a 16-bit integer from the current position of the buffer (byte order determined by `BitConverter.IsLittleEndian`). Mainly used to detect the cipher header of the deployment config.
 
 ---

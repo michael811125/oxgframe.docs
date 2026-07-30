@@ -1,19 +1,20 @@
 ---
 sidebar_position: 1
+description: MediaHelper 是 MediaFrame 的編輯器輔助工具，用於輸出媒體 URL 配置檔（MediaConfig.txt）。
 ---
 
 # MediaHelper
 
 export const Highlight = ({ children, color }) => (
-  <span
-    style={{
-      backgroundColor: color,
-      borderRadius: '5px',
-      color: '#fff',
-      padding: '2.5px'
-    }}>
-    {children}
-  </span>
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
 );
 
 <Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
@@ -22,20 +23,69 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
-## Methods
+`MediaHelper` 是 **MediaFrame** 的編輯器（Editor）輔助工具，用於輸出媒體（Audio / Video）的 URL 配置檔，讓客戶端能動態解析音訊與影片的來源位址。
 
+|  |  |
+| :--- | :--- |
+| **命名空間** | `OxGFrame.MediaFrame.Editor` |
+| **類型** | `public static class` |
+| **原始碼** | [MediaHelper.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/MediaFrame/Scripts/Editor/MediaHelper.cs) |
+
+```csharp
 using OxGFrame.MediaFrame.Editor;
+```
 
-### ExportMediaUrlConfig
-輸出媒體資源（Audio/Video）的 URL 配置文件至指定路徑，通常用於內置的 `StreamingAssets`。此設定檔讓客戶端能動態決定音訊與影片的來源位址。
+<Highlight color="#0373fc">注意</Highlight> 本類別僅供 **Unity Editor** 環境使用。
 
+### 方法總覽 {#overview}
 
+| 方法 | 說明 |
+| :--- | :--- |
+| [ExportMediaUrlConfig](#exportmediaurlconfig) | 輸出媒體 URL 配置檔（`MediaConfig.txt`）至指定路徑。 |
 
-**Params**
-* `string audioUrlset`：音訊資源伺服器路徑 (預設為 `http://127.0.0.1/audio/`)
-* `string videoUrlset`：影片資源伺服器路徑 (預設為 `http://127.0.0.1/video/`)
-* `string outputPath`：配置文件輸出目標路徑
+---
 
-<Highlight color="#00d679">提醒</Highlight> 輸出的檔案將包含說明的註解（#），並以 UTF-8 編碼寫入，確保在不同平台上讀取的兼容性。
+### ExportMediaUrlConfig {#exportmediaurlconfig}
+
+```csharp
+public static void ExportMediaUrlConfig(string audioUrlset, string videoUrlset, string outputPath)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| audioUrlset | `string` | 音訊資源伺服器 URL。傳入空值時，使用預設值 `http://127.0.0.1/audio/`。 |
+| videoUrlset | `string` | 影片資源伺服器 URL。傳入空值時，使用預設值 `http://127.0.0.1/video/`。 |
+| outputPath | `string` | 配置檔輸出的目錄路徑（輸出檔名固定為 `MediaConfig.txt`）。 |
+
+**說明**
+
+將音訊與影片的來源伺服器 URL 輸出成 `MediaConfig.txt` 配置檔至指定路徑，通常輸出至內建的 `StreamingAssets`，供客戶端於使用 URL 播放模式時，動態解析音訊與影片的來源位址。
+
+輸出內容包含 `#` 開頭的說明註解，並以 **UTF-8** 編碼寫入，確保跨平台讀取的相容性：
+
+```text
+# audio_urlset = Audio Source Url Path
+# video_urlset = Video Source Url Path
+
+audio_urlset http://127.0.0.1/audio/
+video_urlset http://127.0.0.1/video/
+```
+
+<Highlight color="#00d679">提醒</Highlight> 亦可透過編輯器選單 **OxGFrame → MediaFrame → Media Url Config Generator (MediaConfig.txt)** 開啟視窗工具產生。
+
+**範例**
+
+```csharp
+using OxGFrame.MediaFrame.Editor;
+using UnityEngine;
+
+MediaHelper.ExportMediaUrlConfig(
+    "https://cdn.example.com/audio/",
+    "https://cdn.example.com/video/",
+    Application.streamingAssetsPath
+);
+```
 
 ---

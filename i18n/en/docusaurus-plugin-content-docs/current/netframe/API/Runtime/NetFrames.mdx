@@ -1,5 +1,6 @@
 ---
 sidebar_position: 1
+description: NetFrames is the unified entry point of the NetFrame module, managing multiple network connections as nodes (NetNode) with APIs for registering, connecting, sending, and closing.
 ---
 
 # NetFrames
@@ -22,105 +23,507 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`NetFrames` is the unified entry point (Facade) of the **NetFrame** module. It manages multiple network connections as nodes (`NetNode`), where each node pairs its own transport implementation ([INetProvider](./INetProvider.mdx)) with its own connection options ([NetOption](./NetOption.mdx)). It covers **node registration, connecting, sending data, and closing**, plus control over the updater that drives network polling.
+
+|  |  |
+| :--- | :--- |
+| **Namespace** | `OxGFrame.NetFrame` |
+| **Type** | `public static class` |
+| **Source** | [NetFrames.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/NetFrame/Scripts/Runtime/NetFrames.cs) |
+
+```csharp
 using OxGFrame.NetFrame;
+```
 
-## Updater Controls
+<Highlight color="#0373fc">Attention</Highlight> Before calling any connection-related API, create a `NetNode` yourself and register it via [AddNetNode](#addnetnode). See the [NetFrame Introduction](../../intro.mdx) for the full setup flow.
 
-`NetFrames` uses an independent `RTUpdater` ([Real-time Updater](https://github.com/michael811125/OxGKit/blob/master/Assets/OxGKit/TimeSystem/Scripts/Runtime/Core/Updater/RTUpdater.cs)) to drive the polling logic of all network nodes. The independent updater ensures that network communication still operates correctly even when the MonoBehaviour's TimeScale is 0.
+## Quick Start {#quick-start}
 
-<Highlight color="#00d679">Reminder</Highlight> This is crucial for implementing features like "handling network disconnection or synchronization while the game is paused".
+```csharp
+// Create a network node (built-in TCP provider; NetTipsExample is a custom INetTips implementation)
+var netNode = new NetNode(new TcpNetProvider(), new NetTipsExample());
+netNode.SetResponseBinaryHandler(recvData => Debug.Log($"Received {recvData.Length} bytes"));
 
-### SetUpdaterTimeScale
-Controls the operation rate of the `NetManager` updater.
-* **Params**: `float timeScale`: Scale factor.
+// Register the node (use the default nnId = 0 for a single connection)
+NetFrames.AddNetNode(netNode);
 
-### Start Methods
-* **StartUpdater()**: Starts the network loop on the main thread.
-* **StartUpdaterOnThread()**: Starts the network loop on an **independent thread**, suitable for scenarios requiring extremely high performance or avoiding main thread blocking.
+// Connect to the server
+NetFrames.Connect(new TcpNetOption("127.0.0.1", 8888));
 
-### Stop / Status
-* **StopUpdater()**: Stops the network loop (all nodes will pause their polling logic).
-* **IsUpdaterRunning()**: Returns whether the updater is currently running.
+// Send binary data
+NetFrames.Send(new byte[] { 0x01, 0x02 });
 
-### Reset Methods
-* **ResetUpdater()**: Resets and restarts the updater on the main thread.
-* **ResetUpdater(bool useThreadedUpdater)**: Resets and restarts with a specified thread mode.
-    * **Params**: `bool useThreadedUpdater`: If true, enables threaded mode.
-* **ResetUpdaterOnThread()**: Resets and restarts the updater on an **independent thread**.
+// Close the connection and remove the node
+NetFrames.Close(0, removeNetNode: true);
+```
 
-<Highlight color="#ff2f00">Important</Highlight> When `StartUpdaterOnThread` is chosen, all network callbacks (e.g., `OnBinary`) will be triggered in a non-main thread. If you need to operate Unity components, please ensure thread safety and use [UMT](https://github.com/michael811125/OxGKit/blob/master/Assets/OxGKit/Utilities/Scripts/Runtime/UnityMainThread/UMT.cs) to dispatch to the main thread.
+## General Rules {#general-rules}
 
----
+### Multi-Node Management (nnId) {#multi-node}
 
-## Node Management
+NetFrame organizes network connections in units of nodes (`NetNode`). Each node owns its own transport implementation ([INetProvider](./INetProvider.mdx)), connection options ([NetOption](./NetOption.mdx)), and status tips ([INetTips](./INetTips.mdx)), and is managed by a unique `nnId` (node ID) — every facade method targets a node by its `nnId`.
 
-The network system is organized in units of `NetNode` (network node), where each node can have its own independent transmission protocol and configuration.
+<Highlight color="#0373fc">Attention</Highlight> For most single-connection scenarios, simply use the default `nnId = 0`. If you need to connect to multiple servers at once (e.g., a Login Server and a Game Server), assign a separate `nnId` to each node.
 
-### AddNetNode
-Adds a network node to the manager.
-* **Params**: 
-    * `NetNode netNode`: The node instance to add.
-    * `int nnId`: Unique identifier for the node (default is 0).
+<Highlight color="#00d679">Reminder</Highlight> A `NetNode` also supports heartbeat, receive-timeout, and reconnection callbacks (`SetHeartBeatAction`, `SetOutReceiveAction`, `SetReconnectAction`, etc.). See the [NetFrame Introduction](../../intro.mdx) for the full setup flow.
 
-### RemoveNetNode
-Removes a specified node from the manager.
-* **Params**: `int nnId`: Node ID.
+### Built-in Providers {#built-in-providers}
 
-### GetNetNode
-Retrieves a registered network node.
-* **Params**: `int nnId`: Node ID.
-* **Returns**: `NetNode`: The node instance, or null if it doesn't exist.
+Three `INetProvider` implementations are built in; pass the matching `NetOption` derived class when connecting. You can also implement [INetProvider](./INetProvider.mdx) yourself to support other transport protocols.
 
-### Count
-* **Returns**: `int`: Total number of currently registered network nodes.
+| Provider | Underlying Library | NetOption | String Sending |
+| :--- | :--- | :--- | :--- |
+| `TcpNetProvider` | [Telepathy](https://github.com/MirrorNetworking/Telepathy) | [TcpNetOption](./NetOption.mdx#tcp-netoption) | Not supported |
+| `KcpNetProvider` | [kcp2k](https://github.com/MirrorNetworking/kcp2k) | [KcpNetOption](./NetOption.mdx#kcp-netoption) | Not supported |
+| `WebSocketNetProvider` | [UnityWebSocket](https://github.com/psygames/UnityWebSocket) | [WebSocketNetOption](./NetOption.mdx#websocket-netoption) | Supported |
 
----
+<Highlight color="#0373fc">Attention</Highlight> `TcpNetProvider` and `KcpNetProvider` support binary sending only — calling the string overload of [Send](#send) on them throws an exception.
 
-## Connection & Communication
+### Updater {#updater}
 
-Core interfaces for performing network operations on specific nodes.
+`NetManager` uses an independent `RTUpdater` ([Real-time Updater](https://github.com/michael811125/OxGKit/blob/master/Assets/OxGKit/TimeSystem/Scripts/Runtime/Core/Updater/RTUpdater.cs)) to drive the polling logic of all nodes (data receiving, heartbeat, receive-timeout, and reconnection timing). The manager initializes automatically on the first call to any `NetFrames` API and starts the updater on the **main thread**.
 
-### Connect
-Opens a connection for a specified network node.
-* **Params**: 
-    * `NetOption netOption`: Connection configuration (includes host address, port, retry count, etc.).
-    * `int nnId`: Target node ID.
+<Highlight color="#00d679">Reminder</Highlight> `RTUpdater` is a real-time updater unaffected by Unity's `Time.timeScale` — network communication keeps running even while the game is paused.
 
-### IsConnected
-Checks the connection status of a node.
-* **Params**: `int nnId`: Node ID.
-* **Returns**: `bool`: Returns true if the node is connected.
-
-### Send (Binary)
-Sends binary packets.
-* **Params**: 
-    * `byte[] buffer`: Raw data stream.
-    * `int nnId`: Target node ID.
-* **Returns**: `bool`: Returns true if sent successfully.
-
-### Send (String)
-Sends string packets (depending on the underlying Provider implementation).
-* **Params**: 
-    * `string text`: String message.
-    * `int nnId`: Target node ID.
-* **Returns**: `bool`: Returns true if sent successfully.
+<Highlight color="#ff2f00">Important</Highlight> When the updater is switched to a separate thread via [StartUpdaterOnThread](#startupdateronthread) or [ResetUpdaterOnThread](#resetupdateronthread), all network callbacks (such as the binary receive handler) fire on a **non-main thread**. If you need to touch Unity components, take care of thread safety and dispatch back to the main thread with [UMT](https://github.com/michael811125/OxGKit/blob/master/Assets/OxGKit/Utilities/Scripts/Runtime/UnityMainThread/UMT.cs).
 
 ---
 
-## Termination
+## Node Management {#node-management}
 
-### Close
-Disconnects the network connection of a specified node.
-* **Params**: 
-    * `int nnId`: Node ID.
-    * `bool removeNetNode`: Whether to remove the node from the manager after disconnection.
+Registering, retrieving, and removing nodes. A `NetNode` must be created yourself with `new NetNode(INetProvider, INetTips)` and then registered with the manager (see [Multi-Node Management](#multi-node)).
 
-### CloseAll
-Closes all active network node connections.
-* **Params**: `bool removeNetNode`: Whether to clear all registered nodes at the same time.
+### Method Overview {#node-overview}
+
+#### Initialization
+
+| Method | Description |
+| :--- | :--- |
+| [InitInstance](#initinstance) | Initializes the `NetManager` singleton instance. |
+
+#### Node Registration & Access
+
+| Method | Description |
+| :--- | :--- |
+| [AddNetNode](#addnetnode) | Registers a network node with the manager. |
+| [RemoveNetNode](#removenetnode) | Disposes and removes the given node. |
+| [GetNetNode](#getnetnode) | Gets a registered network node. |
+| [Count](#count) | Gets the total number of registered nodes. |
 
 ---
 
-<Highlight color="#0373fc">Attention</Highlight> In most single-connection application scenarios, simply using the default `nnId = 0` is sufficient. If there are requirements for multiple server connections (e.g., Login Server and Game Server), please assign independent Node IDs (NNID) for each node.
+### InitInstance {#initinstance}
+
+```csharp
+public static void InitInstance()
+```
+
+**Description**
+
+Explicitly initializes the `NetManager` singleton instance. Initialization also creates the updater and starts it on the main thread. It is recommended to call this once during game startup so the manager is ready ahead of time.
+
+<Highlight color="#00d679">Reminder</Highlight> Every `NetFrames` API initializes the manager automatically on its first call — this method only serves to initialize it in advance.
+
+---
+
+### AddNetNode {#addnetnode}
+
+```csharp
+public static void AddNetNode(NetNode netNode, int nnId = 0)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| netNode | `NetNode` | The network node instance to register. |
+| nnId | `int` | Unique identifier of the node.<br/>**Default**: `0` |
+
+**Description**
+
+Registers a network node with the manager. Afterwards, the node can be connected, used for sending, and closed via its `nnId`.
+
+<Highlight color="#0373fc">Attention</Highlight> If the `nnId` already exists, the previous node is disposed first (closing its connection and releasing its resources), then replaced by the new one.
+
+**Example**
+
+```csharp
+public enum NNID
+{
+    WebSocket = 0,
+    TCP = 1,
+    KCP = 2
+}
+
+// Register the WebSocket node
+var wsNode = new NetNode(new WebSocketNetProvider(), new NetTipsExample());
+NetFrames.AddNetNode(wsNode, (int)NNID.WebSocket);
+
+// Register the TCP node
+var tcpNode = new NetNode(new TcpNetProvider(), new NetTipsExample());
+NetFrames.AddNetNode(tcpNode, (int)NNID.TCP);
+```
+
+---
+
+### RemoveNetNode {#removenetnode}
+
+```csharp
+public static void RemoveNetNode(int nnId = 0)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| nnId | `int` | Unique identifier of the node.<br/>**Default**: `0` |
+
+**Description**
+
+Removes the given node from the manager. The node is disposed before removal (its connection is closed and its callbacks and timers are released). Does nothing if the node is not found.
+
+---
+
+### GetNetNode {#getnetnode}
+
+```csharp
+public static NetNode GetNetNode(int nnId = 0)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| nnId | `int` | Unique identifier of the node.<br/>**Default**: `0` |
+
+**Returns**
+
+`NetNode` — the registered node instance; `null` if not found.
+
+**Description**
+
+Gets a registered network node. Useful for advanced node configuration (heartbeat, receive-timeout, and reconnection callbacks) or for accessing the underlying provider via `GetNetProvider<T>()`.
+
+**Example**
+
+```csharp
+// Check whether the node is registered
+if (NetFrames.GetNetNode() == null)
+{
+    // Not registered yet — create the node first
+}
+
+// Get the underlying provider and send through the KCP Unreliable channel
+NetFrames.GetNetNode((int)NNID.KCP)
+         .GetNetProvider<KcpNetProvider>()
+         .SendBinary(kcp2k.KcpChannel.Unreliable, buffer);
+```
+
+---
+
+### Count {#count}
+
+```csharp
+public static int Count()
+```
+
+**Returns**
+
+`int` — the total number of currently registered network nodes.
+
+**Description**
+
+Gets the number of nodes registered with the manager.
+
+---
+
+## Connection & Communication {#connection}
+
+Network operations — connecting, sending, and closing — performed on a specific node.
+
+### Method Overview {#conn-overview}
+
+#### Connection
+
+| Method | Description |
+| :--- | :--- |
+| [Connect](#connect) | Opens the connection of the given node. |
+| [IsConnected](#isconnected) | Checks the connection state of the given node. |
+
+#### Sending & Closing
+
+| Method | Description |
+| :--- | :--- |
+| [Send](#send) | Sends binary or string data through the given node. |
+| [Close](#close) | Closes the connection of the given node. |
+| [CloseAll](#closeall) | Closes the connections of all nodes. |
+
+---
+
+### Connect {#connect}
+
+```csharp
+public static void Connect(NetOption netOption, int nnId = 0)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| netOption | `NetOption` | Connection options. Pass the derived class matching the node's provider (e.g., `TcpNetOption`, `KcpNetOption`, `WebSocketNetOption`). |
+| nnId | `int` | Unique identifier of the target node.<br/>**Default**: `0` |
+
+**Description**
+
+Opens the connection of the given node. When the connection procedure starts, `INetTips.OnConnecting` and the node's connecting callback are triggered; once established, `INetTips.OnConnected` and the connected callback are triggered. An error is logged if the node is not found.
+
+<Highlight color="#0373fc">Attention</Highlight>
+
+- The type of `netOption` must match the node's provider — the implementation casts it back to obtain the connection parameters.
+- A node only starts the connection procedure while it is **disconnected** (`DISCONNECTED`) or **reconnecting** (`RECONNECTING`); calling this repeatedly does not create a second connection.
+
+**Example**
+
+```csharp
+// TCP connection (auto-reconnect 3 times after disconnection)
+NetFrames.Connect(new TcpNetOption("127.0.0.1", 8888, autoReconnectCount: 3), (int)NNID.TCP);
+
+// WebSocket connection
+NetFrames.Connect(new WebSocketNetOption("ws://127.0.0.1:8080/ws"), (int)NNID.WebSocket);
+```
+
+---
+
+### IsConnected {#isconnected}
+
+```csharp
+public static bool IsConnected(int nnId = 0)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| nnId | `int` | Unique identifier of the target node.<br/>**Default**: `0` |
+
+**Returns**
+
+`bool` — `true` if the node is connected; `false` if the node is not found or not connected.
+
+**Description**
+
+Checks the connection state of the given node's underlying provider.
+
+---
+
+### Send {#send}
+
+```csharp
+public static bool Send(byte[] buffer, int nnId = 0)
+public static bool Send(string text, int nnId = 0)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| buffer | `byte[]` | Binary data to send. |
+| text | `string` | String data to send. |
+| nnId | `int` | Unique identifier of the target node.<br/>**Default**: `0` |
+
+**Returns**
+
+`bool` — `true` if the data was successfully handed to the underlying provider; `false` if the node is not found or not connected.
+
+**Description**
+
+Sends data through the given node. The binary overload maps to the provider's `SendBinary`; the string overload maps to `SendMessage`.
+
+<Highlight color="#ff2f00">Important</Highlight> The built-in `TcpNetProvider` and `KcpNetProvider` do not support string sending — calling the string overload throws an exception. Only `WebSocketNetProvider` supports it.
+
+**Example**
+
+```csharp
+// Send binary data
+bool sent = NetFrames.Send(new byte[] { 0x01, 0x02, 0x03 });
+
+// Send string data (WebSocket only)
+NetFrames.Send("{\"cmd\":\"ping\"}", (int)NNID.WebSocket);
+```
+
+---
+
+### Close {#close}
+
+```csharp
+public static void Close(int nnId = 0, bool removeNetNode = false)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| nnId | `int` | Unique identifier of the target node.<br/>**Default**: `0` |
+| removeNetNode | `bool` | Whether to also remove (dispose) the node from the manager after closing.<br/>**Default**: `false` |
+
+**Description**
+
+Closes the connection of the given node. A manual close is a **forced close** and never triggers auto-reconnection. If `removeNetNode` is `false`, the node stays registered and can be reconnected later via [Connect](#connect). Does nothing if the node is not found.
+
+**Example**
+
+```csharp
+// Close the connection only (the node is kept and can reconnect)
+NetFrames.Close();
+
+// Close the connection and remove the node
+NetFrames.Close((int)NNID.TCP, true);
+```
+
+---
+
+### CloseAll {#closeall}
+
+```csharp
+public static void CloseAll(bool removeNetNode = false)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| removeNetNode | `bool` | Whether to also remove all nodes after closing.<br/>**Default**: `false` |
+
+**Description**
+
+Closes the connections of **all** registered nodes. The parameter behaves the same as in [Close](#close). Useful for a unified cleanup on logout or shutdown.
+
+---
+
+## Updater Controls {#updater-controls}
+
+Starting, stopping, resetting, and scaling the `NetManager` updater. See [Updater](#updater) for the concept and threading notes.
+
+### Method Overview {#updater-overview}
+
+#### Start & Stop
+
+| Method | Description |
+| :--- | :--- |
+| [StartUpdater](#startupdater) | Starts the updater on the main thread. |
+| [StartUpdaterOnThread](#startupdateronthread) | Starts the updater on a separate thread. |
+| [StopUpdater](#stopupdater) | Stops the updater. |
+| [IsUpdaterRunning](#isupdaterrunning) | Checks whether the updater is running. |
+
+#### Reset & Time Scale
+
+| Method | Description |
+| :--- | :--- |
+| [ResetUpdater](#resetupdater) | Resets and restarts the updater. |
+| [ResetUpdaterOnThread](#resetupdateronthread) | Resets and restarts the updater on a separate thread. |
+| [SetUpdaterTimeScale](#setupdatertimescale) | Sets the updater's time scale. |
+
+---
+
+### StartUpdater {#startupdater}
+
+```csharp
+public static void StartUpdater()
+```
+
+**Description**
+
+Starts the updater on the **main thread**. The manager already starts it in main-thread mode during initialization, so this is normally only needed to restart after [StopUpdater](#stopupdater).
+
+---
+
+### StartUpdaterOnThread {#startupdateronthread}
+
+```csharp
+public static void StartUpdaterOnThread()
+```
+
+**Description**
+
+Starts the updater on a **separate thread** — useful to avoid blocking the main thread or for more responsive polling.
+
+<Highlight color="#ff2f00">Important</Highlight> In threaded mode, all network callbacks fire on a non-main thread. Take care of thread safety when touching Unity components (see [Updater](#updater)).
+
+---
+
+### StopUpdater {#stopupdater}
+
+```csharp
+public static void StopUpdater()
+```
+
+**Description**
+
+Stops the updater. Polling of all nodes (data receiving, heartbeat, receive-timeout, and reconnection timing) is suspended until the updater is started again.
+
+---
+
+### IsUpdaterRunning {#isupdaterrunning}
+
+```csharp
+public static bool IsUpdaterRunning()
+```
+
+**Returns**
+
+`bool` — `true` if the updater is currently running.
+
+**Description**
+
+Checks whether the `NetManager` updater is currently running.
+
+---
+
+### ResetUpdater {#resetupdater}
+
+```csharp
+public static void ResetUpdater()
+public static void ResetUpdater(bool useThreadedUpdater)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| useThreadedUpdater | `bool` | Whether to restart in threaded mode. `true` = separate thread; `false` = main thread. The parameterless overload is equivalent to passing `false`. |
+
+**Description**
+
+Stops and destroys the current updater, then re-creates and restarts it in the given mode. Useful for switching the threading mode or resetting the updater state.
+
+---
+
+### ResetUpdaterOnThread {#resetupdateronthread}
+
+```csharp
+public static void ResetUpdaterOnThread()
+```
+
+**Description**
+
+Resets the updater and restarts it on a **separate thread** — equivalent to calling `ResetUpdater(true)`.
+
+---
+
+### SetUpdaterTimeScale {#setupdatertimescale}
+
+```csharp
+public static void SetUpdaterTimeScale(float timeScale)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| timeScale | `float` | Time scale factor. |
+
+**Description**
+
+Sets the time scale of the `NetManager` updater (`RTUpdater.timeScale`).
 
 ---

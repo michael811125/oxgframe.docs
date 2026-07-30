@@ -1,5 +1,6 @@
 ---
 sidebar_position: 1
+description: CoreFrames is the unified entry point of the CoreFrame module, providing UIFrame, SRFrame, USFrame, and CPFrame APIs for showing, closing, preloading, and scene management.
 ---
 
 # CoreFrames
@@ -22,106 +23,2435 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`CoreFrames` is the unified entry point (Facade) of the **CoreFrame** module. It exposes four groups of APIs through nested static classes — `UIFrame` (UI windows), `SRFrame` (scene resources), `USFrame` (Unity scenes), and `CPFrame` (clone prefabs) — covering **preloading, showing, closing, hiding, loading, and unloading** of interface objects and scenes, all wired into AssetLoader's reference counting.
+
+|  |  |
+| :--- | :--- |
+| **Namespace** | `OxGFrame.CoreFrame` |
+| **Type** | `public static class` |
+| **Source** | [CoreFrames.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/CoreFrame/Scripts/Runtime/Core/CoreFrames.cs) |
+
+```csharp
 using OxGFrame.CoreFrame;
+```
 
-## Core Mechanism: Automatic Path Resolution
+<Highlight color="#00d679">Reminder</Highlight> The managers of each subsystem (`UIManager`, `SRManager`, etc.) are created automatically on first use and persist across scenes (`DontDestroyOnLoad`) — no scene setup is required beforehand.
 
-`CoreFrames` has a built-in parser that determines the resource source based on the input name prefix:
+<Highlight color="#0373fc">Attention</Highlight> `UIFrame` requires a `Canvas` object in the scene whose name matches `UISettings.canvasName` on the UI prefab. See the [CoreFrame Introduction](../../intro.mdx) for setup details.
 
-| Prefix | Applicable Framework | Description | Example |
+## Quick Start {#quick-start}
+
+```csharp
+// Show a UI (data can be passed to the UI's OnShow)
+var ui = await CoreFrames.UIFrame.Show("PlayerUI");
+
+// Close the UI
+CoreFrames.UIFrame.Close("PlayerUI");
+
+// Show a scene resource (SR)
+await CoreFrames.SRFrame.Show("BattleField");
+
+// Load a scene in Single mode (no prefix = bundle scene, using its Address)
+await CoreFrames.USFrame.LoadSingleSceneAsync("MainScene");
+
+// Load a scene from Build Settings (build# prefix)
+await CoreFrames.USFrame.LoadSingleSceneAsync("build#MainScene");
+
+// Clone a prefab (CP); simply Destroy it when no longer needed
+var cp = await CoreFrames.CPFrame.LoadWithCloneAsync<CPBase>("BulletCP");
+```
+
+## General Rules {#general-rules}
+
+### Name Prefix Resolution {#asset-name-prefix}
+
+`CoreFrames` has a built-in resolver that determines the loading source based on the name prefix:
+
+| Prefix | Applicable Subsystems | Description | Example |
 | :--- | :--- | :--- | :--- |
-| **res#** | UI, SR, CP | Loads resources from Unity's native **Resources**. | `res#Prefabs/PlayerUI` |
-| **build#** | US | Loads scenes from the **Scenes In Build** list. | `build#MainScene` |
-| **No Prefix** | All | Defaults to loading resources from **Asset Bundle (YooAsset)**. | `PlayerUI` |
+| **res#** | UIFrame, SRFrame, CPFrame | Loads the asset from Unity's native **Resources** (by relative path under Resources). | `res#Prefabs/PlayerUI` |
+| **build#** | USFrame | Loads the scene from the **Scenes In Build** list of Build Settings. | `build#MainScene` |
+| **None** | All | Loads the asset from the **Asset Bundle (YooAsset)** by default (using its addressable name). | `PlayerUI` |
 
----
+### Package {#package}
 
-## UIFrame (User Interface)
+All loading methods provide `packageName` overloads:
 
-Manages all UI windows. Supports `Group` multi-group UI window management (e.g., Lobby group UIs, Battle group UIs, etc.) and `Stack` management.
+- **Without** `packageName`: the default package is used automatically (`AssetPatcher.GetDefaultPackageName()`).
+- **With** `packageName`: the asset is loaded from the specified package, useful for multi-package management.
 
-### Global Constants
+### Group (groupId) {#group-id}
+
+`UIFrame` and `SRFrame` support **multi-group management**: every instance opened via `Show` records a `groupId` (e.g., lobby-group UIs, battle-group UIs), and batch operations (`CloseAll`, `HideAll`, `RevealAll`, `CheckHasAnyHiding`) filter their scope by `groupId`. The framework defines the following internal constants:
 
 | Constant | Value | Description |
 | :--- | :--- | :--- |
-| **DEFAULT_GROUP_ID** | 0 | Default group ID. |
-| **DO_ALL_GROUPS** | -1 | Set object range to all groups when performing operations (e.g., `CloseAll`). |
+| **DEFAULT_GROUP_ID** | `0` | The group id used by overloads that do not take a `groupId`. |
+| **DO_ALL_GROUPS** | `-1` | Passing `-1` as `groupId` extends the operation to **all groups** (equivalent to calling the `...ForAllGroups` methods). |
 
-### State Settings
-* **ignoreTimeScale**: `bool`, whether the UI ignores the influence of TimeScale.
-* **enabledUpdate / enabledFixedUpdate / enabledLateUpdate**: Controls the polling switch for the UI system.
+### Progression Callback {#progression}
 
-### Core Methods
-#### Show / Show\<T\>
-Loads and displays the UI.
-* **Params**:
-    * `int groupId`: Group ID (default 0).
-    * `string packageName`: Resource package name.
-    * `string assetName`: Resource name.
-    * `object data`: Parameters passed to `UIBase.OnShow`.
-    * `string awaitingUIAssetName`: Name of the transition UI displayed before opening.
-    * `float awaitingUIExtraDuration`: Extra duration for the transition UI (seconds).
-    * `uint priority`: Loading priority.
+The `progression` parameter of the loading methods is of type `OxGFrame.AssetLoader.Progression`:
 
-#### Close / CloseAll / CloseStackByStack
-* **Close**: Closes the specified UI.
-* **CloseAll**: Closes UIs within a group. `withoutAssetNames` can set an exclusion list.
-* **CloseStackByStack**: Closes the top-level UI within a specific Canvas (LIFO).
+```csharp
+public delegate void Progression(float progress, float currentCount, float totalCount);
+```
 
-#### SendRefreshData / SendRefreshDataToAll
-Sends data update notifications to open UIs, commonly used for **multi-language switching** refreshes, **receiving server-side data** display refreshes (e.g., after recharging, money display needs to refresh), etc.
-* **Params**: `RefreshInfo`: Contains target UI name and `object data` to be updated.
+- `progress`: overall progress (0 to 1).
+- `currentCount` / `totalCount`: number of completed items and total items.
+
+### Close, Hide & Destroy {#close-hide-destroy}
+
+- **Close** runs the regular closing flow (`OnPreClose` → `OnClose`); **Hide** merely deactivates the object and marks it hidden (triggering `OnHide`), after which **Reveal** restores it (triggering `OnReveal`). A closed object cannot be revealed.
+- Whether Close **destroys the instance** depends on: the caller passing `forceDestroy`, or the prefab having `allowInstantiate` (multi-instance) / `onCloseAndDestroy` (destroy on close) checked. When an instance is destroyed, the asset is automatically unloaded through AssetLoader (reference counting).
+- Objects with **Exclude From Close All** (`whenCloseAllToSkip`) / **Exclude From Hide All** (`whenHideAllToSkip`) checked on the prefab are skipped by `CloseAll` / `HideAll`; use the `...AndExcluded` methods to include them as well.
+
+---
+## CoreFrames.UIFrame {#uiframe}
+
+The unified UI window API. It manages all UI windows and supports `Group` multi-group management (e.g., lobby-group UIs, battle-group UIs), `Stack` management (automatic sorting-order control within a node), reverse switching (`reverseChanges`), and stack-by-stack closing (`allowCloseStackByStack`). UI instances are automatically attached to the matching node under the `Canvas`, based on `canvasName` and `nodeType` of the `UISettings` on the prefab.
+
+### Properties {#ui-properties}
+
+| Property | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| ignoreTimeScale | `bool` | `false` | Whether the UI update timing ignores `Time.timeScale` (uses unscaled time instead). |
+| enableUpdate | `bool` | `true` | Whether the UI `OnUpdate` polling is driven. |
+| enableFixedUpdate | `bool` | `true` | Whether the UI `OnFixedUpdate` polling is driven. |
+| enableLateUpdate | `bool` | `true` | Whether the UI `OnLateUpdate` polling is driven. |
+
+<Highlight color="#00d679">Reminder</Highlight> The old names `enabledUpdate` / `enabledFixedUpdate` / `enabledLateUpdate` remain as `[Obsolete]` forwards; prefer the new names.
+
+### Method Overview {#ui-overview}
+
+#### Initialization & Canvas Environment
+
+| Method | Description |
+| :--- | :--- |
+| [InitInstance](#ui-initinstance) | Initializes the `UIManager` singleton instance. |
+| [SetupAndCheckUICanvas](#ui-setupandcheckuicanvas) | Finds the Canvas object by name, then sets up and checks the UICanvas environment. |
+| [GetUICanvas](#ui-getuicanvas) | Gets the `UICanvas` component by name. |
+
+#### State Queries
+
+| Method | Description |
+| :--- | :--- |
+| [CheckIsShowing](#ui-checkisshowing) | Checks whether the given UI is showing. |
+| [CheckIsHiding](#ui-checkishiding) | Checks whether the given UI is hidden (via Hide). |
+| [CheckHasAnyHiding](#ui-checkhasanyhiding) | Checks whether any UI in the group is hidden. |
+| [CheckHasAnyHidingForAllGroups](#ui-checkhasanyhidingforallgroups) | Checks whether any UI in any group is hidden. |
+| [GetStackByStackCount](#ui-getstackbystackcount) | Gets the current size of the stack-by-stack close stack. |
+
+#### Component Access
+
+| Method | Description |
+| :--- | :--- |
+| [GetComponent\<T\>](#ui-getcomponent) | Gets the instance component of the given UI (top of the stack). |
+| [GetComponents\<T\>](#ui-getcomponents) | Gets all instance components of the given UI. |
+
+#### Data Refresh
+
+| Method | Description |
+| :--- | :--- |
+| [SendRefreshData](#ui-sendrefreshdata) | Sends a data refresh notification to specific UIs. |
+| [SendRefreshDataToAll](#ui-sendrefreshdatatoall) | Broadcasts a data refresh notification to all UIs. |
+
+#### Preloading & Showing
+
+| Method | Description |
+| :--- | :--- |
+| [Preload](#ui-preload) | Preloads UI assets into the cache. |
+| [Show](#ui-show) | Loads and shows a UI, returning its `UIBase` instance (generic supported). |
+
+#### Closing
+
+| Method | Description |
+| :--- | :--- |
+| [Close](#ui-close) | Closes the given UI. |
+| [CloseAll](#ui-closeall) | Closes all UIs in a group. |
+| [CloseAllForAllGroups](#ui-closeallforallgroups) | Closes all UIs across all groups. |
+| [CloseAllAndExcluded](#ui-closeallandexcluded) | Closes all UIs in a group, including those marked as excluded. |
+| [CloseAllAndExcludedForAllGroups](#ui-closeallandexcludedforallgroups) | Closes all UIs across all groups, including those marked as excluded. |
+| [CloseStackByStack](#ui-closestackbystack) | Closes the top UI of the given Canvas stack by stack (LIFO). |
+
+#### Hiding & Revealing
+
+| Method | Description |
+| :--- | :--- |
+| [Reveal](#ui-reveal) | Re-displays a UI that was hidden via Hide. |
+| [RevealAll](#ui-revealall) | Reveals all hidden UIs in a group. |
+| [RevealAllForAllGroups](#ui-revealallforallgroups) | Reveals all hidden UIs across all groups. |
+| [Hide](#ui-hide) | Hides the given UI (keeping its instance and state). |
+| [HideAll](#ui-hideall) | Hides all UIs in a group. |
+| [HideAllForAllGroups](#ui-hideallforallgroups) | Hides all UIs across all groups. |
+| [HideAllAndExcluded](#ui-hideallandexcluded) | Hides all UIs in a group, including those marked as excluded. |
+| [HideAllAndExcludedForAllGroups](#ui-hideallandexcludedforallgroups) | Hides all UIs across all groups, including those marked as excluded. |
 
 ---
 
-## SRFrame (Scene Resource)
+### InitInstance {#ui-initinstance}
 
-Used to manage 3D resources in the scene (such as NPCs, buildings, effect objects, management components required in the scene, AudioListener, etc.), with operation logic similar to UIFrame.
+```csharp
+public static void InitInstance()
+```
 
-### Main Operations
-* **Show / Hide / Reveal**: Controls loading display, temporary hiding, and reappearance of resources.
-* **Preload**: Asynchronously preloads resources into the cache pool to optimize runtime performance.
-    * **Params**: `uint priority`: Priority (0 is lowest).
-* **CheckHasAnyHiding**: Checks if there are any resources in a hidden state within the group.
+**Description**
 
----
-
-## USFrame (Unity Scene)
-
-Enhanced scene management system, supporting concurrent scene loading and synchronization, encapsulating Unity's native `SceneManager` functionality, and extending support for Bundle scenes.
-
-### Scene Loading Methods
-#### LoadSingleSceneAsync / LoadAdditiveSceneAsync
-* **Params**:
-    * `string sceneName`: Scene name (supports `build#` prefix).
-    * `LocalPhysicsMode localPhysicsMode`: Sets independent physics mode for the scene.
-    * `bool activateOnLoad`: Whether to automatically activate after loading.
-    * `Progression progression`: Loading progress callback.
-
-#### LoadMainAndSubScenesAsync
-<Highlight color="#0373fc">Recommended</Highlight> Loads one main scene and multiple sub-scenes at once (handles consolidation automatically).
-* **Params**:
-    * `string singleSceneName`: Main scene name.
-    * `AdditiveSceneInfo[] additiveSceneInfos`: Sub-scene information array, including `sceneName` and `activeRootGameObjects` settings.
+Explicitly initializes the `UIManager` singleton instance. The manager object is created automatically and persists across scenes (`DontDestroyOnLoad`). It is recommended to call this once during game startup so the manager is ready ahead of time.
 
 ---
 
-## CPFrame (Clone Prefab)
+### SetupAndCheckUICanvas {#ui-setupandcheckuicanvas}
 
-Specially handles the management of small objects instantiated (cloned) from Prefabs, such as drop items (e.g., first aid kits, herbs), bullets, UI template elements (e.g., item ICONs). Characteristic is that they can be directly destroyed (`Destroy`), and it will automatically link with AssetLoader for unloading to ensure correct resource counting.
+```csharp
+public static bool SetupAndCheckUICanvas(string canvasName)
+```
 
-### Core Methods
-#### LoadWithCloneAsync\<T\> / LoadWithClone\<T\>
-Loads and clones the Prefab.
-* **Params**:
-    * `Transform parent`: Mounted parent node.
-    * `bool worldPositionStays`: Whether to maintain world coordinates.
-    * `Vector3 position`: Initial coordinates.
-    * `Quaternion rotation`: Initial rotation.
-    * `Vector3? scale`: Initial scale.
+**Parameters**
 
-#### PreloadAsync\<T\> / Preload\<T\>
-Preloads the Prefab into the cache pool.
-* **Params**: `T`: Resource type inheriting from `Object`.
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| canvasName | `string` | Canvas name (must match a `Canvas` object in the scene). |
+
+**Returns**
+
+`bool` — `true` when the setup succeeds (or has already been done); `false` with an error log when no matching Canvas is found in the scene.
+
+**Description**
+
+Finds the `Canvas` object in the scene by name, then sets up and checks the `UICanvas` environment (automatically creating the `UIRoot`, the `NodeType` nodes, and the Mask / Freeze containers).
+
+<Highlight color="#00d679">Reminder</Highlight> `Show` runs this flow automatically; you can also call it manually after a scene switch to prepare the UI environment ahead of time.
+
+---
+
+### GetUICanvas {#ui-getuicanvas}
+
+```csharp
+public static UICanvas GetUICanvas(string canvasName)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| canvasName | `string` | Canvas name. |
+
+**Returns**
+
+`UICanvas` — the `UICanvas` component matching the name; `null` if the environment has not been set up or no match is found.
+
+**Description**
+
+Gets a `UICanvas` that has been set up, giving further access to its `uiRoot`, UI nodes, and the Mask / Freeze managers.
+
+---
+
+### CheckIsShowing {#ui-checkisshowing}
+
+```csharp
+public static bool CheckIsShowing(string assetName)
+public static bool CheckIsShowing(UIBase uiBase)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| assetName | `string` | UI asset name. |
+| uiBase | `UIBase` | UI instance component. |
+
+**Returns**
+
+`bool` — `true` if showing; `false` if not found or not showing.
+
+**Description**
+
+Checks whether the given UI is showing. When queried by name, the state of the **top instance** of the UI's stack is used.
+
+---
+
+### CheckIsHiding {#ui-checkishiding}
+
+```csharp
+public static bool CheckIsHiding(string assetName)
+public static bool CheckIsHiding(UIBase uiBase)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| assetName | `string` | UI asset name. |
+| uiBase | `UIBase` | UI instance component. |
+
+**Returns**
+
+`bool` — `true` if in the hidden (Hide) state; `false` if not found or not hidden.
+
+**Description**
+
+Checks whether the given UI is in the hidden state caused by [Hide](#ui-hide) (the `isHidden` flag). A UI closed via [Close](#ui-close) does not count as hidden.
+
+---
+
+### CheckHasAnyHiding {#ui-checkhasanyhiding}
+
+```csharp
+public static bool CheckHasAnyHiding()
+public static bool CheckHasAnyHiding(int groupId)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| groupId | `int` | Group id.<br/>**Default**: `0` (parameterless overload) |
+
+**Returns**
+
+`bool` — `true` when any UI in the group is hidden.
+
+**Description**
+
+Checks whether any UI in the group is in the hidden state.
+
+---
+
+### CheckHasAnyHidingForAllGroups {#ui-checkhasanyhidingforallgroups}
+
+```csharp
+public static bool CheckHasAnyHidingForAllGroups()
+```
+
+**Returns**
+
+`bool` — `true` when any UI in any group is hidden.
+
+**Description**
+
+Behaves like [CheckHasAnyHiding](#ui-checkhasanyhiding), but checks **all groups**.
+
+---
+
+### GetStackByStackCount {#ui-getstackbystackcount}
+
+```csharp
+public static int GetStackByStackCount(string canvasName)
+public static int GetStackByStackCount(int groupId, string canvasName)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| groupId | `int` | Group id.<br/>**Default**: `0` (overloads without it) |
+| canvasName | `string` | Canvas name. |
+
+**Returns**
+
+`int` — the current size of the stack-by-stack close stack for that group + Canvas; `0` if not found.
+
+**Description**
+
+Gets the size of the stack-by-stack close stack. Only UIs with `allowCloseStackByStack` enabled are counted (pushed when opened via `Show`). Use together with [CloseStackByStack](#ui-closestackbystack).
+
+---
+
+### GetComponent\<T\> {#ui-getcomponent}
+
+```csharp
+public static T GetComponent<T>(string assetName) where T : UIBase
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| assetName | `string` | UI asset name. |
+
+**Returns**
+
+`T` — the top instance component of the UI's stack; `null` if not found.
+
+**Description**
+
+Gets the instance component of the given UI, castable to a subclass for advanced operations.
+
+**Example**
+
+```csharp
+var playerUI = CoreFrames.UIFrame.GetComponent<PlayerUI>("PlayerUI");
+if (playerUI != null)
+{
+    // Perform advanced operations on the instance
+}
+```
+
+---
+
+### GetComponents\<T\> {#ui-getcomponents}
+
+```csharp
+public static T[] GetComponents<T>(string assetName) where T : UIBase
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| assetName | `string` | UI asset name. |
+
+**Returns**
+
+`T[]` — all instance components of the UI; an empty array if none is found.
+
+**Description**
+
+Gets **all** instance components of the given UI. Useful for batch access when multiple instances of a UI with `allowInstantiate` (multi-instance) enabled exist at once.
+
+---
+
+### SendRefreshData {#ui-sendrefreshdata}
+
+```csharp
+public static void SendRefreshData(RefreshInfo refreshInfo)
+public static void SendRefreshData(RefreshInfo[] refreshInfos)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| refreshInfo | `RefreshInfo` | Refresh info struct holding the target UI asset name and the data to pass: `new RefreshInfo(assetName, data)`. |
+| refreshInfos | `RefreshInfo[]` | Array of refresh infos (notify multiple UIs in batch). |
+
+**Description**
+
+Sends a refresh notification to **all instances** of the given UI, triggering their `OnReceiveAndRefresh(data)` (both showing and hidden instances receive it). Commonly used for **language-switch** refreshes and display refreshes after **receiving server data** (e.g., refreshing the money display after a top-up).
+
+**Example**
+
+```csharp
+// Tell PlayerUI to refresh the coin display
+CoreFrames.UIFrame.SendRefreshData(new RefreshInfo("PlayerUI", newCoinAmount));
+```
+
+---
+
+### SendRefreshDataToAll {#ui-sendrefreshdatatoall}
+
+```csharp
+public static void SendRefreshDataToAll()
+public static void SendRefreshDataToAll(object data)
+public static void SendRefreshDataToAll(RefreshInfo[] specificRefreshInfos)
+public static void SendRefreshDataToAll(object data, RefreshInfo[] specificRefreshInfos)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| data | `object` | Shared data broadcast to all UIs.<br/>**Default**: `null` (notification only, no data) |
+| specificRefreshInfos | `RefreshInfo[]` | Specific list. UIs on the list receive the data from their own `RefreshInfo`, while the rest receive the shared `data`. |
+
+**Description**
+
+Broadcasts a refresh notification to **all** UIs, triggering `OnReceiveAndRefresh` on each instance. Commonly used to refresh every UI after a language switch.
+
+**Example**
+
+```csharp
+// After switching languages, tell all UIs to refresh their texts
+CoreFrames.UIFrame.SendRefreshDataToAll();
+```
+
+---
+
+### Preload {#ui-preload}
+
+```csharp
+public static async UniTask Preload(string assetName, uint priority = 0, Progression progression = null)
+public static async UniTask Preload(string packageName, string assetName, uint priority = 0, Progression progression = null)
+public static async UniTask Preload(string[] assetNames, uint priority = 0, Progression progression = null)
+public static async UniTask Preload(string packageName, string[] assetNames, uint priority = 0, Progression progression = null)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. If omitted, the default package is used. |
+| assetName | `string` | UI asset name (bundle assets use their Address; supports the `res#` prefix). |
+| assetNames | `string[]` | Array of UI asset names (batch preloading). |
+| priority | `uint` | Asset loading priority.<br/>**Default**: `0` |
+| progression | `Progression` | Loading progress callback.<br/>**Default**: `null` |
+
+**Returns**
+
+`UniTask` — an awaitable async operation.
+
+**Description**
+
+Loads UI assets into the cache ahead of time (without showing them), so a later [Show](#ui-show) call can use them immediately without a loading delay.
+
+**Example**
+
+```csharp
+// Preload frequently used UIs in batch
+await CoreFrames.UIFrame.Preload(new string[] { "PlayerUI", "SettingsUI" });
+```
+
+---
+
+### Show {#ui-show}
+
+```csharp
+public static async UniTask<UIBase> Show(string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f)
+public static async UniTask<UIBase> Show(string packageName, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f)
+public static async UniTask<UIBase> Show(int groupId, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f)
+public static async UniTask<UIBase> Show(int groupId, string packageName, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f)
+public static async UniTask<T> Show<T>(string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f) where T : UIBase
+public static async UniTask<T> Show<T>(string packageName, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f) where T : UIBase
+public static async UniTask<T> Show<T>(int groupId, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f) where T : UIBase
+public static async UniTask<T> Show<T>(int groupId, string packageName, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f) where T : UIBase
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| groupId | `int` | Group id.<br/>**Default**: `0` (overloads without it) |
+| packageName | `string` | Package name. If omitted, the default package is used. |
+| assetName | `string` | UI asset name (bundle assets use their Address; supports the `res#` prefix). |
+| data | `object` | Data passed to the UI's `OnShow(obj)`.<br/>**Default**: `null` |
+| awaitingUIAssetName | `string` | Transition UI asset name. Shown before the main UI opens (e.g., a loading overlay) and closed automatically once the main UI has opened.<br/>**Default**: `null` (no transition UI) |
+| priority | `uint` | Asset loading priority.<br/>**Default**: `0` |
+| progression | `Progression` | Loading progress callback.<br/>**Default**: `null` |
+| parent | `Transform` | Parent node to attach to.<br/>**Default**: `null` (attached automatically to the matching node under the UICanvas, based on `uiSettings.nodeType`) |
+| awaitingUIExtraDuration | `float` | Extra time in seconds the transition UI stays visible.<br/>**Default**: `0f` |
+
+**Returns**
+
+`UniTask<UIBase>` — the opened UI instance component (generic overloads return `UniTask<T>`); `null` with an error log when loading fails (asset not found).
+
+**Description**
+
+Loads and shows a UI, recording its `groupId` for batch-operation filtering. Opening triggers `OnPreShow` → `OnShow` in order.
+
+<Highlight color="#0373fc">Attention</Highlight>
+
+- If the same UI is **already showing** and `allowInstantiate` is not checked, it is not opened again — a warning is logged and the existing instance is returned.
+- When a UI with `reverseChanges` (reverse switching) enabled opens, the previous UI in the reverse stack of the same Canvas is hidden automatically; closing it restores the previous UI.
+
+**Example**
+
+```csharp
+// Open a UI and pass data
+var ui = await CoreFrames.UIFrame.Show("PlayerUI", new PlayerData(100));
+
+// Open generically to get the subclass directly
+var playerUI = await CoreFrames.UIFrame.Show<PlayerUI>("PlayerUI");
+
+// Open with a specific group and package
+await CoreFrames.UIFrame.Show(1, "OtherPackage", "BattleUI");
+
+// Show a transition UI first (staying an extra 0.5 seconds)
+await CoreFrames.UIFrame.Show("LobbyUI", null, "LoadingUI", awaitingUIExtraDuration: 0.5f);
+```
+
+---
+
+### Close {#ui-close}
+
+```csharp
+public static void Close(string assetName, bool disableOnPreClose = false, bool forceDestroy = false)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| assetName | `string` | UI asset name. |
+| disableOnPreClose | `bool` | Whether to skip the `OnPreClose` callback.<br/>**Default**: `false` |
+| forceDestroy | `bool` | Whether to destroy the instance forcibly. If not forced, the `allowInstantiate` / `onCloseAndDestroy` settings on the prefab decide.<br/>**Default**: `false` |
+
+**Description**
+
+Closes the given UI (for multi-instance UIs, the **top** instance of the stack). Does nothing when the UI is not showing and `forceDestroy` is not passed. When instances are destroyed, the asset is unloaded accordingly (see [Close, Hide & Destroy](#close-hide-destroy)).
+
+**Example**
+
+```csharp
+// Regular close (the prefab settings decide whether to destroy)
+CoreFrames.UIFrame.Close("PlayerUI");
+
+// Force destroy + skip OnPreClose
+CoreFrames.UIFrame.Close("PlayerUI", true, true);
+```
+
+---
+
+### CloseAll {#ui-closeall}
+
+```csharp
+public static void CloseAll(bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+public static void CloseAll(int groupId, bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| groupId | `int` | Group id.<br/>**Default**: `0` (overloads without it) |
+| disableOnPreClose | `bool` | Whether to skip the `OnPreClose` callback.<br/>**Default**: `false` |
+| forceDestroy | `bool` | Whether to destroy the instances forcibly.<br/>**Default**: `false` |
+| withoutAssetNames | `params string[]` | Exclusion list. UIs on the list are not closed. |
+
+**Description**
+
+Closes **all UIs** in the group (including every instance in each UI's stack).
+
+<Highlight color="#0373fc">Attention</Highlight>
+
+- UIs with **Exclude From Close All** (`whenCloseAllToSkip`) checked are skipped — use [CloseAllAndExcluded](#ui-closeallandexcluded) instead.
+- UIs that are not showing are skipped (unless `forceDestroy` is passed or the UI has `allowInstantiate` checked).
+
+**Example**
+
+```csharp
+// Close all UIs in the default group, but keep MainMenuUI
+CoreFrames.UIFrame.CloseAll(false, false, "MainMenuUI");
+```
+
+---
+
+### CloseAllForAllGroups {#ui-closeallforallgroups}
+
+```csharp
+public static void CloseAllForAllGroups(bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| disableOnPreClose | `bool` | Whether to skip the `OnPreClose` callback.<br/>**Default**: `false` |
+| forceDestroy | `bool` | Whether to destroy the instances forcibly.<br/>**Default**: `false` |
+| withoutAssetNames | `params string[]` | Exclusion list. |
+
+**Description**
+
+Behaves like [CloseAll](#ui-closeall), but applies to **all groups**.
+
+---
+
+### CloseAllAndExcluded {#ui-closeallandexcluded}
+
+```csharp
+public static void CloseAllAndExcluded(bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+public static void CloseAllAndExcluded(int groupId, bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| groupId | `int` | Group id.<br/>**Default**: `0` (overloads without it) |
+| disableOnPreClose | `bool` | Whether to skip the `OnPreClose` callback.<br/>**Default**: `false` |
+| forceDestroy | `bool` | Whether to destroy the instances forcibly.<br/>**Default**: `false` |
+| withoutAssetNames | `params string[]` | Exclusion list (still effective). |
+
+**Description**
+
+Behaves like [CloseAll](#ui-closeall), but **also closes** UIs with **Exclude From Close All** (`whenCloseAllToSkip`) checked.
+
+---
+
+### CloseAllAndExcludedForAllGroups {#ui-closeallandexcludedforallgroups}
+
+```csharp
+public static void CloseAllAndExcludedForAllGroups(bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| disableOnPreClose | `bool` | Whether to skip the `OnPreClose` callback.<br/>**Default**: `false` |
+| forceDestroy | `bool` | Whether to destroy the instances forcibly.<br/>**Default**: `false` |
+| withoutAssetNames | `params string[]` | Exclusion list. |
+
+**Description**
+
+Behaves like [CloseAllAndExcluded](#ui-closeallandexcluded), but applies to **all groups**.
+
+---
+
+### CloseStackByStack {#ui-closestackbystack}
+
+```csharp
+public static void CloseStackByStack(string canvasName, bool disableOnPreClose = false, bool forceDestroy = false)
+public static void CloseStackByStack(int groupId, string canvasName, bool disableOnPreClose = false, bool forceDestroy = false)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| groupId | `int` | Group id.<br/>**Default**: `0` (overloads without it) |
+| canvasName | `string` | Canvas name. |
+| disableOnPreClose | `bool` | Whether to skip the `OnPreClose` callback.<br/>**Default**: `false` |
+| forceDestroy | `bool` | Whether to destroy the instance forcibly.<br/>**Default**: `false` |
+
+**Description**
+
+Closes the **topmost (most recently opened)** UI in the stack-by-stack close stack of the given group + Canvas (LIFO). Only affects UIs with `allowCloseStackByStack` enabled — commonly used to implement back-key behavior that closes windows one layer at a time.
+
+**Example**
+
+```csharp
+// Back key: close the top UI layer by layer
+if (CoreFrames.UIFrame.GetStackByStackCount("Canvas") > 0)
+    CoreFrames.UIFrame.CloseStackByStack("Canvas");
+```
+
+---
+
+### Reveal {#ui-reveal}
+
+```csharp
+public static void Reveal(string assetName)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| assetName | `string` | UI asset name. |
+
+**Description**
+
+Re-displays a UI hidden via [Hide](#ui-hide), triggering `OnReveal` (not `OnShow`). Only works on hidden UIs (a UI closed via Close cannot be revealed); a warning is logged if the UI is already showing.
+
+---
+
+### RevealAll {#ui-revealall}
+
+```csharp
+public static void RevealAll()
+public static void RevealAll(int groupId)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| groupId | `int` | Group id.<br/>**Default**: `0` (parameterless overload) |
+
+**Description**
+
+Reveals **all** hidden UIs in the group.
+
+---
+
+### RevealAllForAllGroups {#ui-revealallforallgroups}
+
+```csharp
+public static void RevealAllForAllGroups()
+```
+
+**Description**
+
+Behaves like [RevealAll](#ui-revealall), but applies to **all groups**.
+
+---
+
+### Hide {#ui-hide}
+
+```csharp
+public static void Hide(string assetName)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| assetName | `string` | UI asset name. |
+
+**Description**
+
+Hides **all instances** of the given UI (only deactivating the objects and setting the `isHidden` flag, keeping instances and data state), triggering `OnHide`. The UI can then be restored via [Reveal](#ui-reveal) or [Show](#ui-show).
+
+**Example**
+
+```csharp
+// Hide temporarily (state preserved)
+CoreFrames.UIFrame.Hide("PlayerUI");
+
+// Reveal again
+CoreFrames.UIFrame.Reveal("PlayerUI");
+```
+
+---
+
+### HideAll {#ui-hideall}
+
+```csharp
+public static void HideAll(params string[] withoutAssetNames)
+public static void HideAll(int groupId, params string[] withoutAssetNames)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| groupId | `int` | Group id.<br/>**Default**: `0` (overloads without it) |
+| withoutAssetNames | `params string[]` | Exclusion list. UIs on the list are not hidden. |
+
+**Description**
+
+Hides **all UIs** in the group.
+
+<Highlight color="#0373fc">Attention</Highlight> UIs with **Exclude From Hide All** (`whenHideAllToSkip`) checked are skipped (unless the UI has `reverseChanges` enabled, in which case it is still hidden) — use [HideAllAndExcluded](#ui-hideallandexcluded) instead.
+
+---
+
+### HideAllForAllGroups {#ui-hideallforallgroups}
+
+```csharp
+public static void HideAllForAllGroups(params string[] withoutAssetNames)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| withoutAssetNames | `params string[]` | Exclusion list. |
+
+**Description**
+
+Behaves like [HideAll](#ui-hideall), but applies to **all groups**.
+
+---
+
+### HideAllAndExcluded {#ui-hideallandexcluded}
+
+```csharp
+public static void HideAllAndExcluded(params string[] withoutAssetNames)
+public static void HideAllAndExcluded(int groupId, params string[] withoutAssetNames)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| groupId | `int` | Group id.<br/>**Default**: `0` (overloads without it) |
+| withoutAssetNames | `params string[]` | Exclusion list (still effective). |
+
+**Description**
+
+Behaves like [HideAll](#ui-hideall), but **also hides** UIs with **Exclude From Hide All** (`whenHideAllToSkip`) checked.
+
+---
+
+### HideAllAndExcludedForAllGroups {#ui-hideallandexcludedforallgroups}
+
+```csharp
+public static void HideAllAndExcludedForAllGroups(params string[] withoutAssetNames)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| withoutAssetNames | `params string[]` | Exclusion list. |
+
+**Description**
+
+Behaves like [HideAllAndExcluded](#ui-hideallandexcluded), but applies to **all groups**.
+
+---
+## CoreFrames.SRFrame {#srframe}
+
+The unified Scene Resource API. It manages 3D resources in a scene (such as NPCs, buildings, effect objects, in-scene management components, an AudioListener, etc.). Its operation logic mirrors `UIFrame` (group management, Show / Close / Hide / Reveal, data refresh), but without the Canvas node and stack sorting mechanics. Instances are attached under the `SRManager` node by default.
+
+### Properties {#sr-properties}
+
+| Property | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| ignoreTimeScale | `bool` | `false` | Whether the SR update timing ignores `Time.timeScale` (uses unscaled time instead). |
+| enableUpdate | `bool` | `true` | Whether the SR `OnUpdate` polling is driven. |
+| enableFixedUpdate | `bool` | `true` | Whether the SR `OnFixedUpdate` polling is driven. |
+| enableLateUpdate | `bool` | `true` | Whether the SR `OnLateUpdate` polling is driven. |
+
+<Highlight color="#00d679">Reminder</Highlight> The old names `enabledUpdate` / `enabledFixedUpdate` / `enabledLateUpdate` remain as `[Obsolete]` forwards; prefer the new names.
+
+### Method Overview {#sr-overview}
+
+#### Initialization
+
+| Method | Description |
+| :--- | :--- |
+| [InitInstance](#sr-initinstance) | Initializes the `SRManager` singleton instance. |
+
+#### State Queries
+
+| Method | Description |
+| :--- | :--- |
+| [CheckIsShowing](#sr-checkisshowing) | Checks whether the given SR is showing. |
+| [CheckIsHiding](#sr-checkishiding) | Checks whether the given SR is hidden (via Hide). |
+| [CheckHasAnyHiding](#sr-checkhasanyhiding) | Checks whether any SR in the group is hidden. |
+| [CheckHasAnyHidingForAllGroups](#sr-checkhasanyhidingforallgroups) | Checks whether any SR in any group is hidden. |
+
+#### Component Access
+
+| Method | Description |
+| :--- | :--- |
+| [GetComponent\<T\>](#sr-getcomponent) | Gets the instance component of the given SR (top of the stack). |
+| [GetComponents\<T\>](#sr-getcomponents) | Gets all instance components of the given SR. |
+
+#### Data Refresh
+
+| Method | Description |
+| :--- | :--- |
+| [SendRefreshData](#sr-sendrefreshdata) | Sends a data refresh notification to specific SRs. |
+| [SendRefreshDataToAll](#sr-sendrefreshdatatoall) | Broadcasts a data refresh notification to all SRs. |
+
+#### Preloading & Showing
+
+| Method | Description |
+| :--- | :--- |
+| [Preload](#sr-preload) | Preloads SR assets into the cache. |
+| [Show](#sr-show) | Loads and shows an SR, returning its `SRBase` instance (generic supported). |
+
+#### Closing
+
+| Method | Description |
+| :--- | :--- |
+| [Close](#sr-close) | Closes the given SR. |
+| [CloseAll](#sr-closeall) | Closes all SRs in a group. |
+| [CloseAllForAllGroups](#sr-closeallforallgroups) | Closes all SRs across all groups. |
+| [CloseAllAndExcluded](#sr-closeallandexcluded) | Closes all SRs in a group, including those marked as excluded. |
+| [CloseAllAndExcludedForAllGroups](#sr-closeallandexcludedforallgroups) | Closes all SRs across all groups, including those marked as excluded. |
+
+#### Hiding & Revealing
+
+| Method | Description |
+| :--- | :--- |
+| [Reveal](#sr-reveal) | Re-displays an SR that was hidden via Hide. |
+| [RevealAll](#sr-revealall) | Reveals all hidden SRs in a group. |
+| [RevealAllForAllGroups](#sr-revealallforallgroups) | Reveals all hidden SRs across all groups. |
+| [Hide](#sr-hide) | Hides the given SR (keeping its instance and state). |
+| [HideAll](#sr-hideall) | Hides all SRs in a group. |
+| [HideAllForAllGroups](#sr-hideallforallgroups) | Hides all SRs across all groups. |
+| [HideAllAndExcluded](#sr-hideallandexcluded) | Hides all SRs in a group, including those marked as excluded. |
+| [HideAllAndExcludedForAllGroups](#sr-hideallandexcludedforallgroups) | Hides all SRs across all groups, including those marked as excluded. |
+
+---
+
+### InitInstance {#sr-initinstance}
+
+```csharp
+public static void InitInstance()
+```
+
+**Description**
+
+Explicitly initializes the `SRManager` singleton instance. The manager object is created automatically and persists across scenes (`DontDestroyOnLoad`). It is recommended to call this once during game startup so the manager is ready ahead of time.
+
+---
+
+### CheckIsShowing {#sr-checkisshowing}
+
+```csharp
+public static bool CheckIsShowing(string assetName)
+public static bool CheckIsShowing(SRBase srBase)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| assetName | `string` | SR asset name. |
+| srBase | `SRBase` | SR instance component. |
+
+**Returns**
+
+`bool` — `true` if showing; `false` if not found or not showing.
+
+**Description**
+
+Checks whether the given SR is showing. When queried by name, the state of the **top instance** of the SR's stack is used.
+
+---
+
+### CheckIsHiding {#sr-checkishiding}
+
+```csharp
+public static bool CheckIsHiding(string assetName)
+public static bool CheckIsHiding(SRBase srBase)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| assetName | `string` | SR asset name. |
+| srBase | `SRBase` | SR instance component. |
+
+**Returns**
+
+`bool` — `true` if in the hidden (Hide) state; `false` if not found or not hidden.
+
+**Description**
+
+Checks whether the given SR is in the hidden state caused by [Hide](#sr-hide) (the `isHidden` flag). An SR closed via [Close](#sr-close) does not count as hidden.
+
+---
+
+### CheckHasAnyHiding {#sr-checkhasanyhiding}
+
+```csharp
+public static bool CheckHasAnyHiding()
+public static bool CheckHasAnyHiding(int groupId)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| groupId | `int` | Group id.<br/>**Default**: `0` (parameterless overload) |
+
+**Returns**
+
+`bool` — `true` when any SR in the group is hidden.
+
+**Description**
+
+Checks whether any SR in the group is in the hidden state.
+
+---
+
+### CheckHasAnyHidingForAllGroups {#sr-checkhasanyhidingforallgroups}
+
+```csharp
+public static bool CheckHasAnyHidingForAllGroups()
+```
+
+**Returns**
+
+`bool` — `true` when any SR in any group is hidden.
+
+**Description**
+
+Behaves like [CheckHasAnyHiding](#sr-checkhasanyhiding), but checks **all groups**.
+
+---
+
+### GetComponent\<T\> {#sr-getcomponent}
+
+```csharp
+public static T GetComponent<T>(string assetName) where T : SRBase
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| assetName | `string` | SR asset name. |
+
+**Returns**
+
+`T` — the top instance component of the SR's stack; `null` if not found.
+
+**Description**
+
+Gets the instance component of the given SR, castable to a subclass for advanced operations.
+
+**Example**
+
+```csharp
+var battleField = CoreFrames.SRFrame.GetComponent<BattleFieldSR>("BattleField");
+```
+
+---
+
+### GetComponents\<T\> {#sr-getcomponents}
+
+```csharp
+public static T[] GetComponents<T>(string assetName) where T : SRBase
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| assetName | `string` | SR asset name. |
+
+**Returns**
+
+`T[]` — all instance components of the SR; an empty array if none is found.
+
+**Description**
+
+Gets **all** instance components of the given SR. Useful for batch access when multiple instances of an SR with `allowInstantiate` (multi-instance) enabled exist at once.
+
+---
+
+### SendRefreshData {#sr-sendrefreshdata}
+
+```csharp
+public static void SendRefreshData(RefreshInfo refreshInfo)
+public static void SendRefreshData(RefreshInfo[] refreshInfos)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| refreshInfo | `RefreshInfo` | Refresh info struct holding the target SR asset name and the data to pass: `new RefreshInfo(assetName, data)`. |
+| refreshInfos | `RefreshInfo[]` | Array of refresh infos (notify multiple SRs in batch). |
+
+**Description**
+
+Sends a refresh notification to **all instances** of the given SR, triggering their `OnReceiveAndRefresh(data)` (both showing and hidden instances receive it).
+
+---
+
+### SendRefreshDataToAll {#sr-sendrefreshdatatoall}
+
+```csharp
+public static void SendRefreshDataToAll()
+public static void SendRefreshDataToAll(object data)
+public static void SendRefreshDataToAll(RefreshInfo[] specificRefreshInfos)
+public static void SendRefreshDataToAll(object data, RefreshInfo[] specificRefreshInfos)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| data | `object` | Shared data broadcast to all SRs.<br/>**Default**: `null` (notification only, no data) |
+| specificRefreshInfos | `RefreshInfo[]` | Specific list. SRs on the list receive the data from their own `RefreshInfo`, while the rest receive the shared `data`. |
+
+**Description**
+
+Broadcasts a refresh notification to **all** SRs, triggering `OnReceiveAndRefresh` on each instance.
+
+---
+
+### Preload {#sr-preload}
+
+```csharp
+public static async UniTask Preload(string assetName, uint priority = 0, Progression progression = null)
+public static async UniTask Preload(string packageName, string assetName, uint priority = 0, Progression progression = null)
+public static async UniTask Preload(string[] assetNames, uint priority = 0, Progression progression = null)
+public static async UniTask Preload(string packageName, string[] assetNames, uint priority = 0, Progression progression = null)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. If omitted, the default package is used. |
+| assetName | `string` | SR asset name (bundle assets use their Address; supports the `res#` prefix). |
+| assetNames | `string[]` | Array of SR asset names (batch preloading). |
+| priority | `uint` | Asset loading priority.<br/>**Default**: `0` |
+| progression | `Progression` | Loading progress callback.<br/>**Default**: `null` |
+
+**Returns**
+
+`UniTask` — an awaitable async operation.
+
+**Description**
+
+Loads SR assets into the cache ahead of time (without showing them), so a later [Show](#sr-show) call can use them immediately without a loading delay, improving runtime performance.
+
+**Example**
+
+```csharp
+await CoreFrames.SRFrame.Preload("BattleField");
+```
+
+---
+
+### Show {#sr-show}
+
+```csharp
+public static async UniTask<SRBase> Show(string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f)
+public static async UniTask<SRBase> Show(string packageName, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f)
+public static async UniTask<SRBase> Show(int groupId, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f)
+public static async UniTask<SRBase> Show(int groupId, string packageName, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f)
+public static async UniTask<T> Show<T>(string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f) where T : SRBase
+public static async UniTask<T> Show<T>(string packageName, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f) where T : SRBase
+public static async UniTask<T> Show<T>(int groupId, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f) where T : SRBase
+public static async UniTask<T> Show<T>(int groupId, string packageName, string assetName, object data = null, string awaitingUIAssetName = null, uint priority = 0, Progression progression = null, Transform parent = null, float awaitingUIExtraDuration = 0f) where T : SRBase
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| groupId | `int` | Group id.<br/>**Default**: `0` (overloads without it) |
+| packageName | `string` | Package name. If omitted, the default package is used. |
+| assetName | `string` | SR asset name (bundle assets use their Address; supports the `res#` prefix). |
+| data | `object` | Data passed to the SR's `OnShow(obj)`.<br/>**Default**: `null` |
+| awaitingUIAssetName | `string` | Transition UI asset name (a **UIFrame** UI). Shown before the SR opens and closed automatically once the SR has opened.<br/>**Default**: `null` (no transition UI) |
+| priority | `uint` | Asset loading priority.<br/>**Default**: `0` |
+| progression | `Progression` | Loading progress callback.<br/>**Default**: `null` |
+| parent | `Transform` | Parent node to attach to.<br/>**Default**: `null` (attached under the `SRManager` node) |
+| awaitingUIExtraDuration | `float` | Extra time in seconds the transition UI stays visible.<br/>**Default**: `0f` |
+
+**Returns**
+
+`UniTask<SRBase>` — the opened SR instance component (generic overloads return `UniTask<T>`); `null` with an error log when loading fails (asset not found).
+
+**Description**
+
+Loads and shows a scene resource, recording its `groupId` for batch-operation filtering. Opening triggers `OnPreShow` → `OnShow` in order.
+
+<Highlight color="#0373fc">Attention</Highlight> If the same SR is **already showing** and `allowInstantiate` is not checked, it is not opened again — a warning is logged and the existing instance is returned.
+
+**Example**
+
+```csharp
+// Show a scene resource
+var sr = await CoreFrames.SRFrame.Show("BattleField");
+
+// Open generically with a specific parent
+var npc = await CoreFrames.SRFrame.Show<NpcSR>("VillageNpc", parent: npcRoot);
+
+// Open with a specific group
+await CoreFrames.SRFrame.Show(2, "BattleEffects");
+```
+
+---
+
+### Close {#sr-close}
+
+```csharp
+public static void Close(string assetName, bool disableOnPreClose = false, bool forceDestroy = false)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| assetName | `string` | SR asset name. |
+| disableOnPreClose | `bool` | Whether to skip the `OnPreClose` callback.<br/>**Default**: `false` |
+| forceDestroy | `bool` | Whether to destroy the instance forcibly. If not forced, the `allowInstantiate` / `onCloseAndDestroy` settings on the prefab decide.<br/>**Default**: `false` |
+
+**Description**
+
+Closes the given SR (for multi-instance SRs, the **top** instance of the stack). Does nothing when the SR is not showing and `forceDestroy` is not passed. When instances are destroyed, the asset is unloaded accordingly (see [Close, Hide & Destroy](#close-hide-destroy)).
+
+**Example**
+
+```csharp
+CoreFrames.SRFrame.Close("BattleField");
+```
+
+---
+
+### CloseAll {#sr-closeall}
+
+```csharp
+public static void CloseAll(bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+public static void CloseAll(int groupId, bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| groupId | `int` | Group id.<br/>**Default**: `0` (overloads without it) |
+| disableOnPreClose | `bool` | Whether to skip the `OnPreClose` callback.<br/>**Default**: `false` |
+| forceDestroy | `bool` | Whether to destroy the instances forcibly.<br/>**Default**: `false` |
+| withoutAssetNames | `params string[]` | Exclusion list. SRs on the list are not closed. |
+
+**Description**
+
+Closes **all SRs** in the group (including every instance in each SR's stack).
+
+<Highlight color="#0373fc">Attention</Highlight>
+
+- SRs with **Exclude From Close All** (`whenCloseAllToSkip`) checked are skipped — use [CloseAllAndExcluded](#sr-closeallandexcluded) instead.
+- SRs that are not showing are skipped (unless `forceDestroy` is passed).
+
+---
+
+### CloseAllForAllGroups {#sr-closeallforallgroups}
+
+```csharp
+public static void CloseAllForAllGroups(bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| disableOnPreClose | `bool` | Whether to skip the `OnPreClose` callback.<br/>**Default**: `false` |
+| forceDestroy | `bool` | Whether to destroy the instances forcibly.<br/>**Default**: `false` |
+| withoutAssetNames | `params string[]` | Exclusion list. |
+
+**Description**
+
+Behaves like [CloseAll](#sr-closeall), but applies to **all groups**.
+
+---
+
+### CloseAllAndExcluded {#sr-closeallandexcluded}
+
+```csharp
+public static void CloseAllAndExcluded(bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+public static void CloseAllAndExcluded(int groupId, bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| groupId | `int` | Group id.<br/>**Default**: `0` (overloads without it) |
+| disableOnPreClose | `bool` | Whether to skip the `OnPreClose` callback.<br/>**Default**: `false` |
+| forceDestroy | `bool` | Whether to destroy the instances forcibly.<br/>**Default**: `false` |
+| withoutAssetNames | `params string[]` | Exclusion list (still effective). |
+
+**Description**
+
+Behaves like [CloseAll](#sr-closeall), but **also closes** SRs with **Exclude From Close All** (`whenCloseAllToSkip`) checked.
+
+---
+
+### CloseAllAndExcludedForAllGroups {#sr-closeallandexcludedforallgroups}
+
+```csharp
+public static void CloseAllAndExcludedForAllGroups(bool disableOnPreClose = false, bool forceDestroy = false, params string[] withoutAssetNames)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| disableOnPreClose | `bool` | Whether to skip the `OnPreClose` callback.<br/>**Default**: `false` |
+| forceDestroy | `bool` | Whether to destroy the instances forcibly.<br/>**Default**: `false` |
+| withoutAssetNames | `params string[]` | Exclusion list. |
+
+**Description**
+
+Behaves like [CloseAllAndExcluded](#sr-closeallandexcluded), but applies to **all groups**.
+
+---
+
+### Reveal {#sr-reveal}
+
+```csharp
+public static void Reveal(string assetName)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| assetName | `string` | SR asset name. |
+
+**Description**
+
+Re-displays an SR hidden via [Hide](#sr-hide), triggering `OnReveal` (not `OnShow`). Only works on hidden SRs (an SR closed via Close cannot be revealed); a warning is logged if the SR is already showing.
+
+---
+
+### RevealAll {#sr-revealall}
+
+```csharp
+public static void RevealAll()
+public static void RevealAll(int groupId)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| groupId | `int` | Group id.<br/>**Default**: `0` (parameterless overload) |
+
+**Description**
+
+Reveals **all** hidden SRs in the group.
+
+---
+
+### RevealAllForAllGroups {#sr-revealallforallgroups}
+
+```csharp
+public static void RevealAllForAllGroups()
+```
+
+**Description**
+
+Behaves like [RevealAll](#sr-revealall), but applies to **all groups**.
+
+---
+
+### Hide {#sr-hide}
+
+```csharp
+public static void Hide(string assetName)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| assetName | `string` | SR asset name. |
+
+**Description**
+
+Hides **all instances** of the given SR (only deactivating the objects and setting the `isHidden` flag, keeping instances and data state), triggering `OnHide`. The SR can then be restored via [Reveal](#sr-reveal) or [Show](#sr-show).
+
+**Example**
+
+```csharp
+// Hide the scene resource temporarily (state preserved)
+CoreFrames.SRFrame.Hide("BattleField");
+
+// Reveal again
+CoreFrames.SRFrame.Reveal("BattleField");
+```
+
+---
+
+### HideAll {#sr-hideall}
+
+```csharp
+public static void HideAll(params string[] withoutAssetNames)
+public static void HideAll(int groupId, params string[] withoutAssetNames)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| groupId | `int` | Group id.<br/>**Default**: `0` (overloads without it) |
+| withoutAssetNames | `params string[]` | Exclusion list. SRs on the list are not hidden. |
+
+**Description**
+
+Hides **all SRs** in the group.
+
+<Highlight color="#0373fc">Attention</Highlight> SRs with **Exclude From Hide All** (`whenHideAllToSkip`) checked are skipped — use [HideAllAndExcluded](#sr-hideallandexcluded) instead.
+
+---
+
+### HideAllForAllGroups {#sr-hideallforallgroups}
+
+```csharp
+public static void HideAllForAllGroups(params string[] withoutAssetNames)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| withoutAssetNames | `params string[]` | Exclusion list. |
+
+**Description**
+
+Behaves like [HideAll](#sr-hideall), but applies to **all groups**.
+
+---
+
+### HideAllAndExcluded {#sr-hideallandexcluded}
+
+```csharp
+public static void HideAllAndExcluded(params string[] withoutAssetNames)
+public static void HideAllAndExcluded(int groupId, params string[] withoutAssetNames)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| groupId | `int` | Group id.<br/>**Default**: `0` (overloads without it) |
+| withoutAssetNames | `params string[]` | Exclusion list (still effective). |
+
+**Description**
+
+Behaves like [HideAll](#sr-hideall), but **also hides** SRs with **Exclude From Hide All** (`whenHideAllToSkip`) checked.
+
+---
+
+### HideAllAndExcludedForAllGroups {#sr-hideallandexcludedforallgroups}
+
+```csharp
+public static void HideAllAndExcludedForAllGroups(params string[] withoutAssetNames)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| withoutAssetNames | `params string[]` | Exclusion list. |
+
+**Description**
+
+Behaves like [HideAllAndExcluded](#sr-hideallandexcluded), but applies to **all groups**.
+
+---
+## CoreFrames.USFrame {#usframe}
+
+The unified Unity Scene API. An enhanced scene management system that wraps Unity's native `SceneManager` and extends it with **bundle scene** support — Single / Additive multi-scene loading, combined main + sub scene loading, merged progress reporting, frame-sliced root-object activation, and scene unloading.
+
+<Highlight color="#00d679">Reminder</Highlight> Scene names support the `build#` prefix: with the prefix, scenes load from **Build Settings**; without it, they load from the **Asset Bundle (YooAsset)** (see [Name Prefix Resolution](#asset-name-prefix)).
+
+### Method Overview {#us-overview}
+
+#### Initialization & Scene Queries
+
+| Method | Description |
+| :--- | :--- |
+| [InitInstance](#us-initinstance) | Initializes the `USManager` singleton instance. |
+| [SceneCount](#us-scenecount) | Gets the number of currently loaded scenes. |
+| [GetActiveScene](#us-getactivescene) | Gets the current active scene. |
+| [GetSceneAt](#us-getsceneat) | Gets a loaded scene by index. |
+| [GetSceneByName](#us-getscenebyname) | Gets a loaded scene by name. |
+| [GetSceneByBuildIndex](#us-getscenebybuildindex) | Gets a loaded scene by build index. |
+| [GetAllScenes](#us-getallscenes) | Gets all (or filtered) loaded scenes. |
+
+#### Scene Operations
+
+| Method | Description |
+| :--- | :--- |
+| [CreateScene](#us-createscene) | Creates a new empty scene. |
+| [MergeScenes](#us-mergescenes) | Merges two scenes. |
+| [MoveGameObjectToScene](#us-movegameobjecttoscene) | Moves a GameObject to the given scene. |
+| [MoveGameObjectToActiveScene](#us-movegameobjecttoactivescene) | Moves a GameObject to the active scene. |
+| [SetActiveScene](#us-setactivescene) | Sets the active scene. |
+| [SetActiveSceneRootGameObjects](#us-setactivescenerootgameobjects) | Sets the active state of a scene's root objects in batch. |
+| [SetActiveSceneRootGameObjectsAsync](#us-setactivescenerootgameobjectsasync) | Sets the active state of a scene's root objects in frame-sliced batches. |
+
+#### Scene Loading (Async)
+
+| Method | Description |
+| :--- | :--- |
+| [LoadSingleSceneAsync](#us-loadsinglesceneasync) | Loads a scene asynchronously in Single mode. |
+| [LoadAdditiveSceneAsync](#us-loadadditivesceneasync) | Loads a scene asynchronously in Additive mode. |
+| [LoadMainAndSubScenesAsync](#us-loadmainandsubscenesasync) | Loads one main scene plus multiple sub scenes at once (merged progress). |
+| [LoadSubScenesAsync](#us-loadsubscenesasync) | Loads multiple Additive sub scenes in batch (merged progress). |
+| [LoadSceneAsync](#us-loadsceneasync) | General-purpose async scene loading (explicit LoadSceneMode). |
+
+#### Scene Loading (Sync)
+
+| Method | Description |
+| :--- | :--- |
+| [LoadSingleScene](#us-loadsinglescene) | Loads a scene synchronously in Single mode. |
+| [LoadAdditiveScene](#us-loadadditivescene) | Loads a scene synchronously in Additive mode. |
+| [LoadMainAndSubScenes](#us-loadmainandsubscenes) | Loads one main scene plus multiple sub scenes at once (sync). |
+| [LoadSubScenes](#us-loadsubscenes) | Loads multiple Additive sub scenes in batch (sync). |
+| [LoadScene](#us-loadscene) | General-purpose sync scene loading (explicit LoadSceneMode). |
+
+#### Unloading
+
+| Method | Description |
+| :--- | :--- |
+| [Unload](#us-unload) | Unloads scenes (by name or build index). |
+
+---
+
+### InitInstance {#us-initinstance}
+
+```csharp
+public static void InitInstance()
+```
+
+**Description**
+
+Explicitly initializes the `USManager` singleton instance (a plain C# singleton, not a MonoBehaviour). It is recommended to call this once during game startup.
+
+---
+
+### SceneCount {#us-scenecount}
+
+```csharp
+public static int SceneCount()
+```
+
+**Returns**
+
+`int` — the number of currently loaded scenes (same as `SceneManager.sceneCount`).
+
+**Description**
+
+Gets the number of currently loaded scenes.
+
+---
+
+### GetActiveScene {#us-getactivescene}
+
+```csharp
+public static Scene GetActiveScene()
+```
+
+**Returns**
+
+`Scene` — the current active scene (same as `SceneManager.GetActiveScene()`).
+
+**Description**
+
+Gets the current active scene.
+
+---
+
+### GetSceneAt {#us-getsceneat}
+
+```csharp
+public static Scene GetSceneAt(int index)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| index | `int` | Index in the loaded-scene list (0 to SceneCount - 1). |
+
+**Returns**
+
+`Scene` — the scene at the given index.
+
+**Description**
+
+Gets a loaded scene by index (same as `SceneManager.GetSceneAt`).
+
+---
+
+### GetSceneByName {#us-getscenebyname}
+
+```csharp
+public static Scene GetSceneByName(string sceneName)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| sceneName | `string` | Scene name. |
+
+**Returns**
+
+`Scene` — the loaded scene matching the name; if not found, the returned `Scene` is invalid (`IsValid()` is `false`).
+
+**Description**
+
+Gets a **loaded** scene by name (same as `SceneManager.GetSceneByName`).
+
+---
+
+### GetSceneByBuildIndex {#us-getscenebybuildindex}
+
+```csharp
+public static Scene GetSceneByBuildIndex(int buildIndex)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| buildIndex | `int` | Scene index in Build Settings. |
+
+**Returns**
+
+`Scene` — the loaded scene with the given build index; if not loaded, the returned `Scene` is invalid.
+
+**Description**
+
+Gets a **loaded** scene by build index (same as `SceneManager.GetSceneByBuildIndex`).
+
+---
+
+### GetAllScenes {#us-getallscenes}
+
+```csharp
+public static Scene[] GetAllScenes(params string[] sceneNames)
+public static Scene[] GetAllScenes(params int[] buildIndexes)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| sceneNames | `params string[]` | Scene-name filter. When omitted, **all** loaded scenes are returned. |
+| buildIndexes | `params int[]` | Build-index filter. When omitted, **all** loaded scenes are returned. |
+
+**Returns**
+
+`Scene[]` — the loaded scenes matching the filter; an empty array if none matches.
+
+**Description**
+
+Gets all loaded scenes, optionally filtered by name or build index.
+
+---
+
+### CreateScene {#us-createscene}
+
+```csharp
+public static Scene CreateScene(string sceneName, CreateSceneParameters parameters)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| sceneName | `string` | Name of the new scene. |
+| parameters | `CreateSceneParameters` | Scene creation parameters (including `LocalPhysicsMode`). |
+
+**Returns**
+
+`Scene` — the created empty scene.
+
+**Description**
+
+Creates a new empty scene at runtime (same as `SceneManager.CreateScene`).
+
+---
+
+### MergeScenes {#us-mergescenes}
+
+```csharp
+public static bool MergeScenes(Scene sourceScene, Scene targetScene)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| sourceScene | `Scene` | Source scene (unloaded after the merge). |
+| targetScene | `Scene` | Target scene (receives all objects of the source scene). |
+
+**Returns**
+
+`bool` — `true` on success; `false` with an exception log when an exception occurs.
+
+**Description**
+
+Merges all GameObjects of the source scene into the target scene (same as `SceneManager.MergeScenes`).
+
+---
+
+### MoveGameObjectToScene {#us-movegameobjecttoscene}
+
+```csharp
+public static bool MoveGameObjectToScene(GameObject go, Scene targetScene)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| go | `GameObject` | Object to move (must be a scene root object). |
+| targetScene | `Scene` | Target scene. |
+
+**Returns**
+
+`bool` — `true` on success; `false` with an exception log when an exception occurs.
+
+**Description**
+
+Moves a GameObject to the given scene (same as `SceneManager.MoveGameObjectToScene`).
+
+---
+
+### MoveGameObjectToActiveScene {#us-movegameobjecttoactivescene}
+
+```csharp
+public static bool MoveGameObjectToActiveScene(GameObject go)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| go | `GameObject` | Object to move (must be a scene root object). |
+
+**Returns**
+
+`bool` — `true` on success; `false` with an exception log when an exception occurs.
+
+**Description**
+
+Moves a GameObject to the current **active scene**.
+
+---
+
+### SetActiveScene {#us-setactivescene}
+
+```csharp
+public static bool SetActiveScene(int index)
+public static bool SetActiveScene(string sceneName)
+public static bool SetActiveScene(Scene scene)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| index | `int` | Index in the loaded-scene list. |
+| sceneName | `string` | Scene name. |
+| scene | `Scene` | Scene handle. |
+
+**Returns**
+
+`bool` — `true` on success (same as `SceneManager.SetActiveScene`).
+
+**Description**
+
+Sets the active scene. In a multi-scene Additive setup, newly spawned objects belong to the active scene.
+
+**Example**
+
+```csharp
+// After loading a sub scene, switch the active scene over
+await CoreFrames.USFrame.LoadAdditiveSceneAsync("BattleScene");
+CoreFrames.USFrame.SetActiveScene("BattleScene");
+```
+
+---
+
+### SetActiveSceneRootGameObjects {#us-setactivescenerootgameobjects}
+
+```csharp
+public static void SetActiveSceneRootGameObjects(string sceneName, bool active, params string[] withoutRootGameObjectNames)
+public static void SetActiveSceneRootGameObjects(Scene scene, bool active, string[] withoutRootGameObjectNames = null)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| sceneName | `string` | Scene name. When multiple scenes share the name, **all of them** are processed. |
+| scene | `Scene` | Scene handle. |
+| active | `bool` | The active state to set. |
+| withoutRootGameObjectNames | `params string[]` | Exclusion list. Root objects on the list keep their state. |
+
+**Description**
+
+Sets the active state of a scene's **root objects** in batch. Logs an error/warning and does nothing when the scene is invalid or not fully loaded. Commonly paired with scenes loaded with `activeRootGameObjects: false`, activating the content at the right moment.
+
+---
+
+### SetActiveSceneRootGameObjectsAsync {#us-setactivescenerootgameobjectsasync}
+
+```csharp
+public async static UniTask SetActiveSceneRootGameObjectsAsync(string sceneName, bool active, int framesInterval = 1, int activeObjectsPerInterval = 3, params string[] withoutRootGameObjectNames)
+public async static UniTask SetActiveSceneRootGameObjectsAsync(Scene scene, bool active, int framesInterval = 1, int activeObjectsPerInterval = 3, params string[] withoutRootGameObjectNames)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| sceneName | `string` | Scene name. When multiple scenes share the name, **all of them** are processed. |
+| scene | `Scene` | Scene handle. |
+| active | `bool` | The active state to set. |
+| framesInterval | `int` | Number of frames to wait between batches.<br/>**Default**: `1` |
+| activeObjectsPerInterval | `int` | Number of root objects processed per batch.<br/>**Default**: `3` |
+| withoutRootGameObjectNames | `params string[]` | Exclusion list. |
+
+**Returns**
+
+`UniTask` — an awaitable async operation.
+
+**Description**
+
+Sets the active state of a scene's root objects in **frame-sliced** batches (after every `activeObjectsPerInterval` objects, waits `framesInterval` frames), avoiding hitches caused by activating many objects in a single frame.
+
+**Example**
+
+```csharp
+// Activate 5 root objects every 2 frames for a smooth ramp-up
+await CoreFrames.USFrame.SetActiveSceneRootGameObjectsAsync("BattleScene", true, 2, 5);
+```
+
+---
+
+### LoadSingleSceneAsync {#us-loadsinglesceneasync}
+
+```csharp
+public static async UniTask LoadSingleSceneAsync(string sceneName, Progression progression = null)
+public static async UniTask<T> LoadSingleSceneAsync<T>(string sceneName, Progression progression = null) where T : class
+public static async UniTask LoadSingleSceneAsync(string packageName, string sceneName, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, Progression progression = null)
+public static async UniTask<T> LoadSingleSceneAsync<T>(string packageName, string sceneName, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, Progression progression = null) where T : class
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. If omitted, the default package is used. |
+| sceneName | `string` | Scene name (supports the `build#` prefix). |
+| localPhysicsMode | `LocalPhysicsMode` | Local physics mode for the scene.<br/>**Default**: `LocalPhysicsMode.None` |
+| progression | `Progression` | Loading progress callback.<br/>**Default**: `null` |
+
+**Returns**
+
+`UniTask` — an awaitable async operation. Generic overloads return `UniTask<T>`: an `AsyncOperation` for build scenes, a `BundlePack` for bundle scenes (cast via `as T`; `null` when the type does not match).
+
+**Description**
+
+Loads a scene asynchronously in **Single** mode (replacing the existing scenes).
+
+<Highlight color="#0373fc">Attention</Highlight> If a scene with the same name is **already loaded**, a warning is logged and it is not loaded again.
+
+**Example**
+
+```csharp
+// Load a bundle scene (by Address)
+await CoreFrames.USFrame.LoadSingleSceneAsync("MainScene");
+
+// Load a Build Settings scene and watch the progress
+await CoreFrames.USFrame.LoadSingleSceneAsync("build#MainScene", (progress, current, total) =>
+{
+    Debug.Log($"Loading progress: {progress * 100}%");
+});
+```
+
+---
+
+### LoadAdditiveSceneAsync {#us-loadadditivesceneasync}
+
+```csharp
+public static async UniTask LoadAdditiveSceneAsync(string sceneName, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+public static async UniTask LoadAdditiveSceneAsync(string sceneName, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, bool activeRootGameObjects = true, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+public static async UniTask<T> LoadAdditiveSceneAsync<T>(string sceneName, bool activateOnLoad = true, uint priority = 100, Progression progression = null) where T : class
+public static async UniTask<T> LoadAdditiveSceneAsync<T>(string sceneName, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, bool activeRootGameObjects = true, bool activateOnLoad = true, uint priority = 100, Progression progression = null) where T : class
+public static async UniTask LoadAdditiveSceneAsync(string packageName, string sceneName, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+public static async UniTask LoadAdditiveSceneAsync(string packageName, string sceneName, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, bool activeRootGameObjects = true, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+public static async UniTask<T> LoadAdditiveSceneAsync<T>(string packageName, string sceneName, bool activateOnLoad = true, uint priority = 100, Progression progression = null) where T : class
+public static async UniTask<T> LoadAdditiveSceneAsync<T>(string packageName, string sceneName, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, bool activeRootGameObjects = true, bool activateOnLoad = true, uint priority = 100, Progression progression = null) where T : class
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. If omitted, the default package is used. |
+| sceneName | `string` | Scene name (supports the `build#` prefix). |
+| localPhysicsMode | `LocalPhysicsMode` | Local physics mode for the scene.<br/>**Default**: `LocalPhysicsMode.None` |
+| activeRootGameObjects | `bool` | Whether to keep the scene's root objects active after loading. When `false`, all root objects are deactivated automatically after loading (they can be activated later via [SetActiveSceneRootGameObjects](#us-setactivescenerootgameobjects)).<br/>**Default**: `true` |
+| activateOnLoad | `bool` | Whether the scene activates automatically when loaded (**bundle scenes only**).<br/>**Default**: `true` |
+| priority | `uint` | Scene loading priority (**bundle scenes only**).<br/>**Default**: `100` |
+| progression | `Progression` | Loading progress callback.<br/>**Default**: `null` |
+
+**Returns**
+
+`UniTask` — an awaitable async operation. Generic overloads return `UniTask<T>`: an `AsyncOperation` for build scenes, a `BundlePack` for bundle scenes (cast via `as T`; `null` when the type does not match).
+
+**Description**
+
+Loads a scene asynchronously in **Additive** mode (without unloading existing scenes).
+
+**Example**
+
+```csharp
+// Load a sub scene additively
+await CoreFrames.USFrame.LoadAdditiveSceneAsync("EnvironmentScene");
+
+// Load without activating root objects, then activate them frame by frame later
+await CoreFrames.USFrame.LoadAdditiveSceneAsync("HeavyScene", LocalPhysicsMode.None, false);
+await CoreFrames.USFrame.SetActiveSceneRootGameObjectsAsync("HeavyScene", true);
+```
+
+---
+
+### LoadMainAndSubScenesAsync {#us-loadmainandsubscenesasync}
+
+```csharp
+public static async UniTask LoadMainAndSubScenesAsync(string singleSceneName, AdditiveSceneInfo[] additiveSceneInfos, uint priority = 100, Progression progression = null)
+public static async UniTask LoadMainAndSubScenesAsync(string singleSceneName, LocalPhysicsMode localPhysicsMode, AdditiveSceneInfo[] additiveSceneInfos, uint priority = 100, Progression progression = null)
+public static async UniTask LoadMainAndSubScenesAsync(string packageName, string singleSceneName, AdditiveSceneInfo[] additiveSceneInfos, uint priority = 100, Progression progression = null)
+public static async UniTask LoadMainAndSubScenesAsync(string packageName, string singleSceneName, LocalPhysicsMode localPhysicsMode, AdditiveSceneInfo[] additiveSceneInfos, uint priority = 100, Progression progression = null)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. If omitted, the default package is used. |
+| singleSceneName | `string` | Main scene name (loaded in Single mode; supports the `build#` prefix). |
+| localPhysicsMode | `LocalPhysicsMode` | Local physics mode for the main scene.<br/>**Default**: `LocalPhysicsMode.None` (overloads without it) |
+| additiveSceneInfos | `AdditiveSceneInfo[]` | Sub-scene info array (loaded in Additive mode, in order). |
+| priority | `uint` | Scene loading priority (incremented per sub scene; bundle scenes only).<br/>**Default**: `100` |
+| progression | `Progression` | Loading progress callback (main + sub scenes **merged** into a single progress report).<br/>**Default**: `null` |
+
+`AdditiveSceneInfo` struct fields:
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| sceneName | `string` | Sub-scene name (supports the `build#` prefix). |
+| activeRootGameObjects | `bool` | Whether to keep the scene's root objects active after loading. |
+| localPhysicsMode | `LocalPhysicsMode` | Local physics mode for the sub scene. |
+
+**Returns**
+
+`UniTask` — an awaitable async operation.
+
+**Description**
+
+Loads **one Single main scene** plus **multiple Additive sub scenes** in one call, with progress merged into a single `progression` report (0 to 1).
+
+<Highlight color="#0373fc">Attention</Highlight> If the main scene is **already loaded**, a warning is logged and the whole flow is aborted (sub scenes are not loaded either).
+
+**Example**
+
+```csharp
+// Load the main scene + two sub scenes at once
+await CoreFrames.USFrame.LoadMainAndSubScenesAsync(
+    "BattleScene",
+    new AdditiveSceneInfo[]
+    {
+        new AdditiveSceneInfo { sceneName = "EnvironmentScene", activeRootGameObjects = true },
+        new AdditiveSceneInfo { sceneName = "LightingScene", activeRootGameObjects = true }
+    },
+    progression: (progress, current, total) => Debug.Log($"Total progress: {progress * 100}%")
+);
+```
+
+---
+
+### LoadSubScenesAsync {#us-loadsubscenesasync}
+
+```csharp
+public static async UniTask LoadSubScenesAsync(AdditiveSceneInfo[] additiveSceneInfos, uint priority = 100, Progression progression = null)
+public static async UniTask LoadSubScenesAsync(string packageName, AdditiveSceneInfo[] additiveSceneInfos, uint priority = 100, Progression progression = null)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. If omitted, the default package is used. |
+| additiveSceneInfos | `AdditiveSceneInfo[]` | Sub-scene info array (see [LoadMainAndSubScenesAsync](#us-loadmainandsubscenesasync) for the fields). |
+| priority | `uint` | Scene loading priority (incremented per sub scene; bundle scenes only).<br/>**Default**: `100` |
+| progression | `Progression` | Loading progress callback (all sub scenes **merged** into a single progress report).<br/>**Default**: `null` |
+
+**Returns**
+
+`UniTask` — an awaitable async operation.
+
+**Description**
+
+Loads **multiple Additive sub scenes** in batch (without a main scene), with merged progress reporting.
+
+---
+
+### LoadSceneAsync {#us-loadsceneasync}
+
+```csharp
+public static async UniTask LoadSceneAsync(string sceneName, LoadSceneMode loadSceneMode, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+public static async UniTask LoadSceneAsync(string sceneName, LoadSceneMode loadSceneMode, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+public static async UniTask<T> LoadSceneAsync<T>(string sceneName, LoadSceneMode loadSceneMode, bool activateOnLoad = true, uint priority = 100, Progression progression = null) where T : class
+public static async UniTask<T> LoadSceneAsync<T>(string sceneName, LoadSceneMode loadSceneMode, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, bool activateOnLoad = true, uint priority = 100, Progression progression = null) where T : class
+public static async UniTask LoadSceneAsync(string packageName, string sceneName, LoadSceneMode loadSceneMode, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+public static async UniTask LoadSceneAsync(string packageName, string sceneName, LoadSceneMode loadSceneMode, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, bool activateOnLoad = true, uint priority = 100, Progression progression = null)
+public static async UniTask<T> LoadSceneAsync<T>(string packageName, string sceneName, LoadSceneMode loadSceneMode, bool activateOnLoad = true, uint priority = 100, Progression progression = null) where T : class
+public static async UniTask<T> LoadSceneAsync<T>(string packageName, string sceneName, LoadSceneMode loadSceneMode, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, bool activateOnLoad = true, uint priority = 100, Progression progression = null) where T : class
+public static async UniTask<AsyncOperation> LoadSceneAsync(int buildIndex, LoadSceneMode loadSceneMode = LoadSceneMode.Single, Progression progression = null)
+public static async UniTask<AsyncOperation> LoadSceneAsync(int buildIndex, LoadSceneMode loadSceneMode = LoadSceneMode.Single, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, Progression progression = null)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. If omitted, the default package is used. |
+| sceneName | `string` | Scene name (supports the `build#` prefix). |
+| buildIndex | `int` | Scene index in Build Settings (these overloads load from Build **only**). |
+| loadSceneMode | `LoadSceneMode` | Load mode (`Single` / `Additive`).<br/>**Default**: `LoadSceneMode.Single` (buildIndex overloads) |
+| localPhysicsMode | `LocalPhysicsMode` | Local physics mode for the scene.<br/>**Default**: `LocalPhysicsMode.None` |
+| activateOnLoad | `bool` | Whether the scene activates automatically when loaded (**bundle scenes only**).<br/>**Default**: `true` |
+| priority | `uint` | Scene loading priority (**bundle scenes only**).<br/>**Default**: `100` |
+| progression | `Progression` | Loading progress callback.<br/>**Default**: `null` |
+
+**Returns**
+
+`UniTask` — an awaitable async operation. Generic overloads return `UniTask<T>`: an `AsyncOperation` for build scenes, a `BundlePack` for bundle scenes; the buildIndex overloads return `UniTask<AsyncOperation>`.
+
+**Description**
+
+The general-purpose async scene loading method with an explicit `LoadSceneMode` — the generalized form of [LoadSingleSceneAsync](#us-loadsinglesceneasync) / [LoadAdditiveSceneAsync](#us-loadadditivesceneasync).
+
+**Example**
+
+```csharp
+using UnityEngine.SceneManagement;
+
+// Get the BundlePack of a bundle scene generically
+var pack = await CoreFrames.USFrame.LoadSceneAsync<BundlePack>("BattleScene", LoadSceneMode.Additive);
+
+// Load by build index
+var op = await CoreFrames.USFrame.LoadSceneAsync(1, LoadSceneMode.Single);
+```
+
+---
+
+### LoadSingleScene {#us-loadsinglescene}
+
+```csharp
+public static void LoadSingleScene(string sceneName, Progression progression = null)
+public static void LoadSingleScene(string packageName, string sceneName, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, Progression progression = null)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. If omitted, the default package is used. |
+| sceneName | `string` | Scene name (supports the `build#` prefix). |
+| localPhysicsMode | `LocalPhysicsMode` | Local physics mode for the scene.<br/>**Default**: `LocalPhysicsMode.None` |
+| progression | `Progression` | Loading progress callback.<br/>**Default**: `null` |
+
+**Description**
+
+Loads a scene **synchronously** in **Single** mode. Behaves like [LoadSingleSceneAsync](#us-loadsinglesceneasync) (a warning is logged and nothing happens if a scene with the same name is already loaded).
+
+---
+
+### LoadAdditiveScene {#us-loadadditivescene}
+
+```csharp
+public static void LoadAdditiveScene(string sceneName, Progression progression = null)
+public static void LoadAdditiveScene(string sceneName, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, bool activeRootGameObjects = true, Progression progression = null)
+public static void LoadAdditiveScene(string packageName, string sceneName, Progression progression = null)
+public static void LoadAdditiveScene(string packageName, string sceneName, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, bool activeRootGameObjects = true, Progression progression = null)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. If omitted, the default package is used. |
+| sceneName | `string` | Scene name (supports the `build#` prefix). |
+| localPhysicsMode | `LocalPhysicsMode` | Local physics mode for the scene.<br/>**Default**: `LocalPhysicsMode.None` |
+| activeRootGameObjects | `bool` | Whether to keep the scene's root objects active after loading.<br/>**Default**: `true` |
+| progression | `Progression` | Loading progress callback.<br/>**Default**: `null` |
+
+**Description**
+
+Loads a scene **synchronously** in **Additive** mode. Behaves like [LoadAdditiveSceneAsync](#us-loadadditivesceneasync).
+
+---
+
+### LoadMainAndSubScenes {#us-loadmainandsubscenes}
+
+```csharp
+public static void LoadMainAndSubScenes(string singleSceneName, AdditiveSceneInfo[] additiveSceneInfos, Progression progression = null)
+public static void LoadMainAndSubScenes(string singleSceneName, LocalPhysicsMode localPhysicsMode, AdditiveSceneInfo[] additiveSceneInfos, Progression progression = null)
+public static void LoadMainAndSubScenes(string packageName, string singleSceneName, AdditiveSceneInfo[] additiveSceneInfos, Progression progression = null)
+public static void LoadMainAndSubScenes(string packageName, string singleSceneName, LocalPhysicsMode localPhysicsMode, AdditiveSceneInfo[] additiveSceneInfos, Progression progression = null)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. If omitted, the default package is used. |
+| singleSceneName | `string` | Main scene name (loaded in Single mode; supports the `build#` prefix). |
+| localPhysicsMode | `LocalPhysicsMode` | Local physics mode for the main scene.<br/>**Default**: `LocalPhysicsMode.None` (overloads without it) |
+| additiveSceneInfos | `AdditiveSceneInfo[]` | Sub-scene info array (see [LoadMainAndSubScenesAsync](#us-loadmainandsubscenesasync) for the fields). |
+| progression | `Progression` | Loading progress callback (merged report).<br/>**Default**: `null` |
+
+**Description**
+
+The **synchronous** version of the combined main + sub scene loading. Behaves like [LoadMainAndSubScenesAsync](#us-loadmainandsubscenesasync) (a warning is logged and the flow aborts if the main scene is already loaded).
+
+---
+
+### LoadSubScenes {#us-loadsubscenes}
+
+```csharp
+public static void LoadSubScenes(AdditiveSceneInfo[] additiveSceneInfos, Progression progression = null)
+public static void LoadSubScenes(string packageName, AdditiveSceneInfo[] additiveSceneInfos, Progression progression = null)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. If omitted, the default package is used. |
+| additiveSceneInfos | `AdditiveSceneInfo[]` | Sub-scene info array (see [LoadMainAndSubScenesAsync](#us-loadmainandsubscenesasync) for the fields). |
+| progression | `Progression` | Loading progress callback (merged report).<br/>**Default**: `null` |
+
+**Description**
+
+Loads multiple Additive sub scenes **synchronously** in batch. Behaves like [LoadSubScenesAsync](#us-loadsubscenesasync).
+
+---
+
+### LoadScene {#us-loadscene}
+
+```csharp
+public static void LoadScene(string sceneName, LoadSceneMode loadSceneMode, Progression progression = null)
+public static void LoadScene(string packageName, string sceneName, LoadSceneMode loadSceneMode, Progression progression = null)
+public static void LoadScene(string packageName, string sceneName, LoadSceneMode loadSceneMode, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, Progression progression = null)
+public static Scene LoadScene(int buildIndex, LoadSceneMode loadSceneMode = LoadSceneMode.Single, Progression progression = null)
+public static Scene LoadScene(int buildIndex, LoadSceneMode loadSceneMode = LoadSceneMode.Single, LocalPhysicsMode localPhysicsMode = LocalPhysicsMode.None, Progression progression = null)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. If omitted, the default package is used. |
+| sceneName | `string` | Scene name (supports the `build#` prefix). |
+| buildIndex | `int` | Scene index in Build Settings (these overloads load from Build **only**). |
+| loadSceneMode | `LoadSceneMode` | Load mode (`Single` / `Additive`).<br/>**Default**: `LoadSceneMode.Single` (buildIndex overloads) |
+| localPhysicsMode | `LocalPhysicsMode` | Local physics mode for the scene.<br/>**Default**: `LocalPhysicsMode.None` |
+| progression | `Progression` | Loading progress callback.<br/>**Default**: `null` |
+
+**Returns**
+
+The name-based overloads return nothing; the buildIndex overloads return `Scene` — the loaded scene (`default` when a scene with the same name is already loaded in Single mode).
+
+**Description**
+
+The general-purpose **synchronous** scene loading method with an explicit `LoadSceneMode`.
+
+---
+
+### Unload {#us-unload}
+
+```csharp
+public static void Unload(bool recursively, params string[] sceneNames)
+public static void Unload(bool recursively, params int[] buildIndexes)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| recursively | `bool` | When `true`, unloads **all scenes with the same name**; when `false`, only the **most recently loaded** one. |
+| sceneNames | `params string[]` | Scene names (supports the `build#` prefix; without it, the unload targets bundle scenes). |
+| buildIndexes | `params int[]` | Scene indexes in Build Settings (this overload unloads Build scenes **only**). |
+
+**Description**
+
+Unloads the given scenes. Unloading bundle scenes goes through AssetLoader's reference counting; unloading build scenes uses `SceneManager.UnloadSceneAsync`.
+
+<Highlight color="#0373fc">Attention</Highlight> The last remaining scene cannot be unloaded (a warning is logged).
+
+**Example**
+
+```csharp
+// Unload the most recently loaded sub scene with this name
+CoreFrames.USFrame.Unload(false, "EnvironmentScene");
+
+// Unload all scenes with the same name (Build scenes)
+CoreFrames.USFrame.Unload(true, "build#LightingScene");
+```
+
+---
+## CoreFrames.CPFrame {#cpframe}
+
+The unified Clone Prefab API. It is dedicated to managing small objects instantiated (cloned) from prefabs, such as drop items (first-aid kits, herbs, etc.), bullets, and UI template components (item icons, etc.). Their defining trait: when no longer needed, simply **`Destroy` them** — destroying an instance automatically unloads the asset through AssetLoader, keeping the reference count correct without any extra close call.
+
+### Method Overview {#cp-overview}
+
+#### Initialization
+
+| Method | Description |
+| :--- | :--- |
+| [InitInstance](#cp-initinstance) | Initializes the `CPManager` singleton instance. |
+
+#### Preloading
+
+| Method | Description |
+| :--- | :--- |
+| [PreloadAsync](#cp-preloadasync) | Preloads prefab assets into the cache asynchronously. |
+| [Preload](#cp-preload) | Preloads prefab assets into the cache synchronously. |
+
+#### Loading & Cloning
+
+| Method | Description |
+| :--- | :--- |
+| [LoadWithCloneAsync\<T\>](#cp-loadwithcloneasync) | Loads and clones a prefab asynchronously, returning a `T` instance. |
+| [LoadWithClone\<T\>](#cp-loadwithclone) | Loads and clones a prefab synchronously, returning a `T` instance. |
+
+---
+
+### InitInstance {#cp-initinstance}
+
+```csharp
+public static void InitInstance()
+```
+
+**Description**
+
+Explicitly initializes the `CPManager` singleton instance (a plain C# singleton, not a MonoBehaviour). It is recommended to call this once during game startup.
+
+---
+
+### PreloadAsync {#cp-preloadasync}
+
+```csharp
+public static async UniTask PreloadAsync(string assetName, uint priority = 0, Progression progression = null)
+public static async UniTask PreloadAsync(string packageName, string assetName, uint priority = 0, Progression progression = null)
+public static async UniTask PreloadAsync(string[] assetNames, uint priority = 0, Progression progression = null)
+public static async UniTask PreloadAsync(string packageName, string[] assetNames, uint priority = 0, Progression progression = null)
+public static async UniTask PreloadAsync<T>(string assetName, uint priority = 0, Progression progression = null) where T : UnityEngine.Object
+public static async UniTask PreloadAsync<T>(string packageName, string assetName, uint priority = 0, Progression progression = null) where T : UnityEngine.Object
+public static async UniTask PreloadAsync<T>(string[] assetNames, uint priority = 0, Progression progression = null) where T : UnityEngine.Object
+public static async UniTask PreloadAsync<T>(string packageName, string[] assetNames, uint priority = 0, Progression progression = null) where T : UnityEngine.Object
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. If omitted, the default package is used. |
+| assetName | `string` | Prefab asset name (bundle assets use their Address; supports the `res#` prefix). |
+| assetNames | `string[]` | Array of prefab asset names (batch preloading). |
+| priority | `uint` | Asset loading priority.<br/>**Default**: `0` |
+| progression | `Progression` | Loading progress callback.<br/>**Default**: `null` |
+
+**Returns**
+
+`UniTask` — an awaitable async operation.
+
+**Description**
+
+Loads prefab assets into the cache ahead of time (asset loading only — **no instantiation**), so a later [LoadWithCloneAsync\<T\>](#cp-loadwithcloneasync) call can use them immediately without a loading delay. The generic overloads let you specify the asset type to load (the non-generic overloads load as `Object`).
+
+**Example**
+
+```csharp
+// Preload the bullet prefab before entering battle
+await CoreFrames.CPFrame.PreloadAsync("BulletCP");
+
+// Preload in batch
+await CoreFrames.CPFrame.PreloadAsync(new string[] { "BulletCP", "MedkitCP" });
+```
+
+---
+
+### Preload {#cp-preload}
+
+```csharp
+public static void Preload(string assetName, Progression progression = null)
+public static void Preload(string packageName, string assetName, Progression progression = null)
+public static void Preload(string[] assetNames, Progression progression = null)
+public static void Preload(string packageName, string[] assetNames, Progression progression = null)
+public static void Preload<T>(string assetName, Progression progression = null) where T : UnityEngine.Object
+public static void Preload<T>(string packageName, string assetName, Progression progression = null) where T : UnityEngine.Object
+public static void Preload<T>(string[] assetNames, Progression progression = null) where T : UnityEngine.Object
+public static void Preload<T>(string packageName, string[] assetNames, Progression progression = null) where T : UnityEngine.Object
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. If omitted, the default package is used. |
+| assetName | `string` | Prefab asset name (bundle assets use their Address; supports the `res#` prefix). |
+| assetNames | `string[]` | Array of prefab asset names (batch preloading). |
+| progression | `Progression` | Loading progress callback.<br/>**Default**: `null` |
+
+**Description**
+
+The **synchronous** version of prefab preloading (without the `priority` parameter). Behaves like [PreloadAsync](#cp-preloadasync).
+
+---
+
+### LoadWithCloneAsync\<T\> {#cp-loadwithcloneasync}
+
+```csharp
+public static async UniTask<T> LoadWithCloneAsync<T>(string assetName, Transform parent = null, uint priority = 0, Progression progression = null) where T : CPBase, new()
+public static async UniTask<T> LoadWithCloneAsync<T>(string packageName, string assetName, Transform parent = null, uint priority = 0, Progression progression = null) where T : CPBase, new()
+public static async UniTask<T> LoadWithCloneAsync<T>(string assetName, Transform parent, bool worldPositionStays, uint priority = 0, Progression progression = null) where T : CPBase, new()
+public static async UniTask<T> LoadWithCloneAsync<T>(string packageName, string assetName, Transform parent, bool worldPositionStays, uint priority = 0, Progression progression = null) where T : CPBase, new()
+public static async UniTask<T> LoadWithCloneAsync<T>(string assetName, Vector3 position, Quaternion rotation, Transform parent = null, Vector3? scale = null, uint priority = 0, Progression progression = null) where T : CPBase, new()
+public static async UniTask<T> LoadWithCloneAsync<T>(string packageName, string assetName, Vector3 position, Quaternion rotation, Transform parent = null, Vector3? scale = null, uint priority = 0, Progression progression = null) where T : CPBase, new()
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. If omitted, the default package is used. |
+| assetName | `string` | Prefab asset name (bundle assets use their Address; supports the `res#` prefix). |
+| parent | `Transform` | Parent node to attach to.<br/>**Default**: `null` |
+| worldPositionStays | `bool` | Whether to keep the world position when parenting (same semantics as Unity's `Instantiate`). |
+| position | `Vector3` | Initial position of the instance. |
+| rotation | `Quaternion` | Initial rotation of the instance. |
+| scale | `Vector3?` | Initial scale of the instance.<br/>**Default**: `null` (keeps the prefab's original scale) |
+| priority | `uint` | Asset loading priority.<br/>**Default**: `0` |
+| progression | `Progression` | Loading progress callback.<br/>**Default**: `null` |
+
+**Returns**
+
+`UniTask<T>` — the cloned instance component; `null` when loading fails (asset not found) or no `T` component exists on the instance.
+
+**Description**
+
+Loads a prefab and instantiates (clones) it asynchronously. `T` must be the `CPBase` component (or a subclass) attached to the prefab root. After instantiation, `OnCreate` → `InitFirst` (binding) → `OnShow` are triggered in order.
+
+<Highlight color="#0373fc">Attention</Highlight>
+
+- If the prefab root is active (`true`), `OnShow` is triggered automatically after cloning; if inactive, the instance stays deactivated and `OnShow` fires only after you call `SetActive(true)` yourself.
+- Every clone goes through the load counting, and the count is deducted automatically when the instance is destroyed.
+
+<Highlight color="#00d679">Reminder</Highlight> When no longer needed, simply call `Destroy(instance.gameObject)` — the asset is unloaded automatically through AssetLoader.
+
+**Example**
+
+```csharp
+// Clone a bullet and attach it to the muzzle node
+var bullet = await CoreFrames.CPFrame.LoadWithCloneAsync<BulletCP>("BulletCP", muzzle.transform);
+
+// Clone a drop item at a specific position and rotation
+var drop = await CoreFrames.CPFrame.LoadWithCloneAsync<DropItemCP>("MedkitCP", dropPos, Quaternion.identity);
+
+// Done with it — just destroy (unloads automatically)
+Object.Destroy(bullet.gameObject);
+```
+
+---
+
+### LoadWithClone\<T\> {#cp-loadwithclone}
+
+```csharp
+public static T LoadWithClone<T>(string assetName, Transform parent = null, Progression progression = null) where T : CPBase, new()
+public static T LoadWithClone<T>(string packageName, string assetName, Transform parent = null, Progression progression = null) where T : CPBase, new()
+public static T LoadWithClone<T>(string assetName, Transform parent, bool worldPositionStays, Progression progression = null) where T : CPBase, new()
+public static T LoadWithClone<T>(string packageName, string assetName, Transform parent, bool worldPositionStays, Progression progression = null) where T : CPBase, new()
+public static T LoadWithClone<T>(string assetName, Vector3 position, Quaternion rotation, Transform parent = null, Vector3? scale = null, Progression progression = null) where T : CPBase, new()
+public static T LoadWithClone<T>(string packageName, string assetName, Vector3 position, Quaternion rotation, Transform parent = null, Vector3? scale = null, Progression progression = null) where T : CPBase, new()
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| packageName | `string` | Package name. If omitted, the default package is used. |
+| assetName | `string` | Prefab asset name (bundle assets use their Address; supports the `res#` prefix). |
+| parent | `Transform` | Parent node to attach to.<br/>**Default**: `null` |
+| worldPositionStays | `bool` | Whether to keep the world position when parenting (same semantics as Unity's `Instantiate`). |
+| position | `Vector3` | Initial position of the instance. |
+| rotation | `Quaternion` | Initial rotation of the instance. |
+| scale | `Vector3?` | Initial scale of the instance.<br/>**Default**: `null` (keeps the prefab's original scale) |
+| progression | `Progression` | Loading progress callback.<br/>**Default**: `null` |
+
+**Returns**
+
+`T` — the cloned instance component; `null` when loading fails (asset not found) or no `T` component exists on the instance.
+
+**Description**
+
+The **synchronous** version of load-and-clone (without the `priority` parameter). Behaves like [LoadWithCloneAsync\<T\>](#cp-loadwithcloneasync). Consider calling [Preload](#cp-preload) beforehand to avoid hitches from synchronous loading.
+
+**Example**
+
+```csharp
+// With the asset preloaded, clone an item icon synchronously
+var icon = CoreFrames.CPFrame.LoadWithClone<ItemIconCP>("ItemIconCP", iconRoot);
+```
 
 ---

@@ -1,5 +1,6 @@
 ---
 sidebar_position: 1
+description: Hotfixers 是 Hotfixer 模块的统一调用入口，整合 HybridCLR 提供热更新流程检查、AOT 元数据补充、Hotfix DLL 加载与状态查询等接口。
 ---
 
 # Hotfixers
@@ -22,59 +23,370 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`Hotfixers` 是 **Hotfixer** 模块的统一调用入口（Facade），整合 **[HybridCLR](https://github.com/focus-creative-games/hybridclr)** 代码热更新方案，涵盖**热更新流程检查（下载与加载）、AOT 元数据补充、Hotfix DLL 加载与状态查询**。
+
+|  |  |
+| :--- | :--- |
+| **命名空间** | `OxGFrame.Hotfixer` |
+| **类型** | `public static class` |
+| **源码** | [Hotfixers.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/Hotfixer/Scripts/Runtime/Hotfixers.cs) |
+
+```csharp
 using OxGFrame.Hotfixer;
+```
 
-## 核心机制说明
+<Highlight color="#00d679">提醒</Highlight> 使用 [HybridCLR](https://github.com/focus-creative-games/hybridclr) 如有疑问，请前往[官方文档](https://hybridclr.doc.code-philosophy.com/)进行熟悉；完整使用流程可参考 **HotfixerDemo**（从 Package Manager 导入）。
 
-`Hotfixers` 主要与 **[HybridCLR](https://github.com/focus-creative-games/hybridclr)** 整合，负责在运行时：
-1. **补充 AOT 元数据**: 解决泛型实例化等问题。
-2. **加载热更新 DLL**: 将更新后的逻辑注入执行绪。
+## 快速上手 {#quick-start}
+
+```csharp
+// 启动热更新流程（自动读取 StreamingAssets 中的 HotfixManifest.dat 配置文件）
+Hotfixers.CheckHotfix("HotfixPackage");
+
+// 等待热更新完成，再进入游戏主逻辑与资源更新
+await UniTask.WaitUntil(() => Hotfixers.IsDone());
+
+// 主程序集无法直接引用热更层，通过反射调用热更代码
+var assembly = Hotfixers.GetHotfixAssembly("HotfixerDemo.Hotfix.Runtime.dll");
+assembly?.GetType("Hello")?.GetMethod("Run")?.Invoke(null, null);
+```
+
+## 通用规则 {#general-rules}
+
+### 核心机制 {#core-mechanism}
+
+`Hotfixers` 主要与 **HybridCLR** 整合，负责在运行时：
+
+1. **补充 AOT 元数据**：解决 AOT 泛型实例化等问题（通过 `RuntimeApi.LoadMetadataForAOTAssembly`，采用 `HomologousImageMode.SuperSet` 模式）。
+2. **加载热更新 DLL**：以 `Assembly.Load` 将更新后的代码逻辑加载至执行环境。
+
+<Highlight color="#ff2f00">重要</Highlight> 主程序集（AOT）无法直接引用热更新程序集。热更加载完成后，需通过**反射**调用热更层代码（可由 [GetHotfixAssembly](#gethotfixassembly) 获取程序集）。
+
+<Highlight color="#00d679">提醒</Highlight> AOT / Hotfix DLL 需先通过 Editor 工具 [HotfixHelper](../Editor/HotfixHelper.mdx) 收集（`.dll.bytes`），再以 YooAsset 打包至 Hotfix Package 中，收集方式请参考[收集示例](../../collect_suggest.mdx)。
+
+### 热更流程 {#hotfix-flow}
+
+调用 [CheckHotfix](#checkhotfix) 后，内部状态机将依序执行以下流程：
+
+| 顺序 | 流程状态 | 说明 |
+| :--- | :--- | :--- |
+| 1 | `FsmHotfixPrepare` | 流程准备。 |
+| 2 | `FsmInitHotfixPackage` | 初始化 Hotfix Package；失败时发送 `HotfixInitFailed` 事件。 |
+| 3 | `FsmUpdateHotfixPackage` | 更新 Hotfix Package 版本；失败时发送 `HotfixUpdateFailed` 事件。 |
+| 4 | `FsmHotfixCreateDownloader` | 创建下载器。有待下载文件时，发送 `HotfixCreateDownloader` 事件并**等待用户确认**；无则直接进入下载完成。 |
+| 5 | `FsmHotfixBeginDownload` | 开始下载；过程中发送 `HotfixDownloadProgression` 进度事件，下载失败时发送 `HotfixDownloadFailed` 事件。 |
+| 6 | `FsmHotfixDownloadOver` | 下载完成。 |
+| 7 | `FsmHotfixClearCache` | 清理未使用的缓存文件。 |
+| 8 | `FsmLoadAOTAssemblies` | 为 AOT 程序集补充元数据（HybridCLR `RuntimeApi.LoadMetadataForAOTAssembly`）。 |
+| 9 | `FsmLoadHotfixAssemblies` | 加载热更新程序集（`Assembly.Load`）。 |
+| 10 | `FsmHotfixDone` | 流程完成，[IsDone](#isdone) 返回 `true`。 |
+
+<Highlight color="#0373fc">注意</Highlight>
+
+- 有文件待下载时，流程会停在步骤 4，需由用户发送 `UserBeginDownload` 事件确认后才会开始下载（参考[流程事件](#hotfix-events)）。
+- DLL 文件将以清单中的名称（含 `.dll`）作为资源名称，从 Hotfix Package 以 `TextAsset` 形式加载，加载完成后随即卸载。
+- 编辑器模拟模式（`EditorSimulateMode`）下会跳过 AOT 元数据补充；在 Editor 或热更禁用时，热更程序集改由当前 AppDomain 直接查找（不实际加载 DLL bytes）。
+
+### 配置文件 HotfixManifest.dat {#hotfix-manifest}
+
+自动配置模式的 [CheckHotfix](#checkhotfix) 重载，会向 `StreamingAssets` 请求热更新配置文件，并依配置内容启动流程：
+
+- 文件名默认为 `HotfixManifest.dat`，可通过 `HotfixSettings` 自定义名称与扩展名（参考[全局配置](../../settings.mdx)）。
+- 内容包含 `aotDlls` 与 `hotfixDlls` 两组清单（名称皆含 `.dll` 扩展名），支持**明文 JSON** 与**加密 BYTES** 两种格式，读取时依文件头自动判别。
+- 可通过 [HotfixHelper.ExportHotfixDllConfig](../Editor/HotfixHelper.mdx#exporthotfixdllconfig) 或编辑器菜单 **OxGFrame → Hotfixer → Hotfix Config Generator (HotfixManifest.dat)** 窗口工具生成。
+
+明文 JSON 格式内容如下：
+
+```json
+{
+    "aotDlls": [
+        "mscorlib.dll",
+        "UniTask.dll"
+    ],
+    "hotfixDlls": [
+        "HotfixerDemo.Hotfix.Runtime.dll"
+    ]
+}
+```
+
+### 流程事件 {#hotfix-events}
+
+热更流程通过 **UniEvent**（`UniFramework.Event`）广播与接收事件，事件定义于命名空间 `OxGFrame.Hotfixer.HotfixEvent`。
+
+**框架发送（HotfixEvents）— 由用户监听**
+
+| 事件 | 说明 |
+| :--- | :--- |
+| `HotfixFsmState` | 流程状态切换通知，携带当前状态节点 `stateNode`。 |
+| `HotfixInitFailed` | Hotfix Package 初始化失败。 |
+| `HotfixUpdateFailed` | Hotfix Package 版本更新失败。 |
+| `HotfixCreateDownloader` | 下载器创建完成，携带待下载文件数 `totalCount` 与总大小 `totalBytes`。 |
+| `HotfixDownloadProgression` | 下载进度，携带 `progress`、下载数量、大小与速度等信息。 |
+| `HotfixDownloadFailed` | 文件下载失败，携带 `fileName` 与 `error`。 |
+
+**用户发送（HotfixUserEvents）— 驱动流程继续**
+
+| 事件 | 说明 |
+| :--- | :--- |
+| `UserTryInitHotfix` | 重新尝试初始化 Hotfix Package。 |
+| `UserTryUpdateHotfix` | 重新尝试更新 Hotfix Package。 |
+| `UserTryCreateDownloader` | 重新尝试创建下载器。 |
+| `UserBeginDownload` | 确认开始下载热更新文件。 |
+
+```csharp
+using OxGFrame.Hotfixer.HotfixEvent;
+using UniFramework.Event;
+
+// 监听下载器创建完成事件，确认后开始下载
+UniEvent.AddListener<HotfixEvents.HotfixCreateDownloader>((message) =>
+{
+    var msgData = message as HotfixEvents.HotfixCreateDownloader;
+    Debug.Log($"待下载文件数：{msgData.totalCount}，总大小：{msgData.totalBytes}");
+    HotfixUserEvents.UserBeginDownload.SendEventMessage();
+});
+```
+
+### 禁用热更新 {#hybridclr-disabled}
+
+<Highlight color="#ff2f00">重要</Highlight> 如果禁用 HybridCLR（HybridCLR Settings 取消勾选 **Enable**），必须搭配宏 [OXGFRAME_HYBRIDCLR_DISABLED](https://github.com/michael811125/OxGFrame/wiki/Macro-Definitions)，才能有效剔除热更流程。
+
+![](/img/hotfixer/api/runtime/img_1.png)
+
+定义宏后 [IsDisabled](#isdisabled) 将返回 `true`，流程将跳过 AOT 元数据补充，热更程序集改由当前 AppDomain 直接查找。
+
+## 方法总览 {#overview}
+
+#### 热更流程检查
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [CheckHotfix](#checkhotfix) | 启动热更新流程，下载并加载所有热更新相关文件。 |
+
+#### 状态与重置
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [IsDone](#isdone) | 返回热更新流程是否已全部完成。 |
+| [IsDisabled](#isdisabled) | 返回热更新功能是否已被禁用。 |
+| [Reset](#reset) | 重置热更新标记与缓存数据。 |
+
+#### 程序集信息
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [GetAOTAssemblyNames](#getaotassemblynames) | 获取 AOT 程序集名称（含 `.dll` 扩展名）。 |
+| [GetAotAssemblyNamesWithoutExtensions](#getaotassemblynameswithoutextensions) | 获取 AOT 程序集名称（不含扩展名）。 |
+| [GetHotfixAssemblyNames](#gethotfixassemblynames) | 获取热更新程序集名称（含 `.dll` 扩展名）。 |
+| [GetHotfixAssemblyNamesWithoutExtensions](#gethotfixassemblynameswithoutextensions) | 获取热更新程序集名称（不含扩展名）。 |
+| [GetHotfixAssembly](#gethotfixassembly) | 依名称获取已加载的 `Assembly` 对象。 |
 
 ---
 
-## Patch Operation (更新与检查)
+### CheckHotfix {#checkhotfix}
 
-执行热更新检查与加载的核心方法。
+```csharp
+public static void CheckHotfix(string packageName, Action errorAction = null)
+public static void CheckHotfix(PackageInfoWithBuild packageInfoWithBuild, Action errorAction = null)
+public static void CheckHotfix(string packageName, string[] aotAssemblies, string[] hotfixAssemblies)
+public static void CheckHotfix(PackageInfoWithBuild packageInfoWithBuild, string[] aotAssemblies, string[] hotfixAssemblies)
+```
 
-### CheckHotfix
-开始下载并加载所有热更新相关文件。
+**参数**
 
-* **自动配置模式**
-    * `CheckHotfix(string packageName, Action errorAction = null)`
-    * `CheckHotfix(PackageInfoWithBuild packageInfo, Action errorAction = null)`
-    * <Highlight color="#00d679">提醒</Highlight> 此模式会自动读取 `StreamingAssets` 中的 `HotfixManifest.dat` 配置文件。
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| packageName | `string` | Hotfix 资源包名称。 |
+| packageInfoWithBuild | `PackageInfoWithBuild` | 自定义的资源包信息（可自行指定构建模式等，命名空间 `OxGFrame.AssetLoader.Bundle`）。 |
+| errorAction | `Action` | 配置文件请求失败（URL 无效、请求错误或超时）、内容为空或解析失败时触发的回调。<br/>**默认值**：`null` |
+| aotAssemblies | `string[]` | 需补充元数据的 AOT 程序集清单（名称含 `.dll` 扩展名）。 |
+| hotfixAssemblies | `string[]` | 热更新程序集清单（名称含 `.dll` 扩展名）。 |
 
-* **手动指定模式**
-    * `CheckHotfix(string packageName, string[] aotAssemblies, string[] hotfixAssemblies)`
-    * 支持手动传入需要补充的 AOT 程序集与热更新程序集清单。
+**说明**
+
+启动热更新流程，开始下载并加载所有热更新相关文件，完整流程参考[热更流程](#hotfix-flow)。重载分为两种模式：
+
+- **自动配置模式**（`errorAction` 重载）：自动向 `StreamingAssets` 请求 `HotfixManifest.dat` 配置文件（参考[配置文件](#hotfix-manifest)），解析出 AOT 与 Hotfix 程序集清单后启动流程。
+- **手动指定模式**（`aotAssemblies` 重载）：直接传入需补充元数据的 AOT 程序集与热更新程序集清单。
+
+<Highlight color="#0373fc">注意</Highlight>
+
+- 此方法为非阻塞调用，完成与否需通过 [IsDone](#isdone) 或[流程事件](#hotfix-events)判断。
+- 仅指定 `packageName` 的重载，将以 `AppPackageInfoWithBuild`（构建模式 `ScriptableBuildPipeline`）初始化 Package；如需自定义构建模式，请改用 `PackageInfoWithBuild` 重载。
+- 流程进行中重复调用将被忽略（输出警告）。
+- 流程已完成后再次调用将直接返回（输出警告），需先调用 [Reset](#reset) 才能重新执行。
+
+**示例**
+
+```csharp
+// 自动配置模式：读取 StreamingAssets 中的 HotfixManifest.dat
+Hotfixers.CheckHotfix
+(
+    "HotfixPackage",
+    () => Debug.LogWarning("配置文件请求失败，请先生成 HotfixManifest.dat")
+);
+
+// 手动指定模式：直接传入 AOT 与 Hotfix 程序集清单
+Hotfixers.CheckHotfix
+(
+    "HotfixPackage",
+    // 需补充元数据的 AOT 程序集
+    new string[] { "mscorlib.dll", "UniTask.dll" },
+    // 热更新程序集
+    new string[] { "HotfixerDemo.Hotfix.Runtime.dll" }
+);
+```
 
 ---
 
-## Status & Cache (状态与缓存)
+### IsDone {#isdone}
 
-* **IsDone()**
-    * 返回热更新是否已完成加载。
-    * 等待 Hotfixers.IsDone() 之后再进入游戏主逻辑与资源更新。
-* **IsDisabled()**
-    * 检查当前环境是否禁用了热更新功能（通常用于开发者模式）。
-    * <Highlight color="#ff2f00">重要</Highlight> 如果禁用 HybridCLR，必须搭配 Macro [OXGFRAME_HYBRIDCLR_DISABLED](https://github.com/michael811125/OxGFrame/wiki/Macro-Definitions)，才能有效剔除热更流程。
-    ![](/img/hotfixer/api/runtime/img_1.png)
-* **Reset()**
-    * 重置热更新的标记与缓存数据，如果不是社群版的话，是商业版支持 HotReload 则可以使用 Reset 重置。
+```csharp
+public static bool IsDone()
+```
+
+**返回值**
+
+`bool` — 热更新流程是否已全部完成（下载与加载皆完成后为 `true`）。
+
+**说明**
+
+返回热更新完成状态。建议等待此状态为 `true` 后，再进入游戏主逻辑与资源更新。
+
+**示例**
+
+```csharp
+Hotfixers.CheckHotfix("HotfixPackage");
+
+// 等待热更新完成
+await UniTask.WaitUntil(() => Hotfixers.IsDone());
+
+// 进入游戏主流程
+```
 
 ---
 
-## Assembly Info (程序集信息)
+### IsDisabled {#isdisabled}
 
-提供运行时已载入的程序集查询。
+```csharp
+public static bool IsDisabled()
+```
 
-### AOT Assemblies (元数据程序集)
-* **GetAOTAssemblyNames()**: 获取 AOT 程序集名称（含 `.dll` 扩展名）。
-* **GetAotAssemblyNamesWithoutExtensions()**: 获取 AOT 程序集名称（不含扩展名）。
+**返回值**
 
-### Hotfix Assemblies (热更新程序集)
-* **GetHotfixAssemblyNames()**: 获取热更新程序集名称（含 `.dll` 扩展名）。
-* **GetHotfixAssemblyNamesWithoutExtensions()**: 获取热更新程序集名称（不含扩展名）。
-* **GetHotfixAssembly(string assemblyName)**: 根据名称获取已载入的 `Assembly` 对象。
+`bool` — 是否已禁用热更新功能；项目定义 `OXGFRAME_HYBRIDCLR_DISABLED` 宏时返回 `true`。
+
+**说明**
+
+检查当前环境是否禁用了热更新功能（由编译期宏决定，通常用于开发者模式）。
+
+<Highlight color="#ff2f00">重要</Highlight> 如果禁用 HybridCLR，必须搭配宏 [OXGFRAME_HYBRIDCLR_DISABLED](https://github.com/michael811125/OxGFrame/wiki/Macro-Definitions)，才能有效剔除热更流程（参考[禁用热更新](#hybridclr-disabled)）。
+
+---
+
+### Reset {#reset}
+
+```csharp
+public static void Reset()
+```
+
+**说明**
+
+重置热更新的标记与缓存数据（包含完成标记、已记录的 AOT / Hotfix 程序集名称与已加载的 `Assembly` 缓存），使 [CheckHotfix](#checkhotfix) 能重新执行。
+
+<Highlight color="#00d679">提醒</Highlight> 重置后重新加载热更 DLL 属于 HotReload 范畴，需 HybridCLR **商业版**支持才可使用（社区版不支持）。
+
+---
+
+### GetAOTAssemblyNames {#getaotassemblynames}
+
+```csharp
+public static string[] GetAOTAssemblyNames()
+```
+
+**返回值**
+
+`string[]` — AOT 程序集名称数组（含 `.dll` 扩展名）；尚未执行过 [CheckHotfix](#checkhotfix) 时返回 `null`。
+
+**说明**
+
+获取需补充元数据的 AOT 程序集名称清单。此清单在调用 [CheckHotfix](#checkhotfix) 时设置。
+
+---
+
+### GetAotAssemblyNamesWithoutExtensions {#getaotassemblynameswithoutextensions}
+
+```csharp
+public static string[] GetAotAssemblyNamesWithoutExtensions()
+```
+
+**返回值**
+
+`string[]` — 去除 `.dll` 扩展名的 AOT 程序集名称数组；尚未执行过 [CheckHotfix](#checkhotfix) 时返回 `null`。
+
+**说明**
+
+同 [GetAOTAssemblyNames](#getaotassemblynames)，但名称**不含** `.dll` 扩展名（首次调用时转换并缓存结果）。
+
+---
+
+### GetHotfixAssemblyNames {#gethotfixassemblynames}
+
+```csharp
+public static string[] GetHotfixAssemblyNames()
+```
+
+**返回值**
+
+`string[]` — 热更新程序集名称数组（含 `.dll` 扩展名）；尚未执行过 [CheckHotfix](#checkhotfix) 时返回 `null`。
+
+**说明**
+
+获取热更新程序集名称清单。此清单在调用 [CheckHotfix](#checkhotfix) 时设置。
+
+---
+
+### GetHotfixAssemblyNamesWithoutExtensions {#gethotfixassemblynameswithoutextensions}
+
+```csharp
+public static string[] GetHotfixAssemblyNamesWithoutExtensions()
+```
+
+**返回值**
+
+`string[]` — 去除 `.dll` 扩展名的热更新程序集名称数组；尚未执行过 [CheckHotfix](#checkhotfix) 时返回 `null`。
+
+**说明**
+
+同 [GetHotfixAssemblyNames](#gethotfixassemblynames)，但名称**不含** `.dll` 扩展名（首次调用时转换并缓存结果）。
+
+---
+
+### GetHotfixAssembly {#gethotfixassembly}
+
+```csharp
+public static Assembly GetHotfixAssembly(string assemblyName)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| assemblyName | `string` | 热更新程序集名称（含 `.dll` 扩展名，如 `HotfixerDemo.Hotfix.Runtime.dll`）。 |
+
+**返回值**
+
+`Assembly` — 已加载的热更新程序集；未找到时返回 `null`。
+
+**说明**
+
+依名称获取已加载的 `Assembly` 对象。主程序集无法直接引用热更新程序集，可通过此方法获取程序集后，以**反射**调用热更层代码。
+
+**示例**
+
+```csharp
+// 热更完成后，通过反射进入热更层入口
+var assembly = Hotfixers.GetHotfixAssembly("HotfixerDemo.Hotfix.Runtime.dll");
+assembly?.GetType("Hello")?.GetMethod("Run")?.Invoke(null, null);
+```
 
 ---

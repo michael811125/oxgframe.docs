@@ -1,5 +1,6 @@
 ---
 sidebar_position: 3
+description: INetProvider 是 NetFrame 的網路提供者介面，定義底層傳輸的標準行為，內建 TCP、KCP 與 WebSocket 三種實作。
 ---
 
 # INetProvider
@@ -22,68 +23,244 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`INetProvider` 定義 **NetFrame** 底層網路傳輸的標準行為，扮演「傳輸驅動層」的角色，將不同的通訊函式庫封裝成統一介面，供上層的 `NetNode` 呼叫。內建提供 TCP、KCP 與 WebSocket 三種實作，也可自行實作此介面擴充其他傳輸協定。
+
+|  |  |
+| :--- | :--- |
+| **命名空間** | `OxGFrame.NetFrame` |
+| **類型** | `public interface` |
+| **原始碼** | [INetProvider.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/NetFrame/Scripts/Runtime/Core/Interface/NetProvider/INetProvider.cs) |
+
+```csharp
 using OxGFrame.NetFrame;
+```
 
-## 核心設計概念
+**宣告**
 
-`INetProvider` 定義了網絡底層傳輸的標準行為。它扮演著「傳輸驅動層」的角色，將不同的通訊庫（如 Telepathy, Mirror, WebSocketSharp 等...）封裝成統一的接口，供上層的 `NetNode` 或 `NetManager` 調用。
+```csharp
+public interface INetProvider
+```
+
+### 內建實作 {#built-in-implementations}
+
+| 實作類 | 底層函式庫 | 對應 NetOption | SendMessage 字串傳送 |
+| :--- | :--- | :--- | :--- |
+| [TcpNetProvider](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/NetFrame/Scripts/Runtime/Core/Implement/NetProvider/Tcp/TcpNetProvider.cs) | [Telepathy](https://github.com/MirrorNetworking/Telepathy) | [TcpNetOption](./NetOption.mdx#tcp-netoption) | 不支援（擲出例外） |
+| [KcpNetProvider](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/NetFrame/Scripts/Runtime/Core/Implement/NetProvider/Kcp/KcpNetProvider.cs) | [kcp2k](https://github.com/MirrorNetworking/kcp2k) | [KcpNetOption](./NetOption.mdx#kcp-netoption) | 不支援（擲出例外） |
+| [WebSocketNetProvider](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/NetFrame/Scripts/Runtime/Core/Implement/NetProvider/WebSocket/WebSocketNetProvider.cs) | [UnityWebSocket](https://github.com/psygames/UnityWebSocket) | [WebSocketNetOption](./NetOption.mdx#websocket-netoption) | 支援 |
+
+<Highlight color="#00d679">提醒</Highlight>
+
+- `TcpNetProvider` 底層的 Telepathy 已處理 TCP 分包/黏包問題，會強制在每個封包前加入 **4 bytes** 的長度標頭。
+- `KcpNetProvider` 額外提供 `SendBinary(KcpChannel kcpChannel, byte[] buffer)` 多載，可指定以 `Reliable` / `Unreliable` 通道傳送（透過 `NetNode.GetNetProvider<KcpNetProvider>()` 取得實例後呼叫）。
+
+### 成員總覽 {#overview}
+
+#### 事件
+
+| 事件 | 說明 |
+| :--- | :--- |
+| [OnOpen](#onopen) | 連線成功開啟時觸發。 |
+| [OnBinary](#onbinary) | 接收到二進位資料時觸發。 |
+| [OnMessage](#onmessage) | 接收到字串資料時觸發。 |
+| [OnError](#onerror) | 通訊發生錯誤時觸發。 |
+| [OnClose](#onclose) | 連線關閉時觸發。 |
+
+#### 方法
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [CreateConnect](#createconnect) | 依連線選項開啟連線。 |
+| [IsConnected](#isconnected) | 回傳底層是否處於連線狀態。 |
+| [SendBinary](#sendbinary) | 傳送二進位資料。 |
+| [SendMessage](#sendmessage) | 傳送字串資料。 |
+| [OnUpdate](#onupdate) | 驅動底層傳輸的輪詢更新。 |
+| [Close](#close) | 關閉連線並清理資源。 |
 
 ---
 
-## Events (事件監聽)
+### OnOpen {#onopen}
 
-實作者必須處理以下事件，以便通知上層狀態變更：
+```csharp
+event EventHandler<object> OnOpen
+```
 
-* **OnOpen**: 連線成功開啟時觸發。`payload` 通常為連線資訊。
-* **OnBinary**: 接收到二進制數據時觸發。傳入參數為 `byte[]`。
-* **OnMessage**: 接收到字串數據時觸發。傳入參數為 `string`。
-* **OnError**: 通訊發生異常時觸發。
-* **OnClose**: 連線關閉時觸發。
+**說明**
+
+連線成功開啟時觸發，`payload` 為連線資訊。`NetNode` 訂閱此事件以驅動 `INetTips.OnConnected` 與 Connected 回呼。
+
+<Highlight color="#00d679">提醒</Highlight> 內建實作的 payload：`TcpNetProvider` / `KcpNetProvider` 傳入 `0`；`WebSocketNetProvider` 傳入開啟事件參數。
 
 ---
 
-## Interface Methods (介面方法)
+### OnBinary {#onbinary}
 
-### CreateConnect(NetOption netOption)
-根據提供的配置開啟連線。
-* **Params**: 
-    * `NetOption netOption`: 包含連線目標（Host/Port）與各項參數的配置物件。實作時需將其轉型為對應的子類別（如 `TcpNetOption`）。
+```csharp
+event EventHandler<byte[]> OnBinary
+```
 
-### IsConnected()
-* **Returns**: `bool`，返回當前底層傳輸是否處於連線狀態。
+**說明**
 
-### SendBinary(byte[] buffer)
-發送二進制數據。
-* **Params**: `byte[] buffer`: 要發送的原始位元組資料。
-* **Returns**: `bool`，發送成功返回 true。
+接收到二進位資料時觸發。`NetNode` 訂閱此事件，並轉發給 `SetResponseBinaryHandler` 所設定的處理器。
 
-### SendMessage(string text)
-發送字串數據。
-* **Params**: `string text`: 要發送的字串。
-* **注意**: 並非所有協議都支持直接發送字串（如純 TCP），實作時需視情況拋出異常或進行 UTF-8 轉換。
+---
 
-### OnUpdate()
-驅動底層傳輸的輪詢（Polling）。
-* **用途**: 通常用於從接收隊列中提取封包並觸發事件。對於異步傳輸庫，此方法可確保回調發生在 Unity 主線程中。
+### OnMessage {#onmessage}
 
-### Close()
+```csharp
+event EventHandler<string> OnMessage
+```
+
+**說明**
+
+接收到字串資料時觸發。`NetNode` 訂閱此事件，並轉發給 `SetResponseMessageHandler` 所設定的處理器。
+
+<Highlight color="#0373fc">注意</Highlight> 內建實作中僅 `WebSocketNetProvider` 會觸發此事件（TCP / KCP 一律以二進位接收）。
+
+---
+
+### OnError {#onerror}
+
+```csharp
+event EventHandler<object> OnError
+```
+
+**說明**
+
+通訊發生錯誤時觸發，`payload` 為錯誤資訊（內建實作皆傳入錯誤訊息字串）。`NetNode` 據此驅動 `INetTips.OnConnectionError`。
+
+---
+
+### OnClose {#onclose}
+
+```csharp
+event EventHandler<object> OnClose
+```
+
+**說明**
+
+連線關閉時觸發，`payload` 為關閉資訊。`NetNode` 據此驅動 `INetTips.OnDisconnected`，並於非主動關閉時啟動自動重連程序。
+
+<Highlight color="#00d679">提醒</Highlight> 內建實作的 payload：`TcpNetProvider` / `KcpNetProvider` 傳入 `-1`；`WebSocketNetProvider` 傳入關閉代碼（Close Code）。
+
+---
+
+### CreateConnect {#createconnect}
+
+```csharp
+void CreateConnect(NetOption netOption)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| netOption | `NetOption` | 連線選項。實作時需將其轉型為對應的衍生類（如 `TcpNetOption`）以取得連線參數。 |
+
+**說明**
+
+依連線選項建立並開啟連線，由 `NetNode.Connect` 於連線程序啟動時呼叫。連線成功後應觸發 [OnOpen](#onopen) 事件通知上層。
+
+---
+
+### IsConnected {#isconnected}
+
+```csharp
+bool IsConnected()
+```
+
+**回傳值**
+
+`bool` — 底層傳輸處於連線狀態回傳 `true`。
+
+**說明**
+
+回傳底層傳輸目前的連線狀態。
+
+---
+
+### SendBinary {#sendbinary}
+
+```csharp
+bool SendBinary(byte[] buffer)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| buffer | `byte[]` | 要傳送的二進位資料。 |
+
+**回傳值**
+
+`bool` — 成功交付傳送回傳 `true`；未連線或傳送失敗回傳 `false`。
+
+**說明**
+
+傳送二進位資料，即 `NetFrames.Send(byte[], int)` 的底層實作。
+
+---
+
+### SendMessage {#sendmessage}
+
+```csharp
+bool SendMessage(string text)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| text | `string` | 要傳送的字串資料。 |
+
+**回傳值**
+
+`bool` — 成功交付傳送回傳 `true`。
+
+**說明**
+
+傳送字串資料，即 `NetFrames.Send(string, int)` 的底層實作。
+
+<Highlight color="#0373fc">注意</Highlight> 並非所有協定都支援直接傳送字串，內建的 `TcpNetProvider` 與 `KcpNetProvider` 會擲出例外；自行實作時可視情況擲出例外，或將字串轉換為 UTF-8 二進位改走 [SendBinary](#sendbinary)。
+
+---
+
+### OnUpdate {#onupdate}
+
+```csharp
+void OnUpdate()
+```
+
+**說明**
+
+驅動底層傳輸的輪詢（Polling），由 `NetManager` 的更新器於每次更新透過 `NetNode` 呼叫。通常用於自接收佇列提取封包並觸發事件；若底層函式庫自帶事件派發（如 UnityWebSocket），可留空實作。
+
+<Highlight color="#ff2f00">重要</Highlight> 此方法會被高頻呼叫，請確保其中的輪詢邏輯足夠輕量。
+
+---
+
+### Close {#close}
+
+```csharp
+void Close()
+```
+
+**說明**
+
 中斷連線並清理底層資源。
 
 ---
 
-## 實作範例：TcpNetProvider (基於 Telepathy)
+### 繼承實作範例 {#implementation-example}
 
-以下展示如何使用第三方庫 Telepathy 實作 TCP 傳輸層：
+以自訂傳輸函式庫實作 `INetProvider` 的骨架如下：
 
 ```csharp
-public class TcpNetProvider : INetProvider
-{
-    private Client _client = null;
-    
-    // 每幀處理封包上限
-    public int processLimitPerTick;
+using System;
+using OxGFrame.NetFrame;
 
-    // 實作介面定義的事件
+public class CustomNetProvider : INetProvider
+{
     public event EventHandler<object> OnOpen;
     public event EventHandler<byte[]> OnBinary;
     public event EventHandler<string> OnMessage;
@@ -92,48 +269,51 @@ public class TcpNetProvider : INetProvider
 
     public void CreateConnect(NetOption netOption)
     {
-        var opt = netOption as TcpNetOption;
-        this._client = new Client(opt.maxBufferSize);
-        this.processLimitPerTick = opt.processLimitPerTick;
+        // 轉型為對應的 NetOption 衍生類，取得連線參數
+        // var option = netOption as CustomNetOption;
 
-        // 綁定底層事件
-        this._client.OnConnected += () => this.OnOpen?.Invoke(this, 0);
-        this._client.OnData += (arrSeg) => {
-            byte[] data = new byte[arrSeg.Count];
-            Buffer.BlockCopy(arrSeg.Array, arrSeg.Offset, data, 0, arrSeg.Count);
-            this.OnBinary?.Invoke(this, data);
-        };
-        this._client.OnDisconnected += () => this.OnClose?.Invoke(this, -1);
-
-        this._client.Connect(opt.host, opt.port);
+        // 建立底層連線並綁定事件：
+        // 開啟 → this.OnOpen?.Invoke(this, payload)
+        // 收包 → this.OnBinary?.Invoke(this, data)
+        // 錯誤 → this.OnError?.Invoke(this, error)
+        // 關閉 → this.OnClose?.Invoke(this, code)
     }
 
-    public void OnUpdate()
+    public bool IsConnected()
     {
-        // 驅動底層輪詢，將數據推送至事件
-        this._client?.Tick(this.processLimitPerTick);
+        // 回傳底層連線狀態
+        return false;
     }
 
     public bool SendBinary(byte[] buffer)
     {
-        if (!IsConnected()) return false;
-        return this._client.Send(new ArraySegment<byte>(buffer));
+        // 傳送二進位資料，成功交付回傳 true
+        return false;
     }
 
     public bool SendMessage(string text)
     {
-        // TCP 通常不支持純文本發送，需由開發者決定是否自行封裝 UTF8 轉換
-        throw new NotSupportedException("TCP not supports SendMessage, use SendBinary.");
+        // 不支援字串傳送時，可擲出例外提示改用 SendBinary
+        throw new NotSupportedException();
     }
 
-    public bool IsConnected() => this._client?.Connected ?? false;
+    public void OnUpdate()
+    {
+        // 每次更新被呼叫，驅動底層輪詢（提取封包並觸發事件）
+    }
 
     public void Close()
     {
-        this._client?.Disconnect();
-        this._client = null;
+        // 中斷連線並清理底層資源
     }
 }
 ```
 
-<Highlight color="#ff2f00">重要</Highlight> 由於 OnUpdate 會在每一幀被調用，請確保其中的 Tick 邏輯足夠輕量。
+實作完成後，建立 `NetNode` 時傳入即可：
+
+```csharp
+var netNode = new NetNode(new CustomNetProvider(), new NetTipsExample());
+NetFrames.AddNetNode(netNode);
+```
+
+---

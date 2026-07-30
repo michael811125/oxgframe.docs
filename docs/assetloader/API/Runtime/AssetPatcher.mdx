@@ -1,5 +1,6 @@
 ---
 sidebar_position: 5
+description: AssetPatcher 是 AssetLoader 模組的更新補丁統一入口，涵蓋補丁流程控制、Package 生命週期管理、下載器建立與合併下載、版本狀態與路徑查詢。
 ---
 
 # AssetPatcher
@@ -22,80 +23,1759 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`AssetPatcher` 是 **AssetLoader** 模組的更新補丁統一入口（Facade），底層由 **YooAsset** 驅動，涵蓋**補丁流程控制**（檢查、修復、暫停、恢復、取消）、**Package 生命週期管理**（初始化、更新、卸載、預設 Package 切換）、**下載器**建立與多 Package 合併下載，以及版本、狀態與路徑查詢。
+
+|  |  |
+| :--- | :--- |
+| **命名空間** | `OxGFrame.AssetLoader` |
+| **類型** | `public static class` |
+| **原始碼** | [AssetPatcher.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/AssetLoader/Scripts/Runtime/AssetPatcher.cs) |
+
+```csharp
 using OxGFrame.AssetLoader;
+using OxGFrame.AssetLoader.Bundle; // PackageInfoWithBuild、BundleConfig.PlayMode 等型別
+```
 
-## Patch Status (更新狀態)
+<Highlight color="#0373fc">注意</Highlight> 使用前須於啟動場景中建置 `PatchLauncher`（負責設定 PlayMode、Preset Packages 與下載選項），相關設定請參考 [AssetLoader 介紹](../../intro.mdx)。
 
-用於監控當前資源更新流程的進度。
+## 快速上手 {#quick-start}
 
-* **IsInitialized()**: 判斷資源系統是否已完成初始化。
-* **IsCheck()**: 是否正在執行版本檢查。
-* **IsRepair()**: 是否正在執行修復（重新下載）流程。
-* **IsDone()**: 更新流程是否已全部完成且可開始加載資源。
+```csharp
+// 啟動補丁檢查流程（版本比對 → 清單更新 → 建立主下載器 → 下載）
+AssetPatcher.Check();
+
+// 等待補丁流程完成後，即可開始載入資源
+while (!AssetPatcher.IsDone())
+    await UniTask.Yield();
+
+// 初始化 DLC Package 並更新版本與清單
+bool success = await AssetPatcher.InitDlcPackage(new DlcPackageInfoWithBuild()
+{
+    packageName = "Dlc01Package",
+    dlcVersion = "v1.0"
+}, updatePackage: true);
+
+// 切換預設 Package（AssetLoaders 未指定 packageName 時使用）
+AssetPatcher.SwitchDefaultPackage("Dlc01Package");
+
+// 查詢目前資源版本
+string patchVersion = AssetPatcher.GetPatchVersion();
+```
+
+## 通用規則 {#general-rules}
+
+### Package 概念 {#package-concept}
+
+OxGFrame 以 **Package** 為資源管理單位（對應 YooAsset 的 `ResourcePackage`）：
+
+| 類型 | 說明 |
+| :--- | :--- |
+| **App Package** | 主要資源包，遠端路徑跟隨主程式版號（App Version）。 |
+| **DLC Package** | 擴充資源包，具有**獨立版號**路徑（`dlcVersion`），可依需求動態初始化與卸載。 |
+
+- **Preset Packages**：於 `PatchLauncher` Inspector 配置的預設 Package 清單（App 與 DLC），啟動時（`Awake`）自動初始化，並合併納入補丁流程的主下載；清單中**首個 App Package** 會被設為**預設 Package**。
+- **預設 Package**：[AssetLoaders](./AssetLoaders.mdx) 各載入方法未指定 `packageName` 時，一律使用預設 Package（可透過 [SetDefaultPackage](#setdefaultpackage)／[SwitchDefaultPackage](#switchdefaultpackage) 變更）。
+- Package 資訊基類 `PackageInfoWithBuild` 欄位：
+
+| 欄位 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| buildMode | `BundleConfig.BuildMode` | 建置管線（僅 EditorSimulateMode 使用）：`ScriptableBuildPipeline`／`BuiltinBuildPipeline`／`RawFileBuildPipeline`。 |
+| packageName | `string` | Package 名稱。 |
+| hostServer | `string` | 自訂資源伺服器 URL（空值時依配置自動組合）。 |
+| fallbackHostServer | `string` | 自訂備用資源伺服器 URL（空值時依配置自動組合）。 |
+| initializeParameters | `InitializeParameters` | YooAsset 初始化參數（CustomMode 使用）。 |
+
+`AppPackageInfoWithBuild` 直接繼承上表；`DlcPackageInfoWithBuild` 額外增加：
+
+| 欄位 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| withoutPlatform | `bool` | DLC 遠端路徑是否略過平台層級。<br/>**預設值**：`false` |
+| dlcVersion | `string` | DLC 版本。空值時自動使用最新（依日期）版本。 |
+
+### PlayMode 運行模式 {#play-mode}
+
+由 `PatchLauncher` 設定的 `BundleConfig.PlayMode` 決定資源系統的運行方式：
+
+| 值 | 說明 |
+| :--- | :--- |
+| `EditorSimulateMode` | 編輯器模擬模式：無需實際建置 AssetBundle，於編輯器中模擬運行。 |
+| `OfflineMode` | 離線模式：僅使用內建（StreamingAssets）資源，不進行遠端更新。 |
+| `HostMode` | 主機模式：連線資源伺服器進行版本檢查、清單更新與下載。 |
+| `WeakHostMode` | 弱聯網主機模式：同 HostMode，但斷網時可改用上次記錄的本地版本繼續運行（本地資源需完整）。 |
+| `WebGLMode` | WebGL 模式：僅使用 Web 平台內建資源（WebGL 平台限定）。 |
+| `WebGLRemoteMode` | WebGL 遠端模式：內建資源搭配遠端資源伺服器（WebGL 平台限定）。 |
+| `CustomMode` | 自訂模式：自行提供 YooAsset `InitializeParameters`；Preset Packages 需透過 [SetPresetPackages](#setpresetpackages) 手動配置。 |
+
+<Highlight color="#00d679">提醒</Highlight> 打包後可透過 Scripting Define Symbols（`OXGFRAME_OFFLINE_MODE`、`OXGFRAME_HOST_MODE`、`OXGFRAME_WEAK_HOST_MODE`、`OXGFRAME_WEBGL_MODE`、`OXGFRAME_WEBGL_REMOTE_MODE`、`OXGFRAME_CUSTOM_MODE`）強制覆蓋 PlayMode。
+
+### YooAsset 版本相容性 {#yooasset-compat}
+
+自 **v3.7.0** 起，同時支援 **YooAsset 2.x**（驗證 2.3.18～2.3.19）與 **YooAsset 3.x**（驗證 3.0.3-beta～3.0.5，建議 **3.0.5+**）：
+
+- 依安裝的 `com.tuyoogame.yooasset` 套件版本，自動定義 `YOOASSET_2`（2.x）或 `YOOASSET_3`（3.x），**無需手動設定宏**。
+- 公開 API 簽名於兩版本下**完全一致**，專案程式碼無需修改，版本差異由框架內部分支處理。
+- 自訂解密實作介面的 `IDecryptInitialize.CheckIsIntialized()` 已更名為 `CheckIsInitialized()`（僅影響自訂解密實作）。
+
+| 項目 | YooAsset 2.x | YooAsset 3.x |
+| :--- | :--- | :--- |
+| 初始化與檔案系統 | 傳統 `InitializeParameters` | v3 原生 Options API 與新版檔案系統（內部處理） |
+| [BundleConfig](./BundleConfig.mdx) 的 `BuildMode.ArchiveFileBuildPipeline` | 不支援 | 支援（含 EditorSimulateMode 歸檔包模擬） |
+| 內建 8 種加解密服務 | 支援 | 支援（實作 v3 拆分式解密介面；Editor 端另實作 `IBundleEncryptor` / `IManifestEncryptor`） |
+| 下載失敗回呼 `onDownloadError` 型別 | `DownloaderOperation.DownloadError` | 同簽名別名 `Action<DownloadErrorEventArgs>`（用法不變） |
+| 原生檔案（RawFile）載入 | `RawFileHandle` | `RawFileObject` / `EnsureBundleFileAsync`（行為一致） |
+
+### 補丁流程與主下載器 {#patch-flow}
+
+- [Check](#check)／[Repair](#repair) 會啟動內部狀態機驅動的補丁流程（版本比對 → 清單更新 → 建立下載器 → 下載 → 完成），流程各階段透過 `PatchEvents` 發送事件，供 UI 顯示進度與互動。
+- [Pause](#pause)／[Resume](#resume)／[Cancel](#cancel) 僅作用於補丁流程建立的**主下載器**；透過 [GetPackageDownloader](#getpackagedownloader) 等方法自行建立的下載器不受影響。
+- 流程完成後 [IsDone](#isdone) 回傳 `true`，即可開始透過 [AssetLoaders](./AssetLoaders.mdx) 載入資源。
+
+### DownloadInfo 結構 {#downloadinfo}
+
+```csharp
+public struct DownloadInfo
+```
+
+[GetDownloadInfoWithCombinePackages](#getdownloadinfowithcombinepackages) 系列方法的回傳型別，用於預先統計待下載內容：
+
+| 欄位 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| totalCount | `int` | 待下載的檔案總數。 |
+| totalBytes | `ulong` | 待下載的總位元組數。 |
 
 ---
 
-## Patch Operation (更新操作)
+## 補丁狀態查詢 {#patch-status}
 
-控制主下載器的核心行為。
+查詢補丁與資源系統的目前狀態。
 
-### Check / Repair
-* **Check()**: 開始執行補丁更新流程（包含版本對比與檔案清單獲取）。
-* **Repair()**: 開始執行資源修復流程，會強制檢查所有檔案的完整性。
+### 方法總覽 {#status-overview}
 
-### Control Methods
-* **Pause() / Resume()**: 暫停或繼續主下載器的任務。
-* **Cancel()**: 取消下載。
-
----
-
-## Package Operation (資源包管理)
-
-管理各個獨立 Package 的生命週期與本地緩存。
-
-### InitPackage
-初始化指定的 Package，系統會自動判斷該 Package 是 **App (主要)** 還是 **DLC (擴充)** 類型，並自動從遠端或內置路徑尋找資源。
-
-### UnloadPackageAndClearCacheFiles
-卸載指定的 Package，並從硬碟（Sandbox）中徹底刪除相關資源檔案。
-* **Params**:
-    * `string packageName`: Package 名稱。
-    * `bool destroyPackage`: 是否同時將 Package 從內存中釋放。
-
-### Default Package 設置
-* **SetDefaultPackage**: 設置初始預設的資源包。
-* **SwitchDefaultPackage**: 在已註冊的包之間進行切換預設的資源包。
-* **GetDefaultPackageName**: 獲取目前加載資源時預設使用的包名。
+| 方法 | 說明 |
+| :--- | :--- |
+| [IsInitialized](#isinitialized) | 資源系統（Preset Packages）是否已完成初始化。 |
+| [IsReleased](#isreleased) | 資源系統是否已釋放（呼叫過 `Release`）。 |
+| [IsCheck](#ischeck) | 是否正在執行補丁檢查流程。 |
+| [IsRepair](#isrepair) | 是否正在執行修復流程。 |
+| [IsDone](#isdone) | 補丁流程是否已全部完成。 |
 
 ---
 
-## Downloader (下載器管理)
+### IsInitialized {#isinitialized}
 
-提供極為彈性的下載方案，支持合併多個 Package 同時下載。
+```csharp
+public static bool IsInitialized()
+```
 
-### GetPackageDownloader
-獲取單一 Package 的下載器，支持透過 **Tags (標籤)** 或 **AssetNames (資源名)** 來精確篩選需要更新的內容。
+**回傳值**
 
-### BeginDownloadWithCombinePackages
-合併多個 Package 的更新請求。這在處理「DLC + 主資源更新」時非常有用，能統一在一個進度條中顯示。
+`bool` — Preset Packages 是否已全部初始化完成。
 
-**主要參數：**
-* `OnDownloadSpeedProgress`: 用於接收下載速度、剩餘時間與總進度的回調。
-* `DownloadError`: 下載失敗時的回調（包含檔案資訊與錯誤訊息）。
+**說明**
 
----
-
-## Path & Storage (路徑與儲存)
-
-* **GetLocalSandboxRootPath()**: 取得本地持久化儲存根目錄（.../yoo）。
-* **GetBuiltinRootPath()**: 取得 StreamingAssets 內的內置資源根目錄。
-* **GoToAppStore()**: 呼叫系統瀏覽器前往商店連結（更新 App 本體）。
+判斷資源系統是否已完成初始化（`PatchLauncher` 啟動時的 Preset Packages 初始化，或手動呼叫 [InitSetupPresetPackages](#initsetuppresetpackages) 成功後為 `true`）。
 
 ---
 
-## Release (釋放)
+### IsReleased {#isreleased}
 
-### Release()
-<Highlight color="#ff2f00">重要</Highlight> 當遊戲準備關閉時調用。此方法會異步釋放所有 Package 的資源引用，並清空 Bundle 相關的全局配置，確保內存正確回收。
+```csharp
+public static bool IsReleased()
+```
+
+**回傳值**
+
+`bool` — 是否已呼叫過 [Release](#release) 釋放資源系統。
+
+**說明**
+
+判斷資源系統（YooAsset）是否已釋放。釋放後 `AssetLoaders` 的 Bundle 卸載相關操作將被跳過。
+
+---
+
+### IsCheck {#ischeck}
+
+```csharp
+public static bool IsCheck()
+```
+
+**回傳值**
+
+`bool` — 是否正在執行補丁檢查流程。
+
+**說明**
+
+判斷是否正在執行 [Check](#check) 啟動的補丁檢查流程（流程完成或取消後為 `false`）。
+
+---
+
+### IsRepair {#isrepair}
+
+```csharp
+public static bool IsRepair()
+```
+
+**回傳值**
+
+`bool` — 是否正在執行修復流程。
+
+**說明**
+
+判斷是否正在執行 [Repair](#repair) 啟動的修復流程。
+
+---
+
+### IsDone {#isdone}
+
+```csharp
+public static bool IsDone()
+```
+
+**回傳值**
+
+`bool` — 補丁流程是否已全部完成。
+
+**說明**
+
+判斷補丁流程是否已完成且可開始載入資源。啟動 [Check](#check)／[Repair](#repair) 時會重置為 `false`，流程結束後為 `true`。
+
+**範例**
+
+```csharp
+AssetPatcher.Check();
+
+while (!AssetPatcher.IsDone())
+    await UniTask.Yield();
+
+// 補丁完成，開始載入資源
+```
+
+---
+
+## 補丁流程操作 {#patch-operation}
+
+控制補丁流程與主下載器的行為。
+
+### 方法總覽 {#operation-overview}
+
+#### 流程啟動
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [SetPresetPackages](#setpresetpackages) | 於運行時自訂 Preset App／DLC Packages（CustomMode 用）。 |
+| [InitSetupPresetPackages](#initsetuppresetpackages) | 手動初始化 Preset Packages。 |
+| [Check](#check) | 啟動補丁檢查流程。 |
+| [Repair](#repair) | 啟動修復流程（清除本地快取後重新下載）。 |
+
+#### 主下載器控制
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [Pause](#pause) | 暫停主下載器。 |
+| [Resume](#resume) | 恢復主下載器。 |
+| [Cancel](#cancel) | 取消主下載器的下載。 |
+
+---
+
+### SetPresetPackages {#setpresetpackages}
+
+```csharp
+public static void SetPresetPackages(List<AppPackageInfoWithBuild> appPackages, List<DlcPackageInfoWithBuild> dlcPackages)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| appPackages | `List<AppPackageInfoWithBuild>` | Preset App Packages 清單（首個為預設 Package）。 |
+| dlcPackages | `List<DlcPackageInfoWithBuild>` | Preset DLC Packages 清單。 |
+
+**說明**
+
+於運行時自訂 Preset Packages 配置（覆蓋 `PatchLauncher` 的清單設定）。
+
+<Highlight color="#00d679">提醒</Highlight> 於 `PatchLauncher` 尚未喚醒（Awake）前呼叫時，將改寫入 `BundleConfig` 並輸出警告，不會拋出例外。
+
+<Highlight color="#0373fc">注意</Highlight> 主要供 **CustomMode** 使用——CustomMode 下 `PatchLauncher` Inspector 的 Preset 清單不生效，須以此方法手動配置，再呼叫 [InitSetupPresetPackages](#initsetuppresetpackages) 初始化。
+
+**範例**
+
+```csharp
+AssetPatcher.SetPresetPackages(
+    new List<AppPackageInfoWithBuild>()
+    {
+        new AppPackageInfoWithBuild() { packageName = "DefaultPackage" }
+    },
+    new List<DlcPackageInfoWithBuild>());
+
+await AssetPatcher.InitSetupPresetPackages();
+```
+
+---
+
+### InitSetupPresetPackages {#initsetuppresetpackages}
+
+```csharp
+public static async UniTask InitSetupPresetPackages()
+```
+
+**回傳值**
+
+`UniTask` — 可等待的非同步操作。
+
+**說明**
+
+初始化並設置所有 Preset Packages（App 與 DLC），完成後將清單首個 App Package 設為預設 Package，並更新 [IsInitialized](#isinitialized) 狀態。
+
+<Highlight color="#00d679">提醒</Highlight> 一般情況下 `PatchLauncher` 於 `Awake` 會自動執行；僅在 CustomMode 或關閉 `initializePresetPackages` 選項時需手動呼叫。
+
+---
+
+### Check {#check}
+
+```csharp
+public static void Check()
+```
+
+**說明**
+
+啟動補丁檢查流程：進行主程式版本比對、Package 版本與資源清單更新、建立主下載器並下載更新內容，流程各階段透過 `PatchEvents` 發送事件。
+
+<Highlight color="#0373fc">注意</Highlight> 若補丁檢查或修復流程正在執行中，重複呼叫將被忽略（輸出警告日誌）。
+
+**範例**
+
+```csharp
+// 啟動補丁流程
+AssetPatcher.Check();
+
+// 以輪詢（或訂閱 PatchEvents 事件）等待完成
+while (!AssetPatcher.IsDone())
+    await UniTask.Yield();
+```
+
+---
+
+### Repair {#repair}
+
+```csharp
+public static void Repair()
+```
+
+**說明**
+
+啟動修復流程：**清除本地的補丁快取資料與配置檔（清空下載目錄）**後，重新執行完整的補丁流程，可用於修復損毀或不完整的本地資源。
+
+<Highlight color="#ff2f00">重要</Highlight> 修復會刪除已下載的本地資源，執行後需重新下載全部更新內容。
+
+---
+
+### Pause {#pause}
+
+```csharp
+public static void Pause()
+```
+
+**說明**
+
+暫停補丁流程主下載器的所有下載任務。未執行補丁流程（主下載器不存在）時呼叫無效果。
+
+---
+
+### Resume {#resume}
+
+```csharp
+public static void Resume()
+```
+
+**說明**
+
+恢復補丁流程主下載器的所有下載任務。
+
+---
+
+### Cancel {#cancel}
+
+```csharp
+public static void Cancel()
+```
+
+**說明**
+
+取消主下載器的下載任務，發送下載取消事件（`PatchEvents.PatchDownloadCanceled`），並結束 Check／Repair 狀態。
+
+---
+
+## 版本與平台資訊 {#version-info}
+
+### 方法總覽 {#version-overview}
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [GetPlatform](#getplatform) | 取得目前的運行平台名稱。 |
+| [GetAppVersion](#getappversion) | 取得主程式版本號。 |
+| [GetPatchVersion](#getpatchversion) | 取得最新的資源（補丁）版本。 |
+
+---
+
+### GetPlatform {#getplatform}
+
+```csharp
+public static string GetPlatform()
+```
+
+**回傳值**
+
+`string` — 平台名稱；補丁流程尚未取得平台資訊時（如模擬模式），回傳 `Application.platform.ToString()`。
+
+**說明**
+
+取得補丁配置中記錄的運行平台名稱（來自 AppConfig）。
+
+---
+
+### GetAppVersion {#getappversion}
+
+```csharp
+public static string GetAppVersion()
+```
+
+**回傳值**
+
+`string` — 主程式版本號；補丁流程尚未取得版本資訊時（如模擬模式），回傳 `Application.version`。
+
+**說明**
+
+取得補丁配置中記錄的主程式版本號（來自 AppConfig）。
+
+---
+
+### GetPatchVersion {#getpatchversion}
+
+```csharp
+public static string GetPatchVersion(bool encode = false, int length = 16, string separator = "-")
+public static string GetPatchVersion(string[] customPatchVersions, bool encode = false, int length = 16, string separator = "-")
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| customPatchVersions | `string[]` | 自訂版本清單。未指定時，使用 Preset Packages 記錄的資源版本。 |
+| encode | `bool` | 是否輸出編碼後的版本字串（建議顯示用）。<br/>**預設值**：`false` |
+| length | `int` | 編碼字串長度（有效範圍 11～32）。<br/>**預設值**：`16` |
+| separator | `string` | 編碼字串的分隔符號。<br/>**預設值**：`"-"` |
+
+**回傳值**
+
+`string` — 最新的資源版本字串；查無版本記錄時（如模擬模式），回傳以目前日期產生的版本。
+
+**說明**
+
+取得版本清單中**最新**的資源（補丁）版本。`encode = true` 時回傳編碼後的顯示用字串。
+
+**範例**
+
+```csharp
+// 原始版本字串
+string version = AssetPatcher.GetPatchVersion();
+
+// 編碼後的顯示版本
+string display = AssetPatcher.GetPatchVersion(encode: true);
+```
+
+---
+
+## Package 管理 {#package-operation}
+
+管理各 Package 的初始化、更新、查詢、預設切換與卸載。
+
+### 方法總覽 {#package-overview}
+
+#### 初始化與更新
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [InitPackage](#initpackage) | 依資訊型別自動初始化 App 或 DLC Package。 |
+| [InitAppPackage](#initapppackage) | 初始化 App Package。 |
+| [InitDlcPackage](#initdlcpackage) | 初始化 DLC Package。 |
+| [UpdatePackage](#updatepackage) | 更新指定 Package 的版本與資源清單。 |
+
+#### 預設 Package
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [SetDefaultPackage](#setdefaultpackage) | 設定預設 Package（未註冊時自動註冊）。 |
+| [SwitchDefaultPackage](#switchdefaultpackage) | 在已註冊的 Package 間切換預設。 |
+| [GetDefaultPackageName](#getdefaultpackagename) | 取得預設 Package 名稱。 |
+| [GetDefaultPackage](#getdefaultpackage) | 取得預設 Package 實例。 |
+
+#### 取得 Package
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [GetPackage](#getpackage) | 依名稱取得 Package。 |
+| [GetPackages](#getpackages) | 依名稱批次取得 Packages。 |
+| [GetAllPackages](#getallpackages) | 取得所有已註冊的 Packages。 |
+| [GetPresetAppPackages](#getpresetapppackages) | 取得 Preset App Packages。 |
+| [GetPresetDlcPackages](#getpresetdlcpackages) | 取得 Preset DLC Packages。 |
+| [GetPresetAppPackageInfos](#getpresetapppackageinfos) | 取得 Preset App Package 資訊清單。 |
+| [GetPresetAppPackageNames](#getpresetapppackagenames) | 取得 Preset App Package 名稱清單。 |
+| [GetPresetDlcPackageInfos](#getpresetdlcpackageinfos) | 取得 Preset DLC Package 資訊清單。 |
+| [GetPresetDlcPackageNames](#getpresetdlcpackagenames) | 取得 Preset DLC Package 名稱清單。 |
+
+#### 本地檔案查詢與卸載
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [CheckPackageHasAnyFilesInLocal](#checkpackagehasanyfilesinlocal) | 檢查 Package 於本地 Sandbox 是否存在任何檔案。 |
+| [GetPackageSizeInLocal](#getpackagesizeinlocal) | 取得 Package 於本地 Sandbox 的檔案總大小。 |
+| [UnloadPackage](#unloadpackage) | 從記憶體卸載（銷毀）Package。 |
+| [UnloadPackageAndClearCacheFiles](#unloadpackageandclearcachefiles) | 卸載 Package 並清除本地 Sandbox 的快取檔案。 |
+
+---
+
+### InitPackage {#initpackage}
+
+```csharp
+public static async UniTask<bool> InitPackage(PackageInfoWithBuild packageInfo, bool updatePackage = false)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packageInfo | `PackageInfoWithBuild` | Package 資訊（`AppPackageInfoWithBuild` 或 `DlcPackageInfoWithBuild`）。 |
+| updatePackage | `bool` | 初始化成功後，是否立即更新版本與資源清單。<br/>**預設值**：`false` |
+
+**回傳值**
+
+`UniTask<bool>` — 初始化（含更新）是否成功；`packageInfo` 型別非 App／DLC 兩者之一時回傳 `false`。
+
+**說明**
+
+依 `packageInfo` 的實際型別自動分流至 [InitAppPackage](#initapppackage) 或 [InitDlcPackage](#initdlcpackage)。
+
+---
+
+### InitAppPackage {#initapppackage}
+
+```csharp
+public static async UniTask<bool> InitAppPackage(AppPackageInfoWithBuild packageInfo, bool updatePackage = false)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packageInfo | `AppPackageInfoWithBuild` | App Package 資訊（欄位參考 [Package 概念](#package-concept)）。 |
+| updatePackage | `bool` | 初始化成功後，是否立即更新版本與資源清單。<br/>**預設值**：`false` |
+
+**回傳值**
+
+`UniTask<bool>` — 初始化（含更新）是否成功。
+
+**說明**
+
+註冊並依目前 PlayMode 初始化 App Package。啟用 `autoConfigureServerEndpoints`（PlayMode 參數）時，將自動依配置組合資源伺服器與備用伺服器 URL（HostMode 類型使用）。
+
+<Highlight color="#0373fc">注意</Highlight>
+
+- Package 已初始化時不會重複初始化，僅依 `updatePackage` 決定是否執行更新。
+- 新版 YooAsset 需先取得版本與資源清單才能載入資源，因此啟動流程對 Preset Packages 一律以 `updatePackage = true` 初始化。
+
+**範例**
+
+```csharp
+bool success = await AssetPatcher.InitAppPackage(new AppPackageInfoWithBuild()
+{
+    packageName = "OtherPackage"
+}, updatePackage: true);
+```
+
+---
+
+### InitDlcPackage {#initdlcpackage}
+
+```csharp
+public static async UniTask<bool> InitDlcPackage(DlcPackageInfoWithBuild packageInfo, bool updatePackage = false)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packageInfo | `DlcPackageInfoWithBuild` | DLC Package 資訊（含 `dlcVersion`、`withoutPlatform`，欄位參考 [Package 概念](#package-concept)）。 |
+| updatePackage | `bool` | 初始化成功後，是否立即更新版本與資源清單。<br/>**預設值**：`false` |
+
+**回傳值**
+
+`UniTask<bool>` — 初始化（含更新）是否成功。
+
+**說明**
+
+註冊並依目前 PlayMode 初始化 DLC Package。`packageInfo.hostServer`／`fallbackHostServer` 有值時優先使用；否則於啟用 `autoConfigureServerEndpoints` 時，依 DLC 路徑規則（含 `dlcVersion` 與 `withoutPlatform`）自動組合 URL。
+
+**範例**
+
+```csharp
+// 初始化固定版本的 DLC Package
+bool success = await AssetPatcher.InitDlcPackage(new DlcPackageInfoWithBuild()
+{
+    packageName = "Dlc01Package",
+    dlcVersion = "v1.0"
+}, updatePackage: true);
+
+// dlcVersion 留空，自動使用最新（依日期）版本
+await AssetPatcher.InitDlcPackage(new DlcPackageInfoWithBuild()
+{
+    packageName = "Dlc02Package",
+    dlcVersion = null
+}, updatePackage: true);
+```
+
+---
+
+### UpdatePackage {#updatepackage}
+
+```csharp
+public static async UniTask<bool> UpdatePackage(string packageName)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packageName | `string` | Package 名稱。 |
+
+**回傳值**
+
+`UniTask<bool>` — 版本請求與清單更新是否成功。
+
+**說明**
+
+向伺服器請求指定 Package 的最新版本並更新資源清單，成功後記錄本地版本。
+
+<Highlight color="#00d679">提醒</Highlight> 弱聯網模式（啟用 `enableLastLocalVersionsCheckInWeakNetwork`）下版本請求失敗時，將改用上次記錄的本地版本更新清單，並驗證本地資源完整性（不完整時回傳 `false`，需連網更新）。
+
+---
+
+### SetDefaultPackage {#setdefaultpackage}
+
+```csharp
+public static void SetDefaultPackage(string packageName)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packageName | `string` | Package 名稱。 |
+
+**說明**
+
+將指定 Package 設為預設 Package；該 Package **尚未註冊時會自動註冊**後設為預設。
+
+<Highlight color="#0373fc">注意</Highlight> 自動註冊不等於初始化——新註冊的 Package 仍需完成 [InitPackage](#initpackage) 流程後才能載入資源。
+
+---
+
+### SwitchDefaultPackage {#switchdefaultpackage}
+
+```csharp
+public static void SwitchDefaultPackage(string packageName)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packageName | `string` | Package 名稱。 |
+
+**說明**
+
+在**已註冊**的 Package 之間切換預設 Package。查無指定名稱時輸出錯誤日誌且不變更。
+
+**範例**
+
+```csharp
+// 切換至 DLC Package 作為預設
+AssetPatcher.SwitchDefaultPackage("Dlc01Package");
+
+// 之後 AssetLoaders 未指定 packageName 的載入都使用 Dlc01Package
+var prefab = await AssetLoaders.LoadAssetAsync<GameObject>("DlcShopUI");
+```
+
+---
+
+### GetDefaultPackageName {#getdefaultpackagename}
+
+```csharp
+public static string GetDefaultPackageName()
+```
+
+**回傳值**
+
+`string` — 目前預設 Package 的名稱。
+
+**說明**
+
+取得目前載入資源時預設使用的 Package 名稱。
+
+---
+
+### GetDefaultPackage {#getdefaultpackage}
+
+```csharp
+public static ResourcePackage GetDefaultPackage()
+```
+
+**回傳值**
+
+`ResourcePackage` — 目前的預設 Package 實例（YooAsset）。
+
+**說明**
+
+取得預設 Package 實例，可搭配[下載器](#downloader)系列方法使用。
+
+---
+
+### GetPackage {#getpackage}
+
+```csharp
+public static ResourcePackage GetPackage(string packageName)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packageName | `string` | Package 名稱。 |
+
+**回傳值**
+
+`ResourcePackage` — 名稱匹配的 Package；名稱為空或查無時回傳 `null`。
+
+**說明**
+
+依名稱取得已註冊的 Package 實例。
+
+---
+
+### GetPackages {#getpackages}
+
+```csharp
+public static ResourcePackage[] GetPackages(params string[] packageNames)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packageNames | `string[]` | Package 名稱清單（params）。 |
+
+**回傳值**
+
+`ResourcePackage[]` — 查詢到的 Packages（略過查無者）；傳入空清單時回傳 `null`。
+
+**說明**
+
+依名稱批次取得已註冊的 Package 實例。
+
+---
+
+### GetAllPackages {#getallpackages}
+
+```csharp
+public static ResourcePackage[] GetAllPackages()
+```
+
+**回傳值**
+
+`ResourcePackage[]` — 所有已註冊的 Packages。
+
+**說明**
+
+取得目前所有已註冊的 Package 實例。
+
+---
+
+### GetPresetAppPackages {#getpresetapppackages}
+
+```csharp
+public static ResourcePackage[] GetPresetAppPackages()
+```
+
+**回傳值**
+
+`ResourcePackage[]` — Preset App Packages 實例陣列（略過尚未註冊者）；清單為空時回傳空陣列。
+
+**說明**
+
+取得 `PatchLauncher` 配置的 Preset App Packages 實例。
+
+**範例**
+
+```csharp
+// 合併下載所有 Preset App Packages 的更新內容
+var packages = AssetPatcher.GetPresetAppPackages();
+bool succeed = await AssetPatcher.BeginDownloadWithCombinePackages(packages);
+```
+
+---
+
+### GetPresetDlcPackages {#getpresetdlcpackages}
+
+```csharp
+public static ResourcePackage[] GetPresetDlcPackages()
+```
+
+**回傳值**
+
+`ResourcePackage[]` — Preset DLC Packages 實例陣列（略過尚未註冊者）；清單為空時回傳空陣列。
+
+**說明**
+
+取得 `PatchLauncher` 配置的 Preset DLC Packages 實例。
+
+---
+
+### GetPresetAppPackageInfos {#getpresetapppackageinfos}
+
+```csharp
+public static PackageInfoWithBuild[] GetPresetAppPackageInfos()
+```
+
+**回傳值**
+
+`PackageInfoWithBuild[]` — Preset App Packages 的資訊清單。
+
+**說明**
+
+取得 `PatchLauncher` 配置的 Preset App Package 資訊（名稱、建置管線等）。
+
+---
+
+### GetPresetAppPackageNames {#getpresetapppackagenames}
+
+```csharp
+public static string[] GetPresetAppPackageNames()
+```
+
+**回傳值**
+
+`string[]` — Preset App Packages 的名稱清單。
+
+**說明**
+
+取得 `PatchLauncher` 配置的 Preset App Package 名稱。
+
+---
+
+### GetPresetDlcPackageInfos {#getpresetdlcpackageinfos}
+
+```csharp
+public static DlcPackageInfoWithBuild[] GetPresetDlcPackageInfos()
+```
+
+**回傳值**
+
+`DlcPackageInfoWithBuild[]` — Preset DLC Packages 的資訊清單。
+
+**說明**
+
+取得 `PatchLauncher` 配置的 Preset DLC Package 資訊（名稱、版本等）。
+
+---
+
+### GetPresetDlcPackageNames {#getpresetdlcpackagenames}
+
+```csharp
+public static string[] GetPresetDlcPackageNames()
+```
+
+**回傳值**
+
+`string[]` — Preset DLC Packages 的名稱清單。
+
+**說明**
+
+取得 `PatchLauncher` 配置的 Preset DLC Package 名稱。
+
+---
+
+### CheckPackageHasAnyFilesInLocal {#checkpackagehasanyfilesinlocal}
+
+```csharp
+public static bool CheckPackageHasAnyFilesInLocal(string packageName)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packageName | `string` | Package 名稱。 |
+
+**回傳值**
+
+`bool` — 該 Package 於本地 Sandbox 目錄是否存在任何檔案；查無 Package 或目錄不存在時回傳 `false`。
+
+**說明**
+
+檢查 Package 是否已有下載至本地的檔案，可用於判斷 DLC 是否已下載。
+
+<Highlight color="#00d679">提醒</Highlight> `EditorSimulateMode` 下固定回傳 `true`。
+
+---
+
+### GetPackageSizeInLocal {#getpackagesizeinlocal}
+
+```csharp
+public static ulong GetPackageSizeInLocal(string packageName)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packageName | `string` | Package 名稱。 |
+
+**回傳值**
+
+`ulong` — 該 Package 於本地 Sandbox 的檔案總大小（位元組）；查無 Package 或目錄不存在時回傳 `0`。
+
+**說明**
+
+統計 Package 於本地 Sandbox 目錄的檔案總大小。
+
+<Highlight color="#00d679">提醒</Highlight> `EditorSimulateMode` 下固定回傳 `1`。
+
+---
+
+### UnloadPackage {#unloadpackage}
+
+```csharp
+public static async UniTask<bool> UnloadPackage(string packageName)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packageName | `string` | Package 名稱。 |
+
+**回傳值**
+
+`UniTask<bool>` — 卸載是否成功；查無 Package 時視為已處理回傳 `true`。
+
+**說明**
+
+從記憶體卸載（銷毀）Package 並移除註冊，**不會**刪除本地 Sandbox 的快取檔案。
+
+---
+
+### UnloadPackageAndClearCacheFiles {#unloadpackageandclearcachefiles}
+
+```csharp
+public static async UniTask<bool> UnloadPackageAndClearCacheFiles(string packageName, bool destroyPackage = false)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packageName | `string` | Package 名稱。 |
+| destroyPackage | `bool` | 是否同時清除清單（Manifest）檔案，並將 Package 從記憶體銷毀移除。<br/>**預設值**：`false` |
+
+**回傳值**
+
+`UniTask<bool>` — 清除（與卸載）是否成功；查無 Package 時視為已處理回傳 `true`。
+
+**說明**
+
+清除 Package 於本地 Sandbox 的 Bundle 快取檔案；`destroyPackage = true` 時連同 Manifest 檔案一併清除，並將 Package 從記憶體銷毀。
+
+<Highlight color="#ff2f00">重要</Highlight> 此操作會刪除本地已下載的資源檔案，通常用於移除不再需要的 DLC；清除後若要再次使用，需重新初始化並下載。
+
+**範例**
+
+```csharp
+// 徹底移除 DLC（清除檔案 + 從記憶體銷毀）
+bool succeed = await AssetPatcher.UnloadPackageAndClearCacheFiles("Dlc01Package", true);
+```
+
+---
+
+## 下載器 {#downloader}
+
+建立 YooAsset 下載器（`ResourceDownloaderOperation`），支援以 **Tags**、**AssetNames**、**AssetInfos** 篩選下載內容，並可**合併多個 Package** 統一下載與顯示進度（適用「DLC + 主資源」一次更新的情境）。
+
+下載進度回呼委派（`DownloadSpeedCalculator.OnDownloadSpeedProgress`）：
+
+```csharp
+public delegate void OnDownloadSpeedProgress(int totalDownloadCount, int currentDownloadCount, long totalDownloadBytes, long currentDownloadBytes, long downloadSpeedBytes)
+```
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| totalDownloadCount | `int` | 待下載的檔案總數。 |
+| currentDownloadCount | `int` | 已下載的檔案數。 |
+| totalDownloadBytes | `long` | 待下載的總位元組數。 |
+| currentDownloadBytes | `long` | 已下載的位元組數。 |
+| downloadSpeedBytes | `long` | 目前下載速度（位元組／秒）。 |
+
+<Highlight color="#00d679">提醒</Highlight> `maxConcurrencyDownloadCount`（同時併發下載數）與 `failedRetryCount`（失敗重試次數）傳入 `-1` 時，使用 `PatchLauncher` 的全域設定（預設併發 `10`、重試 `3`）。
+
+### 方法總覽 {#downloader-overview}
+
+#### 單一 Package 下載器
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [GetPackageDownloader](#getpackagedownloader) | 建立下載全部內容的下載器。 |
+| [GetPackageDownloaderByTags](#getpackagedownloaderbytags) | 建立依 Tags 篩選的下載器。 |
+| [GetPackageDownloaderByAssetNames](#getpackagedownloaderbyassetnames) | 建立依資源名稱篩選的下載器。 |
+| [GetPackageDownloaderByAssetInfos](#getpackagedownloaderbyassetinfos) | 建立依 `AssetInfo` 篩選的下載器。 |
+
+#### 合併下載器取得
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [GetDownloadersWithCombinePackages](#getdownloaderswithcombinepackages) | 為多個 Packages 建立下載器陣列。 |
+| [GetDownloadersWithCombinePackagesByTags](#getdownloaderswithcombinepackagesbytags) | 依 Tags 為多個 Packages 建立下載器陣列。 |
+| [GetDownloadersWithCombinePackagesByAssetNames](#getdownloaderswithcombinepackagesbyassetnames) | 依資源名稱為多個 Packages 建立下載器陣列。 |
+| [GetDownloadersWithCombinePackagesByAssetInfos](#getdownloaderswithcombinepackagesbyassetinfos) | 依 `AssetInfo` 為多個 Packages 建立下載器陣列。 |
+
+#### 合併下載
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [BeginDownloadWithCombinePackages](#begindownloadwithcombinepackages) | 合併多個 Packages 開始下載。 |
+| [BeginDownloadWithCombinePackagesByTags](#begindownloadwithcombinepackagesbytags) | 依 Tags 合併多個 Packages 開始下載。 |
+| [BeginDownloadWithCombinePackagesByAssetNames](#begindownloadwithcombinepackagesbyassetnames) | 依資源名稱合併多個 Packages 開始下載。 |
+| [BeginDownloadWithCombinePackagesByAssetInfos](#begindownloadwithcombinepackagesbyassetinfos) | 依 `AssetInfo` 合併多個 Packages 開始下載。 |
+| [BeginDownloadWithCombineDownloaders](#begindownloadwithcombinedownloaders) | 合併多個現成下載器開始下載。 |
+
+#### 下載資訊統計
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [GetDownloadInfoWithCombinePackages](#getdownloadinfowithcombinepackages) | 統計多個 Packages 的待下載檔案數與大小。 |
+| [GetDownloadInfoWithCombinePackagesByTags](#getdownloadinfowithcombinepackagesbytags) | 依 Tags 統計待下載檔案數與大小。 |
+| [GetDownloadInfoWithCombinePackagesByAssetNames](#getdownloadinfowithcombinepackagesbyassetnames) | 依資源名稱統計待下載檔案數與大小。 |
+| [GetDownloadInfoWithCombinePackagesByAssetInfos](#getdownloadinfowithcombinepackagesbyassetinfos) | 依 `AssetInfo` 統計待下載檔案數與大小。 |
+
+---
+
+### GetPackageDownloader {#getpackagedownloader}
+
+```csharp
+public static ResourceDownloaderOperation GetPackageDownloader(ResourcePackage package)
+public static ResourceDownloaderOperation GetPackageDownloader(ResourcePackage package, int maxConcurrencyDownloadCount, int failedRetryCount)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| package | `ResourcePackage` | 目標 Package。 |
+| maxConcurrencyDownloadCount | `int` | 同時併發下載數。`-1` 時使用全域設定。 |
+| failedRetryCount | `int` | 下載失敗重試次數。`-1` 時使用全域設定。 |
+
+**回傳值**
+
+`ResourceDownloaderOperation` — 下載該 Package 全部更新內容的下載器（YooAsset）。
+
+**說明**
+
+建立指定 Package 的資源下載器，可透過下載器的 `TotalDownloadCount`／`TotalDownloadBytes` 取得待下載統計，再自行控制下載開始時機。
+
+**範例**
+
+```csharp
+var package = AssetPatcher.GetPackage("Dlc01Package");
+var downloader = AssetPatcher.GetPackageDownloader(package);
+
+Debug.Log($"待下載檔案數: {downloader.TotalDownloadCount}, 大小: {downloader.TotalDownloadBytes} bytes");
+```
+
+---
+
+### GetPackageDownloaderByTags {#getpackagedownloaderbytags}
+
+```csharp
+public static ResourceDownloaderOperation GetPackageDownloaderByTags(ResourcePackage package, params string[] tags)
+public static ResourceDownloaderOperation GetPackageDownloaderByTags(ResourcePackage package, int maxConcurrencyDownloadCount, int failedRetryCount, params string[] tags)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| package | `ResourcePackage` | 目標 Package。 |
+| maxConcurrencyDownloadCount | `int` | 同時併發下載數。`-1` 時使用全域設定。 |
+| failedRetryCount | `int` | 下載失敗重試次數。`-1` 時使用全域設定。 |
+| tags | `string[]` | 資源群組 Tags（params）。空值或空陣列時，下載全部內容。 |
+
+**回傳值**
+
+`ResourceDownloaderOperation` — 依 Tags 篩選的下載器。
+
+**說明**
+
+建立僅下載指定 **Tags** 內容的下載器，適用於分批（分群）下載的情境。
+
+**範例**
+
+```csharp
+var package = AssetPatcher.GetDefaultPackage();
+var downloader = AssetPatcher.GetPackageDownloaderByTags(package, "UI", "Battle");
+```
+
+---
+
+### GetPackageDownloaderByAssetNames {#getpackagedownloaderbyassetnames}
+
+```csharp
+public static ResourceDownloaderOperation GetPackageDownloaderByAssetNames(ResourcePackage package, params string[] assetNames)
+public static ResourceDownloaderOperation GetPackageDownloaderByAssetNames(ResourcePackage package, int maxConcurrencyDownloadCount, int failedRetryCount, params string[] assetNames)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| package | `ResourcePackage` | 目標 Package。 |
+| maxConcurrencyDownloadCount | `int` | 同時併發下載數。`-1` 時使用全域設定。 |
+| failedRetryCount | `int` | 下載失敗重試次數。`-1` 時使用全域設定。 |
+| assetNames | `string[]` | 資源名稱清單（params）。空值或空陣列時，下載全部內容。 |
+
+**回傳值**
+
+`ResourceDownloaderOperation` — 依資源名稱篩選的下載器。
+
+**說明**
+
+建立僅下載指定**資源名稱**所屬 Bundle 的下載器，可精確更新特定資源。
+
+---
+
+### GetPackageDownloaderByAssetInfos {#getpackagedownloaderbyassetinfos}
+
+```csharp
+public static ResourceDownloaderOperation GetPackageDownloaderByAssetInfos(ResourcePackage package, params AssetInfo[] assetInfos)
+public static ResourceDownloaderOperation GetPackageDownloaderByAssetInfos(ResourcePackage package, int maxConcurrencyDownloadCount, int failedRetryCount, params AssetInfo[] assetInfos)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| package | `ResourcePackage` | 目標 Package。 |
+| maxConcurrencyDownloadCount | `int` | 同時併發下載數。`-1` 時使用全域設定。 |
+| failedRetryCount | `int` | 下載失敗重試次數。`-1` 時使用全域設定。 |
+| assetInfos | `AssetInfo[]` | YooAsset `AssetInfo` 清單（params）。空值或空陣列時，下載全部內容。 |
+
+**回傳值**
+
+`ResourceDownloaderOperation` — 依 `AssetInfo` 篩選的下載器。
+
+**說明**
+
+建立僅下載指定 `AssetInfo` 所屬 Bundle 的下載器。
+
+---
+
+### GetDownloadersWithCombinePackages {#getdownloaderswithcombinepackages}
+
+```csharp
+public static ResourceDownloaderOperation[] GetDownloadersWithCombinePackages(ResourcePackage[] packages)
+public static ResourceDownloaderOperation[] GetDownloadersWithCombinePackages(ResourcePackage[] packages, int maxConcurrencyDownloadCount, int failedRetryCount)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | 目標 Packages。 |
+| maxConcurrencyDownloadCount | `int` | 同時併發下載數。`-1` 時使用全域設定。 |
+| failedRetryCount | `int` | 下載失敗重試次數。`-1` 時使用全域設定。 |
+
+**回傳值**
+
+`ResourceDownloaderOperation[]` — 每個 Package 對應一個下載器的陣列。
+
+**說明**
+
+為多個 Packages 分別建立下載器，可搭配 [BeginDownloadWithCombineDownloaders](#begindownloadwithcombinedownloaders) 合併下載。
+
+---
+
+### GetDownloadersWithCombinePackagesByTags {#getdownloaderswithcombinepackagesbytags}
+
+```csharp
+public static ResourceDownloaderOperation[] GetDownloadersWithCombinePackagesByTags(ResourcePackage[] packages, params string[] tags)
+public static ResourceDownloaderOperation[] GetDownloadersWithCombinePackagesByTags(ResourcePackage[] packages, int maxConcurrencyDownloadCount, int failedRetryCount, params string[] tags)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | 目標 Packages。 |
+| maxConcurrencyDownloadCount | `int` | 同時併發下載數。`-1` 時使用全域設定。 |
+| failedRetryCount | `int` | 下載失敗重試次數。`-1` 時使用全域設定。 |
+| tags | `string[]` | 資源群組 Tags（params）。空值或空陣列時，下載全部內容。 |
+
+**回傳值**
+
+`ResourceDownloaderOperation[]` — 依 Tags 篩選的下載器陣列。
+
+**說明**
+
+依 Tags 為多個 Packages 分別建立下載器。
+
+---
+
+### GetDownloadersWithCombinePackagesByAssetNames {#getdownloaderswithcombinepackagesbyassetnames}
+
+```csharp
+public static ResourceDownloaderOperation[] GetDownloadersWithCombinePackagesByAssetNames(ResourcePackage[] packages, params string[] assetNames)
+public static ResourceDownloaderOperation[] GetDownloadersWithCombinePackagesByAssetNames(ResourcePackage[] packages, int maxConcurrencyDownloadCount, int failedRetryCount, params string[] assetNames)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | 目標 Packages。 |
+| maxConcurrencyDownloadCount | `int` | 同時併發下載數。`-1` 時使用全域設定。 |
+| failedRetryCount | `int` | 下載失敗重試次數。`-1` 時使用全域設定。 |
+| assetNames | `string[]` | 資源名稱清單（params）。空值或空陣列時，下載全部內容。 |
+
+**回傳值**
+
+`ResourceDownloaderOperation[]` — 依資源名稱篩選的下載器陣列。
+
+**說明**
+
+依資源名稱為多個 Packages 分別建立下載器。
+
+---
+
+### GetDownloadersWithCombinePackagesByAssetInfos {#getdownloaderswithcombinepackagesbyassetinfos}
+
+```csharp
+public static ResourceDownloaderOperation[] GetDownloadersWithCombinePackagesByAssetInfos(ResourcePackage[] packages, params AssetInfo[] assetInfos)
+public static ResourceDownloaderOperation[] GetDownloadersWithCombinePackagesByAssetInfos(ResourcePackage[] packages, int maxConcurrencyDownloadCount, int failedRetryCount, params AssetInfo[] assetInfos)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | 目標 Packages。 |
+| maxConcurrencyDownloadCount | `int` | 同時併發下載數。`-1` 時使用全域設定。 |
+| failedRetryCount | `int` | 下載失敗重試次數。`-1` 時使用全域設定。 |
+| assetInfos | `AssetInfo[]` | YooAsset `AssetInfo` 清單（params）。空值或空陣列時，下載全部內容。 |
+
+**回傳值**
+
+`ResourceDownloaderOperation[]` — 依 `AssetInfo` 篩選的下載器陣列。
+
+**說明**
+
+依 `AssetInfo` 為多個 Packages 分別建立下載器。
+
+---
+
+### BeginDownloadWithCombinePackages {#begindownloadwithcombinepackages}
+
+```csharp
+public static async UniTask<bool> BeginDownloadWithCombinePackages(ResourcePackage[] packages, OnDownloadSpeedProgress onDownloadSpeedProgress = null, DownloadError onDownloadError = null)
+public static async UniTask<bool> BeginDownloadWithCombinePackages(ResourcePackage[] packages, int maxConcurrencyDownloadCount, int failedRetryCount, OnDownloadSpeedProgress onDownloadSpeedProgress = null, DownloadError onDownloadError = null)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | 目標 Packages。 |
+| maxConcurrencyDownloadCount | `int` | 同時併發下載數。`-1` 時使用全域設定。 |
+| failedRetryCount | `int` | 下載失敗重試次數。`-1` 時使用全域設定。 |
+| onDownloadSpeedProgress | `OnDownloadSpeedProgress` | 合併進度回呼（含下載速度）。<br/>**預設值**：`null` |
+| onDownloadError | `DownloaderOperation.DownloadError` | 下載失敗回呼（YooAsset）。<br/>**預設值**：`null` |
+
+**回傳值**
+
+`UniTask<bool>` — 全部下載是否成功；任一下載器失敗時回傳 `false`，無待下載內容時回傳 `true`。
+
+**說明**
+
+合併多個 Packages 的更新內容**依序下載**，並以合併後的總數統計進度（統一在單一進度條顯示）。適用於「DLC + 主資源」一次更新的情境。
+
+**範例**
+
+```csharp
+var packages = AssetPatcher.GetPresetAppPackages();
+
+bool succeed = await AssetPatcher.BeginDownloadWithCombinePackages(
+    packages,
+    onDownloadSpeedProgress: (totalCount, currentCount, totalBytes, currentBytes, speedBytes) =>
+    {
+        // 更新下載進度 UI（含下載速度）
+        Debug.Log($"進度: {currentCount}/{totalCount}, 速度: {speedBytes} bytes/s");
+    },
+    onDownloadError: (errorData) =>
+    {
+        // 下載失敗處理
+    });
+```
+
+---
+
+### BeginDownloadWithCombinePackagesByTags {#begindownloadwithcombinepackagesbytags}
+
+```csharp
+public static async UniTask<bool> BeginDownloadWithCombinePackagesByTags(ResourcePackage[] packages, string[] tags = null, OnDownloadSpeedProgress onDownloadSpeedProgress = null, DownloadError onDownloadError = null)
+public static async UniTask<bool> BeginDownloadWithCombinePackagesByTags(ResourcePackage[] packages, int maxConcurrencyDownloadCount, int failedRetryCount, string[] tags = null, OnDownloadSpeedProgress onDownloadSpeedProgress = null, DownloadError onDownloadError = null)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | 目標 Packages。 |
+| maxConcurrencyDownloadCount | `int` | 同時併發下載數。`-1` 時使用全域設定。 |
+| failedRetryCount | `int` | 下載失敗重試次數。`-1` 時使用全域設定。 |
+| tags | `string[]` | 資源群組 Tags。空值時下載全部內容。<br/>**預設值**：`null` |
+| onDownloadSpeedProgress | `OnDownloadSpeedProgress` | 合併進度回呼。<br/>**預設值**：`null` |
+| onDownloadError | `DownloaderOperation.DownloadError` | 下載失敗回呼。<br/>**預設值**：`null` |
+
+**回傳值**
+
+`UniTask<bool>` — 全部下載是否成功。
+
+**說明**
+
+依 Tags 篩選後合併多個 Packages 開始下載，其餘行為同 [BeginDownloadWithCombinePackages](#begindownloadwithcombinepackages)。
+
+---
+
+### BeginDownloadWithCombinePackagesByAssetNames {#begindownloadwithcombinepackagesbyassetnames}
+
+```csharp
+public static async UniTask<bool> BeginDownloadWithCombinePackagesByAssetNames(ResourcePackage[] packages, string[] assetNames = null, OnDownloadSpeedProgress onDownloadSpeedProgress = null, DownloadError onDownloadError = null)
+public static async UniTask<bool> BeginDownloadWithCombinePackagesByAssetNames(ResourcePackage[] packages, int maxConcurrencyDownloadCount, int failedRetryCount, string[] assetNames = null, OnDownloadSpeedProgress onDownloadSpeedProgress = null, DownloadError onDownloadError = null)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | 目標 Packages。 |
+| maxConcurrencyDownloadCount | `int` | 同時併發下載數。`-1` 時使用全域設定。 |
+| failedRetryCount | `int` | 下載失敗重試次數。`-1` 時使用全域設定。 |
+| assetNames | `string[]` | 資源名稱清單。空值時下載全部內容。<br/>**預設值**：`null` |
+| onDownloadSpeedProgress | `OnDownloadSpeedProgress` | 合併進度回呼。<br/>**預設值**：`null` |
+| onDownloadError | `DownloaderOperation.DownloadError` | 下載失敗回呼。<br/>**預設值**：`null` |
+
+**回傳值**
+
+`UniTask<bool>` — 全部下載是否成功。
+
+**說明**
+
+依資源名稱篩選後合併多個 Packages 開始下載，其餘行為同 [BeginDownloadWithCombinePackages](#begindownloadwithcombinepackages)。
+
+---
+
+### BeginDownloadWithCombinePackagesByAssetInfos {#begindownloadwithcombinepackagesbyassetinfos}
+
+```csharp
+public static async UniTask<bool> BeginDownloadWithCombinePackagesByAssetInfos(ResourcePackage[] packages, AssetInfo[] assetInfos = null, OnDownloadSpeedProgress onDownloadSpeedProgress = null, DownloadError onDownloadError = null)
+public static async UniTask<bool> BeginDownloadWithCombinePackagesByAssetInfos(ResourcePackage[] packages, int maxConcurrencyDownloadCount, int failedRetryCount, AssetInfo[] assetInfos = null, OnDownloadSpeedProgress onDownloadSpeedProgress = null, DownloadError onDownloadError = null)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | 目標 Packages。 |
+| maxConcurrencyDownloadCount | `int` | 同時併發下載數。`-1` 時使用全域設定。 |
+| failedRetryCount | `int` | 下載失敗重試次數。`-1` 時使用全域設定。 |
+| assetInfos | `AssetInfo[]` | YooAsset `AssetInfo` 清單。空值時下載全部內容。<br/>**預設值**：`null` |
+| onDownloadSpeedProgress | `OnDownloadSpeedProgress` | 合併進度回呼。<br/>**預設值**：`null` |
+| onDownloadError | `DownloaderOperation.DownloadError` | 下載失敗回呼。<br/>**預設值**：`null` |
+
+**回傳值**
+
+`UniTask<bool>` — 全部下載是否成功。
+
+**說明**
+
+依 `AssetInfo` 篩選後合併多個 Packages 開始下載，其餘行為同 [BeginDownloadWithCombinePackages](#begindownloadwithcombinepackages)。
+
+---
+
+### BeginDownloadWithCombineDownloaders {#begindownloadwithcombinedownloaders}
+
+```csharp
+public static async UniTask<bool> BeginDownloadWithCombineDownloaders(ResourceDownloaderOperation[] downloaders, OnDownloadSpeedProgress onDownloadSpeedProgress = null, DownloadError onDownloadError = null)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| downloaders | `ResourceDownloaderOperation[]` | 現成的下載器陣列（可混合不同建立方式）。 |
+| onDownloadSpeedProgress | `OnDownloadSpeedProgress` | 合併進度回呼。<br/>**預設值**：`null` |
+| onDownloadError | `DownloaderOperation.DownloadError` | 下載失敗回呼。<br/>**預設值**：`null` |
+
+**回傳值**
+
+`UniTask<bool>` — 全部下載是否成功；任一下載器失敗時回傳 `false`，無待下載內容時回傳 `true`。
+
+**說明**
+
+合併多個**現成下載器**依序下載並統一統計進度，是各 `BeginDownloadWithCombinePackages` 系列方法的底層實作，適合自行組合不同篩選條件的下載器後一次下載。
+
+---
+
+### GetDownloadInfoWithCombinePackages {#getdownloadinfowithcombinepackages}
+
+```csharp
+public static DownloadInfo GetDownloadInfoWithCombinePackages(ResourcePackage[] packages)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | 目標 Packages。 |
+
+**回傳值**
+
+`DownloadInfo` — 合併統計的待下載檔案總數與總位元組數（參考 [DownloadInfo 結構](#downloadinfo)）。
+
+**說明**
+
+統計多個 Packages 的待下載內容，可於下載前顯示「需要下載 N 個檔案（共 M bytes）」的確認資訊。
+
+**範例**
+
+```csharp
+var packages = AssetPatcher.GetPresetAppPackages();
+var info = AssetPatcher.GetDownloadInfoWithCombinePackages(packages);
+
+Debug.Log($"待下載檔案數: {info.totalCount}, 總大小: {info.totalBytes} bytes");
+```
+
+---
+
+### GetDownloadInfoWithCombinePackagesByTags {#getdownloadinfowithcombinepackagesbytags}
+
+```csharp
+public static DownloadInfo GetDownloadInfoWithCombinePackagesByTags(ResourcePackage[] packages, params string[] tags)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | 目標 Packages。 |
+| tags | `string[]` | 資源群組 Tags（params）。空值或空陣列時，統計全部內容。 |
+
+**回傳值**
+
+`DownloadInfo` — 合併統計的待下載檔案總數與總位元組數。
+
+**說明**
+
+依 Tags 篩選統計多個 Packages 的待下載內容。
+
+---
+
+### GetDownloadInfoWithCombinePackagesByAssetNames {#getdownloadinfowithcombinepackagesbyassetnames}
+
+```csharp
+public static DownloadInfo GetDownloadInfoWithCombinePackagesByAssetNames(ResourcePackage[] packages, params string[] assetNames)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | 目標 Packages。 |
+| assetNames | `string[]` | 資源名稱清單（params）。空值或空陣列時，統計全部內容。 |
+
+**回傳值**
+
+`DownloadInfo` — 合併統計的待下載檔案總數與總位元組數。
+
+**說明**
+
+依資源名稱篩選統計多個 Packages 的待下載內容。
+
+---
+
+### GetDownloadInfoWithCombinePackagesByAssetInfos {#getdownloadinfowithcombinepackagesbyassetinfos}
+
+```csharp
+public static DownloadInfo GetDownloadInfoWithCombinePackagesByAssetInfos(ResourcePackage[] packages, params AssetInfo[] assetInfos)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packages | `ResourcePackage[]` | 目標 Packages。 |
+| assetInfos | `AssetInfo[]` | YooAsset `AssetInfo` 清單（params）。空值或空陣列時，統計全部內容。 |
+
+**回傳值**
+
+`DownloadInfo` — 合併統計的待下載檔案總數與總位元組數。
+
+**說明**
+
+依 `AssetInfo` 篩選統計多個 Packages 的待下載內容。
+
+---
+
+## 路徑與工具 {#path-utils}
+
+本地與內建資源路徑、商店連結、群組記錄與解密服務等輔助方法。
+
+### 方法總覽 {#utils-overview}
+
+#### 路徑查詢
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [GetLocalSandboxRootPath](#getlocalsandboxrootpath) | 取得本地持久化儲存根目錄。 |
+| [GetLocalSandboxPackagePath](#getlocalsandboxpackagepath) | 取得指定 Package 的本地持久化路徑。 |
+| [GetBuiltinRootPath](#getbuiltinrootpath) | 取得內建資源根目錄。 |
+| [GetBuiltinPackagePath](#getbuiltinpackagepath) | 取得指定 Package 的內建資源路徑。 |
+| [GetRequestStreamingAssetsPath](#getrequeststreamingassetspath) | 取得適用於 UnityWebRequest 的 StreamingAssets 路徑。 |
+
+#### 商店與其他
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [GetAppStoreLink](#getappstorelink) | 取得主程式商店連結。 |
+| [GoToAppStore](#gotoappstore) | 開啟系統瀏覽器前往商店。 |
+| [GetDefaultGroupTag](#getdefaultgrouptag) | 取得預設群組 Tag（`#all`）。 |
+| [ClearLastGroupInfo](#clearlastgroupinfo) | 清除上次選擇的群組記錄。 |
+| [GetBundleDecryptionServices](#getbundledecryptionservices) | 取得 Bundle 解密服務。 |
+| [GetManifestDecryptionServices](#getmanifestdecryptionservices) | 取得 Manifest 解密服務。 |
+
+---
+
+### GetLocalSandboxRootPath {#getlocalsandboxrootpath}
+
+```csharp
+public static string GetLocalSandboxRootPath()
+```
+
+**回傳值**
+
+`string` — 本地持久化儲存根目錄（YooAsset 預設快取根目錄，`.../yoo`）。
+
+**說明**
+
+取得下載資源的本地儲存（Sandbox）根目錄。
+
+---
+
+### GetLocalSandboxPackagePath {#getlocalsandboxpackagepath}
+
+```csharp
+public static string GetLocalSandboxPackagePath(string packageName)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packageName | `string` | Package 名稱。 |
+
+**回傳值**
+
+`string` — 該 Package 的本地持久化路徑（`.../yoo/<PackageName>`）。
+
+**說明**
+
+取得指定 Package 下載資源的本地儲存路徑。
+
+---
+
+### GetBuiltinRootPath {#getbuiltinrootpath}
+
+```csharp
+public static string GetBuiltinRootPath()
+```
+
+**回傳值**
+
+`string` — 內建資源根目錄（`.../StreamingAssets/yoo`）。
+
+**說明**
+
+取得隨包內建資源的根目錄。
+
+---
+
+### GetBuiltinPackagePath {#getbuiltinpackagepath}
+
+```csharp
+public static string GetBuiltinPackagePath(string packageName)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| packageName | `string` | Package 名稱。 |
+
+**回傳值**
+
+`string` — 該 Package 的內建資源路徑（`.../StreamingAssets/yoo/<PackageName>`）。
+
+**說明**
+
+取得指定 Package 的隨包內建資源路徑。
+
+---
+
+### GetRequestStreamingAssetsPath {#getrequeststreamingassetspath}
+
+```csharp
+public static string GetRequestStreamingAssetsPath()
+```
+
+**回傳值**
+
+`string` — 適用於 `UnityWebRequest` 的 StreamingAssets 路徑（macOS／iOS 平台自動加上 `file://` 前綴）。
+
+**說明**
+
+取得跨平台可用於網路請求的 StreamingAssets 路徑。
+
+---
+
+### GetAppStoreLink {#getappstorelink}
+
+```csharp
+public static async UniTask<string> GetAppStoreLink()
+```
+
+**回傳值**
+
+`UniTask<string>` — 配置檔中的商店連結（`STORE_LINK`）。
+
+**說明**
+
+從 Bundle URL 配置檔（burlcfg）讀取主程式商店連結，用於主程式版本過舊時引導更新。
+
+---
+
+### GoToAppStore {#gotoappstore}
+
+```csharp
+public static void GoToAppStore()
+```
+
+**說明**
+
+讀取商店連結並以 `Application.OpenURL` 開啟系統瀏覽器前往商店（更新主程式本體）。
+
+---
+
+### GetDefaultGroupTag {#getdefaultgrouptag}
+
+```csharp
+public static string GetDefaultGroupTag()
+```
+
+**回傳值**
+
+`string` — 預設群組 Tag（`#all`）。
+
+**說明**
+
+取得補丁群組（分包群組）的預設 Tag，代表全部內容。
+
+---
+
+### ClearLastGroupInfo {#clearlastgroupinfo}
+
+```csharp
+public static void ClearLastGroupInfo()
+```
+
+**說明**
+
+清除本地儲存的「上次選擇的群組（GroupInfo）」記錄。補丁流程會記住玩家上次選擇下載的資源群組，透過此方法可重置該記錄。
+
+---
+
+### GetBundleDecryptionServices {#getbundledecryptionservices}
+
+```csharp
+public static DecryptionServices GetBundleDecryptionServices()
+```
+
+**回傳值**
+
+`DecryptionServices` — 目前配置的 Bundle 解密服務；未加密（NONE）時回傳 `null`。
+
+**說明**
+
+取得依 `PatchLauncher` 加密設定初始化的 Bundle 解密服務（YooAsset）。
+
+---
+
+### GetManifestDecryptionServices {#getmanifestdecryptionservices}
+
+```csharp
+public static DecryptionServices GetManifestDecryptionServices()
+```
+
+**回傳值**
+
+`DecryptionServices` — 目前配置的 Manifest 解密服務；未加密（NONE）時回傳 `null`。
+
+**說明**
+
+取得依 `PatchLauncher` 加密設定初始化的 Manifest（資源清單）解密服務（YooAsset）。
+
+---
+
+## 釋放 {#release-section}
+
+### Release {#release}
+
+```csharp
+public async static UniTask Release()
+```
+
+**回傳值**
+
+`UniTask` — 可等待的非同步操作。
+
+**說明**
+
+釋放整個資源系統：銷毀並移除所有 Package、銷毀 YooAssets，並清空 Bundle 相關的全域配置，確保記憶體正確回收。
+
+<Highlight color="#ff2f00">重要</Highlight> 應於**遊戲準備關閉時**呼叫。釋放後 [IsReleased](#isreleased) 為 `true`，`AssetLoaders` 的 Bundle 卸載相關操作將被跳過，資源系統無法再使用。
+
+**範例**
+
+```csharp
+private async void OnApplicationQuit()
+{
+    await AssetPatcher.Release();
+}
+```
 
 ---

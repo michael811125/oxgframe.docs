@@ -1,19 +1,20 @@
 ---
 sidebar_position: 1
+description: GSIManagerBase is the abstract base class for game stage managers in GSIFrame, handling stage registration, lookup, switching, and update driving.
 ---
 
 # GSIManagerBase
 
 export const Highlight = ({ children, color }) => (
-  <span
-    style={{
-      backgroundColor: color,
-      borderRadius: '5px',
-      color: '#fff',
-      padding: '2.5px'
-    }}>
-    {children}
-  </span>
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
 );
 
 <Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
@@ -22,64 +23,532 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
-using OxGFrame.GSIFrame;
+`GSIManagerBase<T>` is the abstract base class for game stage managers in **GSIFrame** (Game Stage Integration), following the FSM concept. It manages the **registration, lookup, switching, and update driving** of [GSIBase](./GSIBase.mdx) stages. After inheriting from it, everything is accessed through static Default APIs on the subclass name. A game typically needs only one manager subclass.
 
-## Core Design Concept
-
-`GSIManagerBase<T>` is a state manager specifically designed for managing `GSIBase` (Game Stage). It is responsible for controlling game flow switching, initialization, updates, and releases. Typically, a game only needs one instance inheriting from this class (e.g., `GameStageManager` or `GSIManager`).
-
-<Highlight color="#00d679">Reminder</Highlight> If there is a hot-update project, it is recommended to distinguish between two GameStageManagers for management (e.g., AotGameStageManager and HotfixGameStageManager).
-
----
-
-## Default APIs (Static Global Interface)
-
-Developers typically call the following static methods directly via the inherited class without needing to access the instance directly.
-
-### Stage Query and Retrieval
-* **GetCurrentId()**
-    * Gets the ID of the currently executing stage.
-* **GetStage\<U\>() / GetStage\<U\>(int id)**
-    * Searches for and retrieves a specific Stage instance from the cache.
-
-### Stage Registration (Add)
-* **AddStage\<U\>() / AddStage\<U\>(int id)**
-    * Instantiates and registers a new Stage class to the manager. If no ID is specified, the class's `GetHashCode()` is used as the unique identifier by default.
-* **AddStage(int id, GSIBase gameStage)**
-    * Registers an existing instance with a specified ID.
-
-### Stage Switching (Change)
-* **ChangeStage\<U\>(bool force = false) / ChangeStage(int id, bool force = false)**
-    * **General Switching**: Sets `incomingId`, transition switch will occur in the next frame. Switching to the same stage is not allowed.
-    * **Force Switching (force = true)**: Immediately triggers `OnExit` and executes `OnEnter` of the target stage.
-
-### Driving Interface
-<Highlight color="#ff2f00">Important</Highlight> The following methods must be called in the main entry (e.g., `Main.cs` inheriting from `MonoBehaviour`) to drive GSI operation.
-* **DriveStart()**: Call in `Start()` to start GSI operation.
-* **DriveUpdate(float dt)**: Call in `Update()` to drive `OnUpdate` of the current stage.
-
-<Highlight color="#ff2f00">Important</Highlight> Do not call any Default APIs static methods in the Constructor, as this will lead to StackOverflow (infinite loop). Only member methods like AddGameStage can be used for registration initialization in the Constructor.
-
----
-
-## Public Member Methods (For Use After Inheritance)
-
-If you need more detailed operations within inherited subclasses, you can use the following member methods:
-
-### Stage Management Member Methods
-| Method Name | Description |
+|  |  |
 | :--- | :--- |
-| **GetCurrentGameStageId()** | Returns the current `_currentId`. |
-| **GetGameStage\<U\>(int id)** | Returns the instance from the cache dictionary `_dictGameStage`. |
-| **AddGameStage(int id, GSIBase gameStage)** | Executes registration logic and automatically calls `gameStage.SetId(id)`. |
-| **DeleteGameStage(int id)** | Removes a specific stage instance from the cache. |
+| **Namespace** | `OxGFrame.GSIFrame` |
+| **Type** | `public abstract class` |
+| **Source** | [GSIManagerBase.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/GSIFrame/Scripts/Runtime/GSIManagerBase.cs) |
 
-### Switching and Lifecycle Control
-* **ChangeGameStage(int id)**: Modifies `_incomingId`, waiting for `OnUpdate` to determine and execute `ReleaseGameStage` and `InitGameStage`.
-* **ChangeGameStageForce(int id)**: Immediately executes sequence "Release old stage -> Update ID -> Initialize new stage".
+```csharp
+using OxGFrame.GSIFrame;
+```
+
+<Highlight color="#00d679">Reminder</Highlight> If your project uses hot updates, it is recommended to keep two separate managers (such as `AotGameStageManager` and `HotfixGameStageManager`).
+
+## Declaration {#declaration}
+
+```csharp
+public abstract class GSIManagerBase<T> where T : GSIManagerBase<T>, new()
+```
+
+**Generic Parameters**
+
+| Generic Parameter | Description |
+| :--- | :--- |
+| T | The manager subclass itself (CRTP self-referencing constraint); it must have a parameterless constructor (`new()`). |
+
+When inheriting, pass the subclass itself as the generic parameter:
+
+```csharp
+public class GSIManagerExample : GSIManagerBase<GSIManagerExample> { /* ... */ }
+```
+
+## How It Works {#how-it-works}
+
+### Singleton & Driving {#singleton-and-driving}
+
+`GSIManagerBase<T>` has a built-in **thread-safe lazy singleton** (double-checked locking). The first call to any static method automatically creates the `T` instance and runs its constructor (the base constructor initializes the stage cache). All Default APIs are forwarded through this singleton to the corresponding instance methods.
+
+<Highlight color="#ff2f00">Important</Highlight>
+
+- `GSIManagerBase<T>` is a plain C# class (not a `MonoBehaviour`) and never updates on its own. It must be driven by your main entry `MonoBehaviour`, calling [DriveStart](#drivestart) in `Start()` and [DriveUpdate](#driveupdate) in `Update()`.
+- Never call any Default API static method inside the subclass constructor — it recurses through `GetInstance()` and causes a StackOverflow (infinite loop). Use the instance methods (such as [AddGameStage](#addgamestage)) in the constructor instead.
+
+### Stage Registration & IDs {#stage-id}
+
+- Each stage is registered in the cache under a unique `int` id. The generic overloads **without an id** use `typeof(U).GetHashCode()` as the id (so only one instance per type can be registered this way).
+- The overloads **with an id** let you assign custom ids, allowing multiple instances of the same type.
+- Registering a duplicate id logs a warning and is **skipped** — the existing stage is not overwritten.
+- On registration, the manager automatically calls `gameStage.SetId(id)` to assign the stage identifier.
+
+### Stage Change Flow {#change-flow}
+
+| Mode | Takes effect | Behavior |
+| :--- | :--- | :--- |
+| **Normal change** (`force = false`) | On the next driven update | Only records the target id. On the next [DriveUpdate](#driveupdate), when the id change is detected, it runs "old stage `OnExit` → update current id → new stage initialization flow" in order. **Changing to the current stage is not allowed** (a warning is logged and nothing happens). |
+| **Forced change** (`force = true`) | Immediately | Immediately runs "old stage `OnExit` → update current id → new stage initialization flow" in order. **No same-stage check** is performed, so it can be used to re-enter the current stage. |
+
+<Highlight color="#0373fc">Attention</Highlight>
+
+- For the new stage's initialization flow (`OnCreate` / `OnEnter` / refresh enabling), see [GSIBase Lifecycle & Call Sequence](./GSIBase.mdx#lifecycle).
+- When changing to an **unregistered** id, the old stage still runs `OnExit`, then an error is logged and the current stage becomes null.
+
+## Inheritance Example {#inheritance-example}
+
+```csharp
+using OxGFrame.GSIFrame;
+using UnityEngine;
+
+// Custom game stage manager: pass the subclass itself as the generic parameter (CRTP)
+public class GSIManagerExample : GSIManagerBase<GSIManagerExample>
+{
+    public GSIManagerExample()
+    {
+        // Register the game stages in the constructor (instance methods only — never Default APIs here)
+        this.AddGameStage<StartupStageExample>();
+        this.AddGameStage<LogoStageExample>();
+        this.AddGameStage<PatchStageExample>();
+        this.AddGameStage<LoginStageExample>();
+        this.AddGameStage<EnterStageExample>();
+    }
+
+    public override void OnStart()
+    {
+        // Start the first game stage
+        this.ChangeGameStage<StartupStageExample>();
+    }
+
+    public override void OnUpdate(float dt = 0.0f)
+    {
+        base.OnUpdate(dt); // Must be called, otherwise stages will not switch or update
+    }
+}
+
+// Main entry MonoBehaviour that drives the manager
+public class Main : MonoBehaviour
+{
+    private void Start()
+    {
+        GSIManagerExample.DriveStart();
+    }
+
+    private void Update()
+    {
+        GSIManagerExample.DriveUpdate(Time.deltaTime);
+    }
+}
+```
+
+After that, switch stages from anywhere through the Default APIs:
+
+```csharp
+// Normal change (executed on the next driven update)
+GSIManagerExample.ChangeStage<LoginStageExample>();
+
+// Forced change (executed immediately)
+GSIManagerExample.ChangeStage<LoginStageExample>(true);
+```
+
+<Highlight color="#00d679">Reminder</Highlight> You can quickly create a manager subclass from the template via the Project window context menu: **Create → OxGFrame → GSI Frame → Template Scripts → Template GSIManager.cs (Game Stage Manager)**.
+
+## Member Overview {#overview}
+
+#### Static Methods (Default API)
+
+Called directly on the subclass name after inheriting (e.g. `GSIManagerExample.ChangeStage<U>()`).
+
+| Method | Description |
+| :--- | :--- |
+| [GetCurrentId](#getcurrentid) | Gets the current stage id. |
+| [GetStage\<U\>](#getstage) | Gets a registered stage instance. |
+| [AddStage](#addstage) | Creates and registers a game stage. |
+| [DeleteStage](#deletestage) | Removes a registered stage from the cache. |
+| [ChangeStage](#changestage) | Changes the game stage (normal / forced). |
+| [DriveStart](#drivestart) | Drives startup (call in the main entry's `Start()`). |
+| [DriveUpdate](#driveupdate) | Drives updates (call in the main entry's `Update()`). |
+| [Start / Update](#obsolete-methods) | Obsolete legacy driving APIs. |
+
+#### Overridable Methods (virtual)
+
+| Method | Description |
+| :--- | :--- |
+| [OnStart](#onstart) | Called by `DriveStart`; override it to start the first stage. |
+| [OnUpdate](#onupdate) | Called by `DriveUpdate` every frame; runs stage change detection and refreshing by default. |
+
+#### Instance Methods
+
+For use inside the subclass (e.g. registration in the constructor, starting a stage in `OnStart`).
+
+| Method | Description |
+| :--- | :--- |
+| [GetCurrentGameStageId](#getcurrentgamestageid) | Gets the current stage id (instance version). |
+| [GetGameStage\<U\>](#getgamestage) | Gets a registered stage instance (instance version). |
+| [AddGameStage](#addgamestage) | Registers a game stage (instance version). |
+| [DeleteGameStage](#deletegamestage) | Removes a registered stage (instance version). |
+| [ChangeGameStage](#changegamestage) | Normal stage change (instance version). |
+| [ChangeGameStageForce](#changegamestageforce) | Immediate forced stage change (instance version). |
+
+#### Protected Members (available to subclasses)
+
+| Member | Type | Description |
+| :--- | :--- | :--- |
+| `_dictGameStage` | `Dictionary<int, GSIBase>` | Stage cache. |
+| `_incomingId` | `int` | Id of the incoming (target) stage. |
+| `_currentId` | `int` | Current stage id (read-only property). |
+| `_currentGameStage` | `GSIBase` | Current stage instance (read-only property). |
+| `GetInstance()` | `static T` | Gets the manager singleton (lazily created, thread-safe). |
+| `UpdateGameStage(float dt = 0.0f)` | `void` | Detects stage changes and refreshes the current stage (called by [OnUpdate](#onupdate)). |
+| `InitGameStage()` | `void` | Fetches the stage for the current id and starts its initialization flow. |
+| `ReleaseGameStage()` | `void` | Calls the current stage's `OnExit`. |
 
 ---
 
-<Highlight color="#0373fc">Attention</Highlight> When `ChangeStage` is called, the `OnExit` of the old stage is triggered first, followed by the new stage calling `BeginInit` (asynchronous) to enter the initialization flow.
+### GetCurrentId {#getcurrentid}
+
+```csharp
+public static int GetCurrentId()
+```
+
+**Returns**
+
+`int` — the current stage id; `0` if no stage change has happened yet.
+
+**Description**
+
+Gets the id of the currently running stage.
+
+---
+
+### GetStage\<U\> {#getstage}
+
+```csharp
+public static U GetStage<U>() where U : GSIBase
+public static U GetStage<U>(int id) where U : GSIBase
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| id | `int` | Stage id. When omitted, `typeof(U).GetHashCode()` is used for the lookup. |
+
+**Returns**
+
+`U` — the matching stage instance; `null` if not found.
+
+**Description**
+
+Gets a registered stage instance from the cache. The parameterless overload looks up by type hash, so it only works for stages registered **without an explicit id**; for stages registered with a custom id, use `GetStage<U>(int id)`.
+
+**Example**
+
+```csharp
+var loginStage = GSIManagerExample.GetStage<LoginStageExample>();
+```
+
+---
+
+### AddStage {#addstage}
+
+```csharp
+public static void AddStage<U>() where U : GSIBase, new()
+public static void AddStage<U>(int id) where U : GSIBase, new()
+public static void AddStage(int id, GSIBase gameStage)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| id | `int` | Stage id. When omitted, `typeof(U).GetHashCode()` is used as the id. |
+| gameStage | `GSIBase` | An existing stage instance (registered under the given id). |
+
+**Description**
+
+Creates (`new U()`) and registers a game stage in the manager's cache, or registers an existing instance under the given id. `SetId(id)` is called automatically on registration to assign the stage identifier.
+
+<Highlight color="#0373fc">Attention</Highlight> Registering a duplicate id logs a warning and is skipped; the existing stage is not overwritten.
+
+**Example**
+
+```csharp
+// Register with the type hash as the id
+GSIManagerExample.AddStage<FightStageExample>();
+
+// Register an existing instance under a custom id
+GSIManagerExample.AddStage(0x01, new FightStageExample());
+```
+
+---
+
+### DeleteStage {#deletestage}
+
+```csharp
+public static void DeleteStage<U>() where U : GSIBase
+public static void DeleteStage(int id)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| id | `int` | Stage id. When omitted, `typeof(U).GetHashCode()` is used for the lookup. |
+
+**Description**
+
+Removes a registered stage from the cache; does nothing if not found.
+
+<Highlight color="#0373fc">Attention</Highlight> This only removes the stage from the cache; the stage's `OnExit` is not triggered.
+
+---
+
+### ChangeStage {#changestage}
+
+```csharp
+public static void ChangeStage<U>(bool force = false) where U : GSIBase
+public static void ChangeStage(int id, bool force = false)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| id | `int` | Target stage id. The generic overload uses `typeof(U).GetHashCode()` as the target id. |
+| force | `bool` | Whether to force the change immediately.<br/>**Default**: `false` (normal change) |
+
+**Description**
+
+Changes the game stage:
+
+- **Normal change** (`force = false`): records the target id and performs the change on the next driven update; changing to the current stage is not allowed (a warning is logged and nothing happens).
+- **Forced change** (`force = true`): immediately runs "old stage `OnExit` → update current id → new stage initialization flow" in order; no same-stage check is performed, so it can be used to re-enter the current stage.
+
+See [Stage Change Flow](#change-flow) and [GSIBase Lifecycle & Call Sequence](./GSIBase.mdx#lifecycle) for details.
+
+**Example**
+
+```csharp
+// Normal change (executed on the next driven update)
+GSIManagerExample.ChangeStage<EnterStageExample>();
+
+// Forced change (executed immediately; can also re-enter the current stage)
+GSIManagerExample.ChangeStage<EnterStageExample>(true);
+```
+
+---
+
+### DriveStart {#drivestart}
+
+```csharp
+public static void DriveStart()
+```
+
+**Description**
+
+Drives startup by forwarding to the singleton's [OnStart](#onstart). Call it once in the main entry `MonoBehaviour`'s `Start()`. The first call automatically creates the manager singleton (running the constructor, which performs stage registration).
+
+**Example**
+
+```csharp
+private void Start()
+{
+    GSIManagerExample.DriveStart();
+}
+```
+
+---
+
+### DriveUpdate {#driveupdate}
+
+```csharp
+public static void DriveUpdate(float dt = 0.0f)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| dt | `float` | Delta time (usually `Time.deltaTime`).<br/>**Default**: `0.0f` |
+
+**Description**
+
+Drives updates by forwarding to the singleton's [OnUpdate](#onupdate), which performs stage change detection and refreshes the current stage's `OnUpdate`. Call it every frame in the main entry `MonoBehaviour`'s `Update()`.
+
+**Example**
+
+```csharp
+private void Update()
+{
+    GSIManagerExample.DriveUpdate(Time.deltaTime);
+}
+```
+
+---
+
+### Start / Update (Obsolete) {#obsolete-methods}
+
+```csharp
+[Obsolete("Use DriveStart instead.")]
+public static void Start()
+
+[Obsolete("Use DriveUpdate instead.")]
+public static void Update(float dt = 0.0f)
+```
+
+**Description**
+
+Legacy driving APIs, behaving the same as [DriveStart](#drivestart) and [DriveUpdate](#driveupdate) respectively.
+
+<Highlight color="#0373fc">Attention</Highlight> Marked `[Obsolete]` — use `DriveStart` / `DriveUpdate` instead.
+
+---
+
+### OnStart {#onstart}
+
+```csharp
+public virtual void OnStart()
+```
+
+**Description**
+
+Called by [DriveStart](#drivestart). The base implementation is empty; in your override, this is typically where you call [ChangeGameStage](#changegamestage) to start the first game stage.
+
+---
+
+### OnUpdate {#onupdate}
+
+```csharp
+public virtual void OnUpdate(float dt)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| dt | `float` | Delta time, passed in by [DriveUpdate](#driveupdate). |
+
+**Description**
+
+Called every frame by [DriveUpdate](#driveupdate). The base implementation runs `UpdateGameStage(dt)`: it detects stage changes (normal changes take effect here) and calls the current stage's `OnUpdate` while its `runUpdate` is enabled.
+
+<Highlight color="#ff2f00">Important</Highlight> When overriding, you must call `base.OnUpdate(dt)`, otherwise stages will not switch or update.
+
+---
+
+### GetCurrentGameStageId {#getcurrentgamestageid}
+
+```csharp
+public int GetCurrentGameStageId()
+```
+
+**Returns**
+
+`int` — the current stage id; `0` if no stage change has happened yet.
+
+**Description**
+
+Instance version of [GetCurrentId](#getcurrentid), for use inside the subclass.
+
+---
+
+### GetGameStage\<U\> {#getgamestage}
+
+```csharp
+public U GetGameStage<U>() where U : GSIBase
+public U GetGameStage<U>(int id) where U : GSIBase
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| id | `int` | Stage id. When omitted, `typeof(U).GetHashCode()` is used for the lookup. |
+
+**Returns**
+
+`U` — the matching stage instance; `null` if not found.
+
+**Description**
+
+Instance version of [GetStage\<U\>](#getstage), for use inside the subclass.
+
+---
+
+### AddGameStage {#addgamestage}
+
+```csharp
+public void AddGameStage<U>() where U : GSIBase, new()
+public void AddGameStage<U>(int id) where U : GSIBase, new()
+public void AddGameStage(int id, GSIBase gameStage)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| id | `int` | Stage id. When omitted, `typeof(U).GetHashCode()` is used as the id. |
+| gameStage | `GSIBase` | An existing stage instance (registered under the given id). |
+
+**Description**
+
+Instance version of [AddStage](#addstage). Use it to register stages in the subclass **constructor** (where static Default APIs must not be called). `gameStage.SetId(id)` is called automatically on registration; registering a duplicate id logs a warning and is skipped. Passing a `null` stage instance logs an error and is skipped as well.
+
+**Example**
+
+```csharp
+public GSIManagerExample()
+{
+    this.AddGameStage<StartupStageExample>();
+}
+```
+
+---
+
+### DeleteGameStage {#deletegamestage}
+
+```csharp
+public void DeleteGameStage<U>() where U : GSIBase
+public void DeleteGameStage(int id)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| id | `int` | Stage id. When omitted, `typeof(U).GetHashCode()` is used for the lookup. |
+
+**Description**
+
+Instance version of [DeleteStage](#deletestage); does nothing if not found. Deleting the **currently running** stage is not allowed (a warning is logged and the call is skipped).
+
+---
+
+### ChangeGameStage {#changegamestage}
+
+```csharp
+public void ChangeGameStage<U>() where U : GSIBase
+public void ChangeGameStage(int id)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| id | `int` | Target stage id. The generic overload uses `typeof(U).GetHashCode()` as the target id. |
+
+**Description**
+
+Instance version of the normal stage change: records the target id and performs the change on the next driven update; changing to the current stage is not allowed, and if the target stage does not exist an error is logged and the change is cancelled. Typically called in [OnStart](#onstart) to start the first stage.
+
+---
+
+### ChangeGameStageForce {#changegamestageforce}
+
+```csharp
+public void ChangeGameStageForce<U>() where U : GSIBase
+public void ChangeGameStageForce(int id)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| id | `int` | Target stage id. The generic overload uses `typeof(U).GetHashCode()` as the target id. |
+
+**Description**
+
+Instance version of the forced stage change: immediately runs "old stage `OnExit` → update current id → new stage initialization flow" in order; no same-stage check is performed, so it can be used to re-enter the current stage.
 
 ---

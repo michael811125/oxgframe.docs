@@ -143,6 +143,13 @@ Copy the OxGFrame folder to the Assets folder of a new Unity project.
 
 If you only need specific modules, you can install them individually.
 
+<Highlight color="#ff2f00">Important</Highlight> Since **v3.7.0**, every module depends on the **Common** module (the Package Manager does not auto-install git dependencies declared inside packages), so **install Common first** before installing any standalone module.
+
+- Common (framework-wide shared module)
+```
+https://github.com/michael811125/OxGFrame.git?path=Assets/OxGFrame/Common
+```
+
 - [AssetLoader](/docs/assetloader/intro)
 ```
 https://github.com/michael811125/OxGFrame.git?path=Assets/OxGFrame/AssetLoader

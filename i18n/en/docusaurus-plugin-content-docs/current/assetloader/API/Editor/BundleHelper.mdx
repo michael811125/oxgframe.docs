@@ -1,5 +1,6 @@
 ---
 sidebar_position: 1
+description: BundleHelper is the editor helper of AssetLoader for exporting the AppConfig, PatchConfig, bundles, and the CDN deployment config (CdnConfig).
 ---
 
 # BundleHelper
@@ -22,108 +23,346 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`BundleHelper` is the editor helper of **AssetLoader**. It exports the app config (AppConfig), patch config (PatchConfig), asset bundles, and the CDN deployment config (CdnConfig), and provides parsing/conversion of group and DLC argument strings for command-line (CI/CD) integration.
+
+|  |  |
+| :--- | :--- |
+| **Namespace** | `OxGFrame.AssetLoader.Editor` |
+| **Type** | `public static class` |
+| **Source** | [BundleHelper.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/AssetLoader/Scripts/Editor/Bundle/BundleHelper.cs) |
+
+```csharp
 using OxGFrame.AssetLoader.Editor;
+```
 
-## Methods
+<Highlight color="#0373fc">Attention</Highlight> This class is intended for the **Unity Editor** environment only.
 
-### ExportAppConfig
-Exports the App basic configuration file to the specified path, typically used for built-in `StreamingAssets`.
+### Method Overview {#overview}
 
-**Params**
-* `string productName`: Product name
-* `string appVersion`: Application version
-* `string outputPath`: Output target path
-* `bool activeBuildTarget`: Whether to use the platform currently set in the editor
-* `BuildTarget buildTarget`: If not using editor settings, specify the target platform
+#### Exporter
 
----
+| Method | Description |
+| :--- | :--- |
+| [ExportAppConfig](#exportappconfig) | Exports the app config (default `AppInfo.json`) to a given path (usually `StreamingAssets`). |
+| [ExportConfigsAndAppBundles](#exportconfigsandappbundles) | Exports the configs (AppConfig / PatchConfig) and the newest app bundles to the CDN output path. |
+| [ExportAppBundles](#exportappbundles) | Exports only the newest app bundles (without configs). |
+| [ExportIndividualDlcBundles](#exportindividualdlcbundles) | Exports independently versioned DLC bundles. |
+| [ExportBundleUrlConfig](#exportbundleurlconfig) | Exports the CDN deployment config (default `CdnConfig.dat`), with optional encryption. |
 
-### ExportConfigsAndAppBundles
-Exports complete resource packages and configuration files (AppConfig & PatchConfig) to the CDN output path.
+#### Parser & Converter
 
-**Params**
-* `string inputPath`: Source resource input path
-* `string outputPath`: CDN resource output path
-* `string productName`: Product name
-* `SemanticRule semanticRule`: Version semantic rule (affects folder naming logic)
-* `string appVersion`: Application version
-* `string[] exportPackages`: List of package names to export
-* `List<GroupInfo> groupInfos`: Resource grouping information list
-* `string[] packageInfos`: Package related information
-* `bool activeBuildTarget`: Whether to use the platform currently set in the editor
-* `BuildTarget buildTarget`: Specified target platform
-* `bool isClearOutputPath`: Whether to clear the target folder before exporting (default is true)
+| Method | Description |
+| :--- | :--- |
+| [ParsingGroupInfosByArgs](#parsinggroupinfosbyargs) | Parses an argument string into a `GroupInfo` list. |
+| [ConvertGroupInfosToArgs](#convertgroupinfostoargs) | Converts a `GroupInfo` list back into an argument string. |
+| [ParsingDlcInfosByArgs](#parsingdlcinfosbyargs) | Parses an argument string into a `DlcInfo` list. |
+| [ConvertDlcInfosToArgs](#convertdlcinfostoargs) | Converts a `DlcInfo` list back into an argument string. |
+
+<Highlight color="#00d679">Reminder</Highlight> These export operations can also be performed via the editor menu **OxGFrame → AssetLoader → Export Bundle And Config Generator**, a window tool covering the four operation types: `ExportAppConfigToStreamingAssets`, `ExportConfigsAndAppBundlesForCDN`, `ExportAppBundlesWithoutConfigsForCDN`, and `ExportIndividualDLCBundlesForCDN`.
 
 ---
 
-### ExportAppBundles
-Exports only the latest resource packages (Bundles) without updating configuration files.
+### ExportAppConfig {#exportappconfig}
 
-**Params**
-* `string inputPath`: Resource input path
-* `string outputPath`: Resource output path
-* `string productName`: Product name
-* `SemanticRule semanticRule`: Semantic rule
-* `string appVersion`: Application version
-* `string[] exportPackages`: List of packages to export
-* `bool activeBuildTarget`: Whether to use the platform set in the editor
-* `BuildTarget buildTarget`: Specified target platform
-* `bool isClearOutputPath`: Whether to clear the target folder
+```csharp
+public static void ExportAppConfig(string productName, string appVersion, string outputPath, bool activeBuildTarget, BuildTarget buildTarget)
+```
 
----
+**Parameters**
 
-### ExportIndividualDlcBundles
-Exports independent DLC resource packages.
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| productName | `string` | Product name (written into the `PRODUCT_NAME` of the AppConfig). |
+| appVersion | `string` | App version. If null or empty, `Application.version` is used automatically. |
+| outputPath | `string` | Output directory path (usually `Application.streamingAssetsPath`). |
+| activeBuildTarget | `bool` | Whether to use the editor's current build target as the `PLATFORM`. |
+| buildTarget | `BuildTarget` | The build target used when `activeBuildTarget` is `false`. |
 
-**Params**
-* `string inputPath`: Resource input path
-* `string outputPath`: Resource output path
-* `string productName`: Product name
-* `List<DlcInfo> dlcInfos`: DLC information list (including name and version)
-* `bool activeBuildTarget`: Whether to use the platform set in the editor
-* `BuildTarget buildTarget`: Specified target platform
-* `bool isClearOutputPath`: Whether to clear the target folder
+**Description**
 
----
+Generates the AppConfig (`PLATFORM`, `PRODUCT_NAME`, `APP_VERSION`) and writes it as JSON to the given path. The file name is determined by [PatchSettings](../Runtime/PatchSettings.mdx) (`AppInfo.json` by default). Usually exported into the built-in `StreamingAssets` so the client can read it at startup for version comparison.
 
-### ExportBundleUrlConfig
-Exports a configuration file containing CDN addresses and store links, supporting encryption.
+**Example**
 
-**Params**
-* `string bundleIp`: Main CDN server IP or domain name
-* `string bundleFallbackIp`: Backup CDN server IP or domain name
-* `string storeLink`: Store (Google Play / App Store) link
-* `string outputPath`: Output path
-* `bool cipher`: Whether to enable encryption (will be encrypted if enabled)
+```csharp
+using OxGFrame.AssetLoader.Editor;
+using UnityEditor;
+using UnityEngine;
+
+BundleHelper.ExportAppConfig(
+    "MyProduct",
+    "1.0.0",
+    Application.streamingAssetsPath,
+    true,                  // Use the editor's current build target
+    BuildTarget.NoTarget   // Not used when activeBuildTarget is true
+);
+```
 
 ---
 
-### ParsingGroupInfosByArgs
-Parses string format parameters into a list of `GroupInfo` objects.
+### ExportConfigsAndAppBundles {#exportconfigsandappbundles}
 
-**Params**
-* `string groupInfoArgs`: String parameters (format: `g1,t1#g2,t1,t2`)
+```csharp
+public static void ExportConfigsAndAppBundles(string inputPath, string outputPath, string productName, SemanticRule semanticRule, string appVersion, string[] exportPackages, List<GroupInfo> groupInfos, string[] packageInfos, bool activeBuildTarget, BuildTarget buildTarget, bool isClearOutputPath = true)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| inputPath | `string` | Source bundle input path. If null or empty, YooAsset's default build output root is used. |
+| outputPath | `string` | CDN output path. |
+| productName | `string` | Product name. |
+| semanticRule | `SemanticRule` | Semantic versioning rule (`AppConfig.SemanticRule`). With `PATCH` enabled, the version folder is `v<Major>.<Minor>.<Patch>`; otherwise `v<Major>.<Minor>`. |
+| appVersion | `string` | App version. If null or empty, `Application.version` is used automatically. |
+| exportPackages | `string[]` | Names of the packages whose bundles are exported. |
+| groupInfos | `List<GroupInfo>` | Asset group info list (written into the `GROUP_INFOS` of the PatchConfig, used for group download selection in the patch flow). |
+| packageInfos | `string[]` | Names of the packages to record in the PatchConfig (total size and version info are computed per package and written into `PACKAGES`). |
+| activeBuildTarget | `bool` | Whether to use the editor's current build target. |
+| buildTarget | `BuildTarget` | The build target used when `activeBuildTarget` is `false`. |
+| isClearOutputPath | `bool` | Whether to clear the output folder before exporting.<br/>**Default**: `true` |
+
+**Description**
+
+Performs the complete export needed for CDN deployment in one call:
+
+- Picks the version folder with the **newest build time** from each package under the input path and copies it to `<outputPath>/<productName>/<platform>/<vVersion>/<packageName>`.
+- Writes the AppConfig (default `AppInfo.json`, plus an `AppInfo.bak` backup inside the version folder) and the PatchConfig (default `PatchInfo.json`, plus a `PatchInfo.bak` backup).
+
+<Highlight color="#ff2f00">Important</Highlight> With `isClearOutputPath` set to `true`, the **entire output folder is deleted first** — make sure it contains no other important data.
+
+**Example**
+
+```csharp
+using OxGFrame.AssetLoader.Bundle;
+using OxGFrame.AssetLoader.Editor;
+using UnityEditor;
+
+var semanticRule = new AppConfig.SemanticRule(); // Default MAJOR.MINOR (PATCH disabled)
+var groupInfos = BundleHelper.ParsingGroupInfosByArgs("g1,t1#g2,t1,t2");
+
+BundleHelper.ExportConfigsAndAppBundles(
+    null,                                // Use YooAsset's default build output path
+    "D:/CDN_Output",
+    "MyProduct",
+    semanticRule,
+    "1.0.0",
+    new string[] { "DefaultPackage" },
+    groupInfos,
+    new string[] { "DefaultPackage" },
+    true,
+    BuildTarget.NoTarget
+);
+```
 
 ---
 
-### ConvertGroupInfosToArgs
-Converts a list of `GroupInfo` objects back to a string format, useful for command line passing.
+### ExportAppBundles {#exportappbundles}
 
-**Params**
-* `List<GroupInfo> groupInfos`: Group information list
+```csharp
+public static void ExportAppBundles(string inputPath, string outputPath, string productName, SemanticRule semanticRule, string appVersion, string[] exportPackages, bool activeBuildTarget, BuildTarget buildTarget, bool isClearOutputPath = true)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| inputPath | `string` | Source bundle input path. If null or empty, YooAsset's default build output root is used. |
+| outputPath | `string` | CDN output path. |
+| productName | `string` | Product name. |
+| semanticRule | `SemanticRule` | Semantic versioning rule (determines the version folder format). |
+| appVersion | `string` | App version. If null or empty, `Application.version` is used automatically. |
+| exportPackages | `string[]` | Names of the packages whose bundles are exported. |
+| activeBuildTarget | `bool` | Whether to use the editor's current build target. |
+| buildTarget | `BuildTarget` | The build target used when `activeBuildTarget` is `false`. |
+| isClearOutputPath | `bool` | Whether to clear the output folder before exporting.<br/>**Default**: `true` |
+
+**Description**
+
+Exports only the newest app bundles to the CDN output path, **without writing** the configs (AppConfig / PatchConfig). Useful when only assets change and the configs stay the same.
+
+<Highlight color="#ff2f00">Important</Highlight> With `isClearOutputPath` set to `true`, the **entire output folder is deleted first**.
 
 ---
 
-### ParsingDlcInfosByArgs
-Parses string format parameters into a list of `DlcInfo` objects.
+### ExportIndividualDlcBundles {#exportindividualdlcbundles}
 
-**Params**
-* `string dlcInfoArgs`: String parameters (format: `dlc1,1.0.0#dlc2,1.1.0`)
+```csharp
+public static void ExportIndividualDlcBundles(string inputPath, string outputPath, string productName, List<DlcInfo> dlcInfos, bool activeBuildTarget, BuildTarget buildTarget, bool isClearOutputPath = true)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| inputPath | `string` | Source bundle input path. If null or empty, YooAsset's default build output root is used. |
+| outputPath | `string` | CDN output path. |
+| productName | `string` | Product name. |
+| dlcInfos | `List<DlcInfo>` | DLC info list (`packageName`, `dlcVersion`, `withoutPlatform`). If `dlcVersion` is null or empty, the newest version number of the package is used automatically; with `withoutPlatform` set to `true`, the platform level is omitted from the output path. |
+| activeBuildTarget | `bool` | Whether to use the editor's current build target. |
+| buildTarget | `BuildTarget` | The build target used when `activeBuildTarget` is `false`. |
+| isClearOutputPath | `bool` | Whether to clear the output folder before exporting.<br/>**Default**: `true` |
+
+**Description**
+
+Exports independently versioned DLC bundles to `<outputPath>/<productName>/<platform>/<dlcFolderName>/<packageName>/<dlcVersion>` (the `<platform>` level is omitted with `withoutPlatform`; `dlcFolderName` is determined by [PatchSettings](../Runtime/PatchSettings.mdx), `DLC` by default).
+
+<Highlight color="#00d679">Reminder</Highlight> DLC packages have their own version paths; the client composes the corresponding download endpoint via [BundleConfig.GetDlcHostServerUrl](../Runtime/BundleConfig.mdx#getdlchostserverurl).
 
 ---
 
-### ConvertDlcInfosToArgs
-Converts a list of `DlcInfo` objects back to a string format.
+### ExportBundleUrlConfig {#exportbundleurlconfig}
 
-**Params**
-* `List<DlcInfo> dlcInfos`: DLC information list
+```csharp
+public static void ExportBundleUrlConfig(string bundleIp, string bundleFallbackIp, string storeLink, string outputPath, bool cipher)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| bundleIp | `string` | Primary CDN server IP or domain. If null or empty, the default `http://127.0.0.1` is used. |
+| bundleFallbackIp | `string` | Fallback CDN server IP or domain. If null or empty, the default `http://127.0.0.1` is used. |
+| storeLink | `string` | Store link (Google Play / App Store). If null or empty, the default `http://` is used. |
+| outputPath | `string` | Output directory path (the file name is determined by [PatchSettings](../Runtime/PatchSettings.mdx), `CdnConfig.dat` by default). |
+| cipher | `bool` | Whether to encrypt the output. |
+
+**Description**
+
+Exports the CDN addresses and store link as the deployment config to the given path, usually into the built-in `StreamingAssets`, so the client can resolve the bundle request endpoints. The plaintext output looks like this:
+
+```text
+# bundle_ip = First CDN Server IP or Domain (Plan A)
+# bundle_fallback_ip = Second CDN Server IP or Domain (Plan B)
+# store_link = GooglePlay Store Link (https://play.google.com/store/apps/details?id=YOUR_ID)
+# store_link = Apple Store Link (https://apps.apple.com/app/idYOUR_ID)
+
+bundle_ip http://127.0.0.1
+bundle_fallback_ip http://127.0.0.1
+store_link http://
+```
+
+<Highlight color="#0373fc">Attention</Highlight> With `cipher` enabled, only the key-value lines are kept (the `#` comment lines are removed), the content is XOR-encrypted with the `PatchSettings.settings.bundleUrlCfgCipher` key, and the 2-byte `PatchSettings.CIPHER_HEADER` mark is written at the head of the file. The client detects and decrypts it automatically when reading via [BundleConfig.GetValueFromUrlCfg](../Runtime/BundleConfig.mdx#getvaluefromurlcfg).
+
+<Highlight color="#00d679">Reminder</Highlight> The config can also be generated via the editor menu **OxGFrame → AssetLoader → Bundle Url Config Generator (CdnConfig.dat)**.
+
+**Example**
+
+```csharp
+using OxGFrame.AssetLoader.Editor;
+using UnityEngine;
+
+BundleHelper.ExportBundleUrlConfig(
+    "https://cdn.example.com",
+    "https://backup-cdn.example.com",
+    "https://play.google.com/store/apps/details?id=com.example.game",
+    Application.streamingAssetsPath,
+    true
+);
+```
+
+---
+
+### ParsingGroupInfosByArgs {#parsinggroupinfosbyargs}
+
+```csharp
+public static List<GroupInfo> ParsingGroupInfosByArgs(string groupInfoArgs)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| groupInfoArgs | `string` | Group argument string. Format: `<groupName>,<tag1>,<tag2>...`, with multiple groups separated by `#` (e.g., `g1,t1#g2,t1,t2`). |
+
+**Returns**
+
+`List<GroupInfo>` — the parsed group info list; an empty list if the input is null/empty or parsing fails.
+
+**Description**
+
+Parses a string argument into a list of `GroupInfo` objects (in each group, the first element is `groupName` and the rest are `tags`), which makes it easy to pass group settings as strings on the command line (CI/CD).
+
+**Example**
+
+```csharp
+var groupInfos = BundleHelper.ParsingGroupInfosByArgs("g1,t1#g2,t1,t2");
+// groupInfos[0].groupName = "g1", tags = ["t1"]
+// groupInfos[1].groupName = "g2", tags = ["t1", "t2"]
+```
+
+---
+
+### ConvertGroupInfosToArgs {#convertgroupinfostoargs}
+
+```csharp
+public static string ConvertGroupInfosToArgs(List<GroupInfo> groupInfos)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| groupInfos | `List<GroupInfo>` | Group info list. |
+
+**Returns**
+
+`string` — the converted argument string (e.g., `g1,t1#g2,t1,t2`); an empty string for an empty list.
+
+**Description**
+
+Converts a list of `GroupInfo` objects back into the string format for command-line passing (the inverse of [ParsingGroupInfosByArgs](#parsinggroupinfosbyargs)).
+
+---
+
+### ParsingDlcInfosByArgs {#parsingdlcinfosbyargs}
+
+```csharp
+public static List<DlcInfo> ParsingDlcInfosByArgs(string dlcInfoArgs)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| dlcInfoArgs | `string` | DLC argument string. Format: `<packageName>,<version>`, with multiple entries separated by `#` (e.g., `dlc1,1.0.0#dlc2,1.1.0`). |
+
+**Returns**
+
+`List<DlcInfo>` — the parsed DLC info list; an empty list if the input is null/empty or parsing fails.
+
+**Description**
+
+Parses a string argument into a list of `DlcInfo` objects (in each entry, the elements are `packageName` and `dlcVersion` in order), which makes it easy to pass DLC settings as strings on the command line (CI/CD).
+
+**Example**
+
+```csharp
+var dlcInfos = BundleHelper.ParsingDlcInfosByArgs("dlc1,1.0.0#dlc2,1.1.0");
+// dlcInfos[0].packageName = "dlc1", dlcVersion = "1.0.0"
+// dlcInfos[1].packageName = "dlc2", dlcVersion = "1.1.0"
+```
+
+---
+
+### ConvertDlcInfosToArgs {#convertdlcinfostoargs}
+
+```csharp
+public static string ConvertDlcInfosToArgs(List<DlcInfo> dlcInfos)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| dlcInfos | `List<DlcInfo>` | DLC info list. |
+
+**Returns**
+
+`string` — the converted argument string (e.g., `dlc1,1.0.0#dlc2,1.1.0`); an empty string for an empty list.
+
+**Description**
+
+Converts a list of `DlcInfo` objects back into the string format for command-line passing (the inverse of [ParsingDlcInfosByArgs](#parsingdlcinfosbyargs)).
+
+---

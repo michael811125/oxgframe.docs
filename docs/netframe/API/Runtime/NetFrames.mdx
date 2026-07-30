@@ -1,5 +1,6 @@
 ---
 sidebar_position: 1
+description: NetFrames 是 NetFrame 模組的統一呼叫入口，以節點（NetNode）為單位管理多組網路連線，提供節點註冊、連線、傳送與關閉等介面。
 ---
 
 # NetFrames
@@ -22,105 +23,507 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`NetFrames` 是 **NetFrame** 模組的統一呼叫入口（Facade），以節點（`NetNode`）為單位管理多組網路連線。每個節點可搭配獨立的傳輸實作（[INetProvider](./INetProvider.mdx)）與連線選項（[NetOption](./NetOption.mdx)），涵蓋**節點註冊、連線、傳送資料與關閉**，並提供驅動網路輪詢的更新器控制。
+
+|  |  |
+| :--- | :--- |
+| **命名空間** | `OxGFrame.NetFrame` |
+| **類型** | `public static class` |
+| **原始碼** | [NetFrames.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/NetFrame/Scripts/Runtime/NetFrames.cs) |
+
+```csharp
 using OxGFrame.NetFrame;
+```
 
-## Updater Controls
+<Highlight color="#0373fc">注意</Highlight> 呼叫連線相關 API 前，需先自行建立 `NetNode` 並透過 [AddNetNode](#addnetnode) 註冊至管理器，完整建置流程請參考 [NetFrame 介紹](../../intro.mdx)。
 
-`NetFrames` 使用一個獨立的 `RTUpdater` ([Real-time Updater](https://github.com/michael811125/OxGKit/blob/master/Assets/OxGKit/TimeSystem/Scripts/Runtime/Core/Updater/RTUpdater.cs)) 來驅動所有網絡節點的輪詢邏輯。獨立的刷新器，也確保了即便在 MonoBehaviour 的 TimeScale 為 0 的情況下，網絡通訊依然能正常運作。
+## 快速上手 {#quick-start}
 
-<Highlight color="#00d679">提醒</Highlight> 這對於實作「遊戲暫停時，仍能處理網絡斷線或同步」的功能至關重要。
+```csharp
+// 建立網路節點（使用內建 TCP Provider；NetTipsExample 為自訂的 INetTips 實作）
+var netNode = new NetNode(new TcpNetProvider(), new NetTipsExample());
+netNode.SetResponseBinaryHandler(recvData => Debug.Log($"收到 {recvData.Length} bytes"));
 
-### SetUpdaterTimeScale
-控制 `NetManager` 更新器的運作速率。
-* **Params**: `float timeScale`: 縮放倍率。
+// 註冊節點（單一連線使用預設 nnId = 0 即可）
+NetFrames.AddNetNode(netNode);
 
-### Start 方法
-* **StartUpdater()**: 於主執行緒啟動網絡循環。
-* **StartUpdaterOnThread()**: 於**獨立執行緒**啟動網絡循環，適用於需要極高性能或避免主執行緒阻塞的情境。
+// 連線至伺服器
+NetFrames.Connect(new TcpNetOption("127.0.0.1", 8888));
 
-### Stop / Status
-* **StopUpdater()**: 停止網絡循環（所有節點將暫停刷新邏輯）。
-* **IsUpdaterRunning()**: 返回更新器當前是否正在運行。
+// 傳送二進位資料
+NetFrames.Send(new byte[] { 0x01, 0x02 });
 
-### Reset 方法
-* **ResetUpdater()**: 重置並於主執行緒重啟更新器。
-* **ResetUpdater(bool useThreadedUpdater)**: 重置並指定執行緒模式重啟。
-    * **Params**: `bool useThreadedUpdater`: 若為 true 則開啟執行緒模式。
-* **ResetUpdaterOnThread()**: 重置並於**獨立執行緒**重啟更新器。
+// 關閉連線並移除節點
+NetFrames.Close(0, removeNetNode: true);
+```
 
-<Highlight color="#ff2f00">重要</Highlight> 當選擇 `StartUpdaterOnThread` 時，所有的網絡回調（如 `OnBinary`）會在非主執行緒觸發，若需操作 Unity 組件請務必注意執行緒安全與使用 [UMT](https://github.com/michael811125/OxGKit/blob/master/Assets/OxGKit/Utilities/Scripts/Runtime/UnityMainThread/UMT.cs) 傳入主執行緒。
+## 通用規則 {#general-rules}
 
----
+### 多節點管理 (nnId) {#multi-node}
 
-## Node Management
+NetFrame 以節點（`NetNode`）為單位組織網路連線，每個節點擁有各自獨立的傳輸實作（[INetProvider](./INetProvider.mdx)）、連線選項（[NetOption](./NetOption.mdx)）與狀態提示（[INetTips](./INetTips.mdx)），並以 `nnId`（Node ID）作為唯一識別碼進行管理，所有操作方法皆以 `nnId` 指定目標節點。
 
-網絡系統以 `NetNode` (網絡節點) 為單位進行組織，每個節點可以擁有獨立的傳輸協議與配置。
+<Highlight color="#0373fc">注意</Highlight> 大多數單一連線的情境，直接使用預設的 `nnId = 0` 即可；若需同時連線多個伺服器（如 Login Server 與 Game Server），請為各節點分配獨立的 `nnId`。
 
-### AddNetNode
-將一個網絡節點加入管理器。
-* **Params**: 
-    * `NetNode netNode`: 要加入的節點實例。
-    * `int nnId`: 節點的唯一辨識碼 (預設為 0)。
+<Highlight color="#00d679">提醒</Highlight> `NetNode` 本身還支援心跳、逾時檢測與重連等回呼設定（`SetHeartBeatAction`、`SetOutReceiveAction`、`SetReconnectAction` 等），詳細建置流程請參考 [NetFrame 介紹](../../intro.mdx)。
 
-### RemoveNetNode
-從管理器中移除指定節點。
-* **Params**: `int nnId`: 節點 ID。
+### 內建 Provider {#built-in-providers}
 
-### GetNetNode
-獲取已註冊的網絡節點。
-* **Params**: `int nnId`: 節點 ID。
-* **Returns**: `NetNode`: 節點實例，若不存在則返回 null。
+內建三種 `INetProvider` 實作，連線時搭配對應的 `NetOption` 衍生類使用；亦可自行實作 [INetProvider](./INetProvider.mdx) 擴充其他傳輸協定。
 
-### Count
-* **Returns**: `int`: 當前已註冊的網絡節點總數。
+| Provider | 底層函式庫 | 對應 NetOption | 字串傳送 |
+| :--- | :--- | :--- | :--- |
+| `TcpNetProvider` | [Telepathy](https://github.com/MirrorNetworking/Telepathy) | [TcpNetOption](./NetOption.mdx#tcp-netoption) | 不支援 |
+| `KcpNetProvider` | [kcp2k](https://github.com/MirrorNetworking/kcp2k) | [KcpNetOption](./NetOption.mdx#kcp-netoption) | 不支援 |
+| `WebSocketNetProvider` | [UnityWebSocket](https://github.com/psygames/UnityWebSocket) | [WebSocketNetOption](./NetOption.mdx#websocket-netoption) | 支援 |
 
----
+<Highlight color="#0373fc">注意</Highlight> `TcpNetProvider` 與 `KcpNetProvider` 僅支援二進位傳送，對其呼叫字串多載的 [Send](#send) 會擲出例外。
 
-## Connection & Communication
+### 更新器 (Updater) {#updater}
 
-針對特定節點執行網絡操作的核心接口。
+`NetManager` 使用獨立的 `RTUpdater`（[Real-time Updater](https://github.com/michael811125/OxGKit/blob/master/Assets/OxGKit/TimeSystem/Scripts/Runtime/Core/Updater/RTUpdater.cs)）驅動所有節點的輪詢邏輯（資料接收、心跳、逾時與重連計時）。首次呼叫任一 `NetFrames` API 時，管理器會自動初始化並於**主執行緒**啟動更新器。
 
-### Connect
-開啟指定網絡節點的連線。
-* **Params**: 
-    * `NetOption netOption`: 連線配置 (包含主機位址、端口、重連次數等...)。
-    * `int nnId`: 目標節點 ID。
+<Highlight color="#00d679">提醒</Highlight> `RTUpdater` 為即時刷新器，不受 Unity `Time.timeScale` 影響，即使遊戲暫停，網路通訊依然正常運作。
 
-### IsConnected
-檢查節點的連線狀態。
-* **Params**: `int nnId`: 節點 ID。
-* **Returns**: `bool`: 若節點已連線返回 true。
-
-### Send (Binary)
-發送二進制封包。
-* **Params**: 
-    * `byte[] buffer`: 原始資料流。
-    * `int nnId`: 目標節點 ID。
-* **Returns**: `bool`: 發送成功返回 true。
-
-### Send (String)
-發送字串封包（視底層 Provider 實作而定）。
-* **Params**: 
-    * `string text`: 字串訊息。
-    * `int nnId`: 目標節點 ID。
-* **Returns**: `bool`: 發送成功返回 true。
+<Highlight color="#ff2f00">重要</Highlight> 若透過 [StartUpdaterOnThread](#startupdateronthread) 或 [ResetUpdaterOnThread](#resetupdateronthread) 改以獨立執行緒驅動，所有網路回呼（如 Binary 接收回呼）會於**非主執行緒**觸發，若需操作 Unity 元件，請務必注意執行緒安全並使用 [UMT](https://github.com/michael811125/OxGKit/blob/master/Assets/OxGKit/Utilities/Scripts/Runtime/UnityMainThread/UMT.cs) 派回主執行緒。
 
 ---
 
-## Termination
+## 節點管理 {#node-management}
 
-### Close
-中斷指定節點的網絡連線。
-* **Params**: 
-    * `int nnId`: 節點 ID。
-    * `bool removeNetNode`: 是否在中斷後將節點從管理器中移除。
+節點的註冊、取得與移除。`NetNode` 需以 `new NetNode(INetProvider, INetTips)` 自行建立後註冊至管理器（參考[多節點管理](#multi-node)）。
 
-### CloseAll
-關閉所有活躍中的網絡節點連線。
-* **Params**: `bool removeNetNode`: 是否同時清空所有註冊節點。
+### 方法總覽 {#node-overview}
+
+#### 初始化
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [InitInstance](#initinstance) | 初始化 `NetManager` 單例實例。 |
+
+#### 節點註冊與取得
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [AddNetNode](#addnetnode) | 註冊網路節點至管理器。 |
+| [RemoveNetNode](#removenetnode) | 釋放並移除指定節點。 |
+| [GetNetNode](#getnetnode) | 取得已註冊的網路節點。 |
+| [Count](#count) | 取得已註冊的節點總數。 |
 
 ---
 
-<Highlight color="#0373fc">注意</Highlight> 在大多數單一連線的應用情境下，直接使用預設的 `nnId = 0` 即可。若有多個伺服器連線需求（如：Login Server 與 Game Server），請為各節點分配獨立的 Node ID (NNID)。
+### InitInstance {#initinstance}
+
+```csharp
+public static void InitInstance()
+```
+
+**說明**
+
+主動初始化 `NetManager` 單例實例，初始化時會一併建立更新器並於主執行緒啟動。建議於遊戲啟動階段呼叫一次，確保管理器提前就緒。
+
+<Highlight color="#00d679">提醒</Highlight> 所有 `NetFrames` API 於首次呼叫時皆會自動完成初始化，此方法僅用於提前初始化。
+
+---
+
+### AddNetNode {#addnetnode}
+
+```csharp
+public static void AddNetNode(NetNode netNode, int nnId = 0)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| netNode | `NetNode` | 要註冊的網路節點實例。 |
+| nnId | `int` | 節點的唯一識別碼。<br/>**預設值**：`0` |
+
+**說明**
+
+將網路節點註冊至管理器，之後即可透過 `nnId` 對該節點進行連線、傳送與關閉等操作。
+
+<Highlight color="#0373fc">注意</Highlight> 若 `nnId` 已存在，舊節點會先被 `Dispose`（關閉連線並釋放資源），再以新節點取代。
+
+**範例**
+
+```csharp
+public enum NNID
+{
+    WebSocket = 0,
+    TCP = 1,
+    KCP = 2
+}
+
+// 註冊 WebSocket 節點
+var wsNode = new NetNode(new WebSocketNetProvider(), new NetTipsExample());
+NetFrames.AddNetNode(wsNode, (int)NNID.WebSocket);
+
+// 註冊 TCP 節點
+var tcpNode = new NetNode(new TcpNetProvider(), new NetTipsExample());
+NetFrames.AddNetNode(tcpNode, (int)NNID.TCP);
+```
+
+---
+
+### RemoveNetNode {#removenetnode}
+
+```csharp
+public static void RemoveNetNode(int nnId = 0)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| nnId | `int` | 節點的唯一識別碼。<br/>**預設值**：`0` |
+
+**說明**
+
+將指定節點自管理器移除，移除前會先 `Dispose` 該節點（關閉連線並釋放回呼與計時器等資源）。查無節點時不動作。
+
+---
+
+### GetNetNode {#getnetnode}
+
+```csharp
+public static NetNode GetNetNode(int nnId = 0)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| nnId | `int` | 節點的唯一識別碼。<br/>**預設值**：`0` |
+
+**回傳值**
+
+`NetNode` — 已註冊的節點實例；查無時回傳 `null`。
+
+**說明**
+
+取得已註冊的網路節點，可對節點進行進階設定（如心跳、逾時、重連回呼），或透過 `GetNetProvider<T>()` 取得底層 Provider 進行進階操作。
+
+**範例**
+
+```csharp
+// 檢查節點是否已註冊
+if (NetFrames.GetNetNode() == null)
+{
+    // 尚未註冊，先行建立節點
+}
+
+// 取得底層 Provider，改以 KCP Unreliable 通道傳送
+NetFrames.GetNetNode((int)NNID.KCP)
+         .GetNetProvider<KcpNetProvider>()
+         .SendBinary(kcp2k.KcpChannel.Unreliable, buffer);
+```
+
+---
+
+### Count {#count}
+
+```csharp
+public static int Count()
+```
+
+**回傳值**
+
+`int` — 目前已註冊的網路節點總數。
+
+**說明**
+
+取得管理器中已註冊的節點數量。
+
+---
+
+## 連線與通訊 {#connection}
+
+針對指定節點執行連線、傳送與關閉等網路操作。
+
+### 方法總覽 {#conn-overview}
+
+#### 連線
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [Connect](#connect) | 開啟指定節點的連線。 |
+| [IsConnected](#isconnected) | 檢查指定節點的連線狀態。 |
+
+#### 傳送與關閉
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [Send](#send) | 透過指定節點傳送二進位或字串資料。 |
+| [Close](#close) | 中斷指定節點的連線。 |
+| [CloseAll](#closeall) | 中斷所有節點的連線。 |
+
+---
+
+### Connect {#connect}
+
+```csharp
+public static void Connect(NetOption netOption, int nnId = 0)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| netOption | `NetOption` | 連線選項。依節點的 Provider 傳入對應的衍生類（如 `TcpNetOption`、`KcpNetOption`、`WebSocketNetOption`）。 |
+| nnId | `int` | 目標節點的唯一識別碼。<br/>**預設值**：`0` |
+
+**說明**
+
+開啟指定節點的連線。連線程序啟動時會觸發 `INetTips.OnConnecting` 與節點的 Connecting 回呼；連線成功後觸發 `INetTips.OnConnected` 與 Connected 回呼。查無節點時輸出錯誤日誌。
+
+<Highlight color="#0373fc">注意</Highlight>
+
+- `netOption` 的型別必須與節點的 Provider 相對應，實作內部會將其轉型以取得連線參數。
+- 節點僅在**未連線**（`DISCONNECTED`）或**重連中**（`RECONNECTING`）狀態下才會啟動連線程序，重複呼叫不會建立第二條連線。
+
+**範例**
+
+```csharp
+// TCP 連線（斷線後自動重連 3 次）
+NetFrames.Connect(new TcpNetOption("127.0.0.1", 8888, autoReconnectCount: 3), (int)NNID.TCP);
+
+// WebSocket 連線
+NetFrames.Connect(new WebSocketNetOption("ws://127.0.0.1:8080/ws"), (int)NNID.WebSocket);
+```
+
+---
+
+### IsConnected {#isconnected}
+
+```csharp
+public static bool IsConnected(int nnId = 0)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| nnId | `int` | 目標節點的唯一識別碼。<br/>**預設值**：`0` |
+
+**回傳值**
+
+`bool` — 節點已連線回傳 `true`；查無節點或未連線回傳 `false`。
+
+**說明**
+
+檢查指定節點底層 Provider 的連線狀態。
+
+---
+
+### Send {#send}
+
+```csharp
+public static bool Send(byte[] buffer, int nnId = 0)
+public static bool Send(string text, int nnId = 0)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| buffer | `byte[]` | 要傳送的二進位資料。 |
+| text | `string` | 要傳送的字串資料。 |
+| nnId | `int` | 目標節點的唯一識別碼。<br/>**預設值**：`0` |
+
+**回傳值**
+
+`bool` — 成功交付底層 Provider 傳送回傳 `true`；查無節點或未連線時回傳 `false`。
+
+**說明**
+
+透過指定節點傳送資料。二進位多載對應 Provider 的 `SendBinary`；字串多載對應 `SendMessage`。
+
+<Highlight color="#ff2f00">重要</Highlight> 內建的 `TcpNetProvider` 與 `KcpNetProvider` 不支援字串傳送，呼叫字串多載會擲出例外；僅 `WebSocketNetProvider` 支援。
+
+**範例**
+
+```csharp
+// 傳送二進位資料
+bool sent = NetFrames.Send(new byte[] { 0x01, 0x02, 0x03 });
+
+// 傳送字串資料（僅 WebSocket 支援）
+NetFrames.Send("{\"cmd\":\"ping\"}", (int)NNID.WebSocket);
+```
+
+---
+
+### Close {#close}
+
+```csharp
+public static void Close(int nnId = 0, bool removeNetNode = false)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| nnId | `int` | 目標節點的唯一識別碼。<br/>**預設值**：`0` |
+| removeNetNode | `bool` | 關閉後是否一併將節點自管理器移除（`Dispose`）。<br/>**預設值**：`false` |
+
+**說明**
+
+中斷指定節點的連線。主動關閉屬於**強制關閉**，不會觸發自動重連；若 `removeNetNode` 為 `false`，節點仍保留於管理器中，可再次呼叫 [Connect](#connect) 重新連線。查無節點時不動作。
+
+**範例**
+
+```csharp
+// 僅關閉連線（節點保留，可重新連線）
+NetFrames.Close();
+
+// 關閉連線並移除節點
+NetFrames.Close((int)NNID.TCP, true);
+```
+
+---
+
+### CloseAll {#closeall}
+
+```csharp
+public static void CloseAll(bool removeNetNode = false)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| removeNetNode | `bool` | 關閉後是否一併移除所有節點。<br/>**預設值**：`false` |
+
+**說明**
+
+中斷**所有**已註冊節點的連線，參數行為同 [Close](#close)。適用於登出或離開遊戲時的統一清理。
+
+---
+
+## 更新器控制 {#updater-controls}
+
+控制 `NetManager` 更新器的啟停、重置與運作速率，更新器概念與執行緒注意事項請參考[更新器 (Updater)](#updater)。
+
+### 方法總覽 {#updater-overview}
+
+#### 啟動與停止
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [StartUpdater](#startupdater) | 於主執行緒啟動更新器。 |
+| [StartUpdaterOnThread](#startupdateronthread) | 於獨立執行緒啟動更新器。 |
+| [StopUpdater](#stopupdater) | 停止更新器。 |
+| [IsUpdaterRunning](#isupdaterrunning) | 檢查更新器是否運行中。 |
+
+#### 重置與調速
+
+| 方法 | 說明 |
+| :--- | :--- |
+| [ResetUpdater](#resetupdater) | 重置並重啟更新器。 |
+| [ResetUpdaterOnThread](#resetupdateronthread) | 重置並於獨立執行緒重啟更新器。 |
+| [SetUpdaterTimeScale](#setupdatertimescale) | 調整更新器的時間縮放倍率。 |
+
+---
+
+### StartUpdater {#startupdater}
+
+```csharp
+public static void StartUpdater()
+```
+
+**說明**
+
+於**主執行緒**啟動更新器。管理器初始化時預設即以主執行緒模式啟動，通常僅在呼叫過 [StopUpdater](#stopupdater) 後需要手動重啟。
+
+---
+
+### StartUpdaterOnThread {#startupdateronthread}
+
+```csharp
+public static void StartUpdaterOnThread()
+```
+
+**說明**
+
+於**獨立執行緒**啟動更新器，適用於避免主執行緒阻塞或需要更即時輪詢的情境。
+
+<Highlight color="#ff2f00">重要</Highlight> 執行緒模式下，所有網路回呼會於非主執行緒觸發，操作 Unity 元件請務必注意執行緒安全（參考[更新器 (Updater)](#updater)）。
+
+---
+
+### StopUpdater {#stopupdater}
+
+```csharp
+public static void StopUpdater()
+```
+
+**說明**
+
+停止更新器，所有節點的輪詢邏輯（資料接收、心跳、逾時與重連計時）將一併暫停，直到再次啟動。
+
+---
+
+### IsUpdaterRunning {#isupdaterrunning}
+
+```csharp
+public static bool IsUpdaterRunning()
+```
+
+**回傳值**
+
+`bool` — 更新器運行中回傳 `true`。
+
+**說明**
+
+檢查 `NetManager` 更新器目前是否正在運行。
+
+---
+
+### ResetUpdater {#resetupdater}
+
+```csharp
+public static void ResetUpdater()
+public static void ResetUpdater(bool useThreadedUpdater)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| useThreadedUpdater | `bool` | 是否改以獨立執行緒模式重啟。`true` = 獨立執行緒；`false` = 主執行緒。無參數多載等同傳入 `false`。 |
+
+**說明**
+
+停止並銷毀現有更新器後，重新建立並依指定模式啟動。可用於切換執行緒模式或重置更新器狀態。
+
+---
+
+### ResetUpdaterOnThread {#resetupdateronthread}
+
+```csharp
+public static void ResetUpdaterOnThread()
+```
+
+**說明**
+
+重置更新器並改以**獨立執行緒**模式重啟，等同呼叫 `ResetUpdater(true)`。
+
+---
+
+### SetUpdaterTimeScale {#setupdatertimescale}
+
+```csharp
+public static void SetUpdaterTimeScale(float timeScale)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| timeScale | `float` | 時間縮放倍率。 |
+
+**說明**
+
+設定 `NetManager` 更新器的時間縮放倍率（`RTUpdater.timeScale`）。
 
 ---

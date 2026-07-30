@@ -60,6 +60,20 @@ export const Highlight = ({ children, color }) => (
 
 ![](/img/mediaframe/latest/gif_1.gif)
 
+### Inspector 预览播放器 (v3.7.0+)
+
+`AudioBase` / `VideoBase` 的 Inspector 提供**预览播放器**，无需进入 Play Mode 即可直接试听、试看媒体内容：
+
+- 支持 Play / Pause / Resume / Stop、拖拽进度条与 Timecode 显示，支持全部 Source Type。
+
+- 视频直接在 Inspector 内绘制画面，音轨则在音频线程采样播放。
+
+- 会检测被 Insecure HTTP（Unity 2022.1+）拦截的 `http://` 来源，并询问是否切换为 Only in development builds。
+
+| `AudioBase` | `VideoBase` |
+| :---: | :---: |
+| ![](/img/mediaframe/latest/img_1.png) | ![](/img/mediaframe/latest/img_2.png) |
+
 ---
 
 ## 其他说明

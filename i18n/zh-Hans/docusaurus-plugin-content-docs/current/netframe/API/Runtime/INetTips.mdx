@@ -1,19 +1,20 @@
 ---
 sidebar_position: 4
+description: INetTips 是 NetFrame 的连接状态提示接口，在连接、断线、错误与重连等状态变化时自动触发对应方法。
 ---
 
 # INetTips
 
 export const Highlight = ({ children, color }) => (
-  <span
-    style={{
-      backgroundColor: color,
-      borderRadius: '5px',
-      color: '#fff',
-      padding: '2.5px'
-    }}>
-    {children}
-  </span>
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
 );
 
 <Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
@@ -22,78 +23,183 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
-using OxGFrame.NetFrame;
+`INetTips` 是 **NetFrame** 的连接状态提示接口。当节点的连接状态发生变化（开始连接、连接成功、连接错误、断线、重连）时，`NetNode` 会自动调用对应的接口方法，适合用来实现连接 Loading 遮罩、错误弹窗与断线重连提示等 UI 反馈。
 
-## 核心设计概念
-
-`INetTips` 是一个连线状态监听接口。在网络通讯过程中，当连线状态发生变化（如：开始连线、成功、失败或断开）时，`NetFrame` 会自动触发实作者中的对应方法。这对于实作 **Loading 遮罩** 或 **断线重连提示** 非常重要。
-
----
-
-## Interface Methods (接口方法)
-
-### OnConnecting()
-* **触发时机**: 当调用连线方法（如 `Connect()`）并开始启动连线程序时。
-* **用途**: 通常在此处开启「连线中」的 UI 遮罩，防止使用者重复操作。
-
-### OnConnected(object payload)
-* **触发时机**: 成功建立网络连线时。
-* **Params**: `payload`: 包含连线成功的相关信息。
-* **用途**: 关闭连线遮罩，并开始执行如「登入」或「同步数据」等后续逻辑。
-
-### OnConnectionError(object payload)
-* **触发时机**: 连线尝试失败时。
-* **Params**: `payload`: 错误原因或异常消息。
-* **用途**: 弹出错误消息窗口，提示使用者检查网络环境。
-
-### OnDisconnected(object payload)
-* **触发时机**: 已建立的连线被断开时（无论是手动或意外）。
-* **Params**: `payload`: 断开连线的状态码或原因。
-* **用途**: 执行数据清理，或跳转回登入画面。
-
-### OnReconnecting()
-* **触发时机**: 当连线断开且 `NetOption` 启动自动重连机制时。
-* **用途**: 显示「网络不稳定，尝试重连中...」的提示 UI。
-
----
-
-## 实作示例 (Implementation Example)
-
-您可以定义一个类别并实作 `INetTips`，然后将其传入连线管理器中。
+|  |  |
+| :--- | :--- |
+| **命名空间** | `OxGFrame.NetFrame` |
+| **类型** | `public interface` |
+| **源码** | [INetTips.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/NetFrame/Scripts/Runtime/Core/Interface/NetTip/INetTips.cs) |
 
 ```csharp
+using OxGFrame.NetFrame;
+```
+
+**声明**
+
+```csharp
+public interface INetTips
+```
+
+### 状态与触发时机 {#status-mapping}
+
+`NetNode` 内部以 `NetStatus` 枚举管理连接状态，每次状态变化都会触发对应的 `INetTips` 方法：
+
+| NetStatus | 对应方法 | 触发时机 |
+| :--- | :--- | :--- |
+| `CONNECTING` | [OnConnecting](#onconnecting) | 调用 `Connect` 启动连接流程时。 |
+| `CONNECTED` | [OnConnected](#onconnected) | 连接成功建立时。 |
+| `CONNECTION_ERROR` | [OnConnectionError](#onconnectionerror) | 通信发生错误时。 |
+| `DISCONNECTED` | [OnDisconnected](#ondisconnected) | 连接关闭或断开时。 |
+| `RECONNECTING` | [OnReconnecting](#onreconnecting) | 断线后进入自动重连流程时。 |
+
+<Highlight color="#00d679">提醒</Highlight> 可在创建 `NetNode` 时传入实现实例（`new NetNode(provider, netTips)`），或通过 `NetNode.SetNetTips` 设置。
+
+### 成员总览 {#overview}
+
+| 方法 | 说明 |
+| :--- | :--- |
+| [OnConnecting](#onconnecting) | 开始启动连接流程时触发。 |
+| [OnConnected](#onconnected) | 连接成功建立时触发。 |
+| [OnConnectionError](#onconnectionerror) | 通信发生错误时触发。 |
+| [OnDisconnected](#ondisconnected) | 连接关闭或断开时触发。 |
+| [OnReconnecting](#onreconnecting) | 进入自动重连流程时触发。 |
+
+---
+
+### OnConnecting {#onconnecting}
+
+```csharp
+void OnConnecting()
+```
+
+**说明**
+
+调用 `NetFrames.Connect`（或 `NetNode.Connect`）启动连接流程时触发。通常在此开启「连接中」的 UI 遮罩，防止用户重复操作。
+
+---
+
+### OnConnected {#onconnected}
+
+```csharp
+void OnConnected(object payload)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| payload | `object` | 连接成功的相关信息，内容依 Provider 而异（内置 `TcpNetProvider` / `KcpNetProvider` 传入 `0`；`WebSocketNetProvider` 传入开启事件参数）。 |
+
+**说明**
+
+连接成功建立时触发。通常在此关闭连接遮罩，并开始执行「登录」或「同步数据」等后续流程。
+
+---
+
+### OnConnectionError {#onconnectionerror}
+
+```csharp
+void OnConnectionError(object payload)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| payload | `object` | 错误信息（内置实现皆传入错误信息字符串）。 |
+
+**说明**
+
+通信发生错误时触发。通常在此弹出错误信息窗口，提示用户检查网络环境。
+
+---
+
+### OnDisconnected {#ondisconnected}
+
+```csharp
+void OnDisconnected(object payload)
+```
+
+**参数**
+
+| 参数 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| payload | `object` | 断线的相关信息（内置 `TcpNetProvider` / `KcpNetProvider` 传入 `-1`；`WebSocketNetProvider` 传入关闭代码；自动重连结束转入断线时为 `null`）。 |
+
+**说明**
+
+连接关闭或断开时触发（无论主动关闭或意外断线）。通常在此执行数据清理，或返回登录界面。
+
+---
+
+### OnReconnecting {#onreconnecting}
+
+```csharp
+void OnReconnecting()
+```
+
+**说明**
+
+连接**非主动关闭**而断开、节点进入自动重连流程时触发。通常在此显示「网络不稳定，尝试重连中...」的提示 UI。
+
+<Highlight color="#0373fc">注意</Highlight>
+
+- 自动重连由 [NetOption.autoReconnectCount](./NetOption.mdx#properties) 控制，重连次数用尽后将转为 [OnDisconnected](#ondisconnected)。
+- 通过 `NetFrames.Close`（或 `NetNode.Close`）主动关闭连接不会触发自动重连。
+
+---
+
+### 继承实现示例 {#implementation-example}
+
+定义一个类实现 `INetTips`，并挂载至 `NetNode`：
+
+```csharp
+using OxGFrame.NetFrame;
+using UnityEngine;
+
 public class NetTipsExample : INetTips
 {
     public void OnConnecting()
     {
-        // 开启 Loading 遮罩
-        Debug.Log("连线中...");
+        // 开启「连接中」遮罩，防止重复操作
+        Debug.Log("连接中...");
     }
 
     public void OnConnected(object payload)
     {
-        // 关闭 Loading 遮罩，进入游戏
-        Debug.Log($"连线成功: {payload}");
+        // 关闭遮罩，执行登录或同步数据等后续流程
+        Debug.Log($"连接成功: {payload}");
     }
 
     public void OnConnectionError(object payload)
     {
-        // 显示连线错误提示
-        Debug.LogError($"连线失败: {payload}");
+        // 显示连接错误提示
+        Debug.LogError($"连接错误: {payload}");
     }
 
     public void OnDisconnected(object payload)
     {
-        // 处理断线逻辑
-        Debug.LogWarning($"连线断开: {payload}");
+        // 清理数据或返回登录界面
+        Debug.LogWarning($"连接断开: {payload}");
     }
 
     public void OnReconnecting()
     {
-        // 显示重连中 UI
-        Debug.Log("尝试重新连线中...");
+        // 显示「重连中」提示 UI
+        Debug.Log("尝试重新连接中...");
     }
 }
 ```
 
-<Highlight color="#0373fc">注意</Highlight> payload 的具体内容取决于您底层使用的传输协议（TCP/UDP/WebSocket），在使用前建议进行型别检查（Type Check）。
+```csharp
+// 创建节点时传入
+var netNode = new NetNode(new TcpNetProvider(), new NetTipsExample());
+
+// 或在现有节点上设置
+netNode.SetNetTips(new NetTipsExample());
+```
+
+<Highlight color="#0373fc">注意</Highlight> `payload` 的实际内容取决于底层 Provider，使用前建议先做类型检查。
+
+---

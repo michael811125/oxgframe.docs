@@ -1,19 +1,20 @@
 ---
 sidebar_position: 2
+description: NetOption 是 NetFrame 的連線選項抽象基類，內建 TcpNetOption、KcpNetOption 與 WebSocketNetOption 三種衍生類。
 ---
 
 # NetOption
 
 export const Highlight = ({ children, color }) => (
-  <span
-    style={{
-      backgroundColor: color,
-      borderRadius: '5px',
-      color: '#fff',
-      padding: '2.5px'
-    }}>
-    {children}
-  </span>
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
 );
 
 <Highlight color="#ff2f00">重要</Highlight> <Highlight color="#0373fc">注意</Highlight> <Highlight color="#00d679">提醒</Highlight>
@@ -22,77 +23,247 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`NetOption` 是 **NetFrame** 連線選項的抽象基類，定義各協定共用的自動重連設定。內建三個衍生類，分別承載三種內建 Provider 的連線參數；實作自訂 Provider 時，也可繼承此類別擴充專屬選項。
+
+|  |  |
+| :--- | :--- |
+| **命名空間** | `OxGFrame.NetFrame` |
+| **類型** | `public abstract class` |
+| **原始碼** | [NetOption.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/NetFrame/Scripts/Runtime/Core/Interface/NetOption/NetOption.cs) |
+
+```csharp
 using OxGFrame.NetFrame;
+```
 
-## 核心設計概念
+**宣告**
 
-`NetOption` 是一個抽象基類，開發者在實作自定義的網絡協議（如 TCP, UDP, WebSocket）時，必須繼承此類別來定義該連線的特定配置。
+```csharp
+public abstract class NetOption
+```
+
+### 衍生類總覽 {#derived-overview}
+
+| 類別 | 適用 Provider | 說明 |
+| :--- | :--- | :--- |
+| [TcpNetOption](#tcp-netoption) | `TcpNetProvider` | TCP 連線選項（主機、連接埠與封包處理設定）。 |
+| [KcpNetOption](#kcp-netoption) | `KcpNetProvider` | KCP 連線選項（主機、連接埠、通道與 KCP 配置）。 |
+| [WebSocketNetOption](#websocket-netoption) | `WebSocketNetProvider` | WebSocket 連線選項（連線 URL）。 |
+
+### 屬性 {#properties}
+
+| 屬性 | 型別 | 預設值 | 說明 |
+| :--- | :--- | :--- | :--- |
+| autoReconnectCount | `int` | `-1` | 自動重連次數。大於 `0` 時，斷線（非主動關閉）後會自動嘗試重連並逐次遞減；`-1` 表示停用自動重連。可設為 `int.MaxValue` 達到近乎無限次重連。 |
+
+### 建構子 {#constructor}
+
+```csharp
+public NetOption(int autoReconnectCount = -1)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| autoReconnectCount | `int` | 自動重連次數。<br/>**預設值**：`-1`（停用自動重連） |
+
+**說明**
+
+由衍生類建構子透過 `base(autoReconnectCount)` 呼叫，初始化自動重連次數。
+
+<Highlight color="#00d679">提醒</Highlight> 重連間隔與重連回呼可透過 `NetNode.SetReconnectTickerTime`（預設 5 秒）與 `NetNode.SetReconnectAction` 設定。
 
 ---
 
-## Properties (屬性)
+## TcpNetOption {#tcp-netoption}
 
-### autoReconnectCount
-* 類型：`int`
-* 說明：設定自動重連的嘗試次數。
-* **數值規則**：
-    * <Highlight color="#00d679">正整數 (n)</Highlight>：當連線斷開時，會嘗試自動重新連線 N 次。
-    * <Highlight color="#0373fc">-1</Highlight>：**禁用自動重連**（預設值）。
-    * <Highlight color="#ff2f00">int.MaxValue</Highlight>：理論上的無限次嘗試重連。
+`TcpNetProvider`（Telepathy）的連線選項。
 
----
+|  |  |
+| :--- | :--- |
+| **類型** | `public class` |
+| **原始碼** | [TcpNetOption.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/NetFrame/Scripts/Runtime/Core/Implement/NetProvider/Tcp/NetOption/TcpNetOption.cs) |
 
-## Constructor (建構函式)
-
-### NetOption(int autoReconnectCount)
-* **Params**:
-    * `autoReconnectCount`: 初始化的重連次數。預設為 `-1`。
-
----
-
-## 如何擴充 (Custom Option)
-
-當您實作特定的網絡服務時，可以透過繼承 `NetOption` 來加入更多參數。
-
-**範例代碼：**
+**宣告**
 
 ```csharp
 public class TcpNetOption : NetOption
+```
+
+### 屬性 {#tcp-properties}
+
+| 屬性 | 型別 | 預設值 | 說明 |
+| :--- | :--- | :--- | :--- |
+| host | `string` | — | 伺服器主機位址。 |
+| port | `int` | — | 伺服器連接埠。 |
+| processLimitPerTick | `int` | `64` | 每次輪詢（tick）最多處理的封包數。 |
+| maxBufferSize | `int` | `65536` | 單一封包的最大緩衝大小（64KB）。 |
+
+### 建構子 {#tcp-constructor}
+
+```csharp
+public TcpNetOption(string host, int port, int autoReconnectCount = -1)
+public TcpNetOption(string host, int port, int processLimitPerTick, int maxBufferSize = 65536, int autoReconnectCount = -1)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| host | `string` | 伺服器主機位址。 |
+| port | `int` | 伺服器連接埠。 |
+| processLimitPerTick | `int` | 每次輪詢最多處理的封包數。 |
+| maxBufferSize | `int` | 單一封包的最大緩衝大小。<br/>**預設值**：`65536` |
+| autoReconnectCount | `int` | 自動重連次數。<br/>**預設值**：`-1`（停用自動重連） |
+
+**範例**
+
+```csharp
+// 基本連線（斷線後自動重連 3 次）
+var tcpOption = new TcpNetOption("127.0.0.1", 8888, autoReconnectCount: 3);
+NetFrames.Connect(tcpOption);
+
+// 自訂封包處理上限與緩衝大小
+var tunedOption = new TcpNetOption("127.0.0.1", 8888, processLimitPerTick: 128, maxBufferSize: 131072);
+```
+
+---
+
+## KcpNetOption {#kcp-netoption}
+
+`KcpNetProvider`（kcp2k）的連線選項。
+
+|  |  |
+| :--- | :--- |
+| **類型** | `public class` |
+| **原始碼** | [KcpNetOption.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/NetFrame/Scripts/Runtime/Core/Implement/NetProvider/Kcp/NetOption/KcpNetOption.cs) |
+
+**宣告**
+
+```csharp
+public class KcpNetOption : NetOption
+```
+
+### 屬性 {#kcp-properties}
+
+| 屬性 | 型別 | 預設值 | 說明 |
+| :--- | :--- | :--- | :--- |
+| host | `string` | — | 伺服器主機位址。 |
+| port | `int` | — | 伺服器連接埠。 |
+| kcpChannel | `KcpChannel` | `KcpChannel.Reliable` | KCP 傳輸通道（`Reliable` 可靠 / `Unreliable` 不可靠）。 |
+| config | `KcpConfig` | 內建預設配置（見下） | kcp2k 的連線配置（NoDelay、視窗大小、逾時等）。 |
+
+`config` 的內建預設值如下：
+
+```csharp
+new KcpConfig
+(
+    NoDelay: true,
+    DualMode: false,
+    Interval: 1,
+    Timeout: 2000,
+    SendWindowSize: Kcp.WND_SND * 1000,
+    ReceiveWindowSize: Kcp.WND_RCV * 1000,
+    CongestionWindow: false,
+    MaxRetransmits: Kcp.DEADLINK * 2
+)
+```
+
+### 建構子 {#kcp-constructor}
+
+```csharp
+public KcpNetOption(string host, int port, KcpChannel kcpChannel = KcpChannel.Reliable, int autoReconnectCount = -1)
+public KcpNetOption(string host, int port, KcpConfig config, KcpChannel kcpChannel = KcpChannel.Reliable, int autoReconnectCount = -1)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| host | `string` | 伺服器主機位址。 |
+| port | `int` | 伺服器連接埠。連線時會轉型為 `ushort`（0–65535）。 |
+| config | `KcpConfig` | 自訂 kcp2k 連線配置。未指定時使用內建預設配置。 |
+| kcpChannel | `KcpChannel` | KCP 傳輸通道。<br/>**預設值**：`KcpChannel.Reliable` |
+| autoReconnectCount | `int` | 自動重連次數。<br/>**預設值**：`-1`（停用自動重連） |
+
+**範例**
+
+```csharp
+using kcp2k;
+
+// 使用內建預設配置
+var kcpOption = new KcpNetOption("127.0.0.1", 7777);
+NetFrames.Connect(kcpOption);
+
+// 自訂 KcpConfig
+var config = new KcpConfig(NoDelay: true, Interval: 10, Timeout: 5000);
+var customOption = new KcpNetOption("127.0.0.1", 7777, config, KcpChannel.Reliable, autoReconnectCount: 3);
+```
+
+---
+
+## WebSocketNetOption {#websocket-netoption}
+
+`WebSocketNetProvider`（UnityWebSocket）的連線選項。
+
+|  |  |
+| :--- | :--- |
+| **類型** | `public class` |
+| **原始碼** | [WebSocketNetOption.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/NetFrame/Scripts/Runtime/Core/Implement/NetProvider/WebSocket/NetOption/WebSocketNetOption.cs) |
+
+**宣告**
+
+```csharp
+public class WebSocketNetOption : NetOption
+```
+
+### 屬性 {#websocket-properties}
+
+| 屬性 | 型別 | 預設值 | 說明 |
+| :--- | :--- | :--- | :--- |
+| url | `string` | — | WebSocket 連線位址（`ws://` 或 `wss://`）。 |
+
+### 建構子 {#websocket-constructor}
+
+```csharp
+public WebSocketNetOption(string url, int autoReconnectCount = -1)
+```
+
+**參數**
+
+| 參數 | 型別 | 說明 |
+| :--- | :--- | :--- |
+| url | `string` | WebSocket 連線位址（`ws://` 或 `wss://`）。 |
+| autoReconnectCount | `int` | 自動重連次數。<br/>**預設值**：`-1`（停用自動重連） |
+
+**範例**
+
+```csharp
+var wsOption = new WebSocketNetOption("ws://127.0.0.1:8080/ws", autoReconnectCount: 3);
+NetFrames.Connect(wsOption);
+```
+
+---
+
+## 自訂擴充 {#custom-option}
+
+實作自訂 Provider 時，可繼承 `NetOption` 加入該協定專屬的連線參數：
+
+```csharp
+public class CustomNetOption : NetOption
 {
     public string host { get; set; }
 
     public int port { get; set; }
 
-    /// <summary>
-    /// Processes up to 'limit' messages per tick
-    /// </summary>
-    public int processLimitPerTick = _DEFAULT_PROCESS_LIMIT_PER_TICK;
-
-    /// <summary>
-    /// Max buffer size of single packet
-    /// </summary>
-    public int maxBufferSize = _MAX_BUFFER_SIZE;
-
-    /// <summary>
-    /// Default: process up to 64 packets per frame
-    /// </summary>
-    private const int _DEFAULT_PROCESS_LIMIT_PER_TICK = 64;
-
-    /// <summary>
-    /// Max packet size: 64KB (65536 bytes)
-    /// </summary>
-    private const int _MAX_BUFFER_SIZE = 65536;
-
-    public TcpNetOption(string host, int port, int autoReconnectCount = -1) : base(autoReconnectCount)
+    public CustomNetOption(string host, int port, int autoReconnectCount = -1) : base(autoReconnectCount)
     {
         this.host = host;
         this.port = port;
     }
-
-    public TcpNetOption(string host, int port, int processLimitPerTick, int maxBufferSize = _MAX_BUFFER_SIZE, int autoReconnectCount = -1) : this(host, port, autoReconnectCount)
-    {
-        this.maxBufferSize = maxBufferSize;
-        this.processLimitPerTick = processLimitPerTick;
-    }
 }
 ```
+
+於自訂 Provider 的 `CreateConnect` 中，將 `NetOption` 轉型回 `CustomNetOption` 即可取得參數（參考 [INetProvider 繼承實作範例](./INetProvider.mdx#implementation-example)）。
+
+---

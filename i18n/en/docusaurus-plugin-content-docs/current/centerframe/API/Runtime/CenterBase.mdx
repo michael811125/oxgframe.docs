@@ -1,5 +1,6 @@
 ---
 sidebar_position: 1
+description: CenterBase is the generic registration center base class of CenterFrame, managing registered objects in a type-safe cache as the shared base of APICenter and EventCenter.
 ---
 
 # CenterBase
@@ -22,67 +23,365 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`CenterBase<TCenter, TClass>` is the abstract registration center base class of **CenterFrame**. It has a built-in thread-safe singleton and a type-safe `Dictionary<int, TClass>` cache, providing a unified object management interface — **register (Add), remove (Delete), and look up (Find)**. **APICenter** (`APIBase`) and **EventCenter** (`EventBase`) both build on it as their shared base, and you can also implement your own center with a custom `TClass` base type.
+
+|  |  |
+| :--- | :--- |
+| **Namespace** | `OxGFrame.CenterFrame` |
+| **Type** | `public abstract class` |
+| **Source** | [CenterBase.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/CenterFrame/Scripts/Runtime/Common/CenterBase.cs) |
+
+```csharp
 using OxGFrame.CenterFrame;
+```
 
-## Core Design Concept
+## Declaration {#declaration}
 
-`CenterBase<TCenter, TClass>` adopts the **CRTP (Curiously Recurring Template Pattern)** and **Thread-Safe Singleton** design. It establishes a type-safe cache pool, providing unified object management logic for all center points inheriting from this class.
+```csharp
+public abstract class CenterBase<TCenter, TClass> where TCenter : CenterBase<TCenter, TClass>, new()
+```
+
+**Generic Parameters**
+
+| Generic Parameter | Description |
+| :--- | :--- |
+| TCenter | The center subclass itself (CRTP self-referencing constraint); it must have a parameterless constructor (`new()`). |
+| TClass | The base type of the managed objects (such as `APIBase` for APICenter or `EventBase` for EventCenter). |
+
+When inheriting, pass the subclass itself and the managed base type as the generic parameters:
+
+```csharp
+public class APICenterExample : CenterBase<APICenterExample, APIBase> { /* ... */ }
+public class EventCenterExample : CenterBase<EventCenterExample, EventBase> { /* ... */ }
+```
+
+## How It Works {#how-it-works}
+
+### Singleton & Registration Timing {#singleton}
+
+`CenterBase<TCenter, TClass>` has a built-in **thread-safe lazy singleton** (double-checked locking). The first call to any Default API static method automatically creates the `TCenter` instance and runs its constructor; it is recommended to register your objects with [Register](#register) in the subclass **constructor**.
+
+<Highlight color="#ff2f00">Important</Highlight> Never call any Default API static method (such as `Add` / `Find`) inside the subclass constructor — it recurses through `GetInstance()` and causes a StackOverflow (infinite loop). Use the instance methods (such as [Register](#register)) in the constructor instead.
+
+### ID Rules {#id-rules}
+
+- Each registered object is cached under a unique `int` id. The generic overloads **without an id** use `typeof(UClass).GetHashCode()` as the id (so only one instance per type can be registered this way).
+- The overloads **with an id** let you assign custom ids, allowing multiple instances of the same type.
+- Registering a duplicate id logs a warning and is **skipped** — the existing object is not overwritten.
+
+### Default API vs Instance Methods {#default-api-vs-members}
+
+The static Default APIs (`Add` / `Delete` / `Find`) are forwarded through the singleton to the corresponding instance methods (`Register` / `Remove` / `Get`):
+
+- **Callers**: use the Default APIs directly on the subclass name (e.g. `EventCenterExample.Find<UClass>()`).
+- **Inside the subclass (constructor)**: use the instance methods (e.g. `this.Register<UClass>()`).
+
+<Highlight color="#0373fc">Attention</Highlight> `CenterBase` is only responsible for object registration and cache management. If a managed object holds Unity assets (such as prefabs), make sure to release them properly (in conjunction with `AssetLoaders`) before removal.
+
+## Inheritance Example {#inheritance-example}
+
+An EventCenter-style example with a custom event center and event class:
+
+```csharp
+using Cysharp.Threading.Tasks;
+using OxGFrame.CenterFrame;
+using OxGFrame.CenterFrame.EventCenter;
+using UnityEngine;
+
+// Custom event center: TCenter is the subclass itself (CRTP), TClass is the managed base type
+public class EventCenterExample : CenterBase<EventCenterExample, EventBase>
+{
+    public EventCenterExample()
+    {
+        // Register events in the constructor (instance method Register only — never Default APIs here)
+        this.Register<EventMsgTest>();
+    }
+}
+
+// Custom event: inherit EventBase
+public class EventMsgTest : EventBase
+{
+    private string _message;
+
+    public void Emit(string message)
+    {
+        this._message = message;
+        this.HandleEvent().Forget();
+    }
+
+    public async override UniTaskVoid HandleEvent()
+    {
+        // Handle the event content
+        Debug.Log($"Received message: {this._message}");
+        this.Release();
+    }
+
+    protected override void Release()
+    {
+        // Release the data held by the event
+        this._message = null;
+    }
+}
+```
+
+Callers look up the event through the Default API and dispatch it:
+
+```csharp
+// Find the registered event by type and dispatch it
+EventCenterExample.Find<EventMsgTest>()?.Emit("Hello OxGFrame");
+```
+
+An APICenter-style center works the same way — just use `APIBase` as `TClass`:
+
+```csharp
+using OxGFrame.CenterFrame;
+using OxGFrame.CenterFrame.APICenter;
+
+// APIGetPlayerData is a custom API class inheriting APIBase
+public class APICenterExample : CenterBase<APICenterExample, APIBase>
+{
+    public APICenterExample()
+    {
+        this.Register<APIGetPlayerData>();
+    }
+}
+```
+
+<Highlight color="#00d679">Reminder</Highlight> You can quickly create subclasses from the templates via the Project window context menu: **Create → OxGFrame → Center Frame → Event Center / API Center → Template Scripts**.
+
+## Member Overview {#overview}
+
+#### Static Methods (Default API)
+
+Called directly on the subclass name after inheriting (e.g. `EventCenterExample.Find<UClass>()`).
+
+| Method | Description |
+| :--- | :--- |
+| [Add](#add) | Instantiates and registers an object in the cache. |
+| [Delete](#delete) | Removes an object from the cache. |
+| [DeleteAll](#deleteall) | Clears all objects in the cache. |
+| [Find\<UClass\>](#find) | Looks up an object in the cache and returns it cast to the target type. |
+
+#### Instance Methods
+
+| Method | Description |
+| :--- | :--- |
+| [Get\<UClass\>](#get) | Gets an object from the cache and casts it (instance version of `Find`). |
+| [Has\<UClass\>](#has) | Checks whether an object is registered. |
+| [Register](#register) | Registers an object in the cache (instance version of `Add`). |
+| [Remove](#remove) | Removes an object from the cache (instance version of `Delete`). |
+| [RemoveAll](#removeall) | Clears the cache (instance version of `DeleteAll`). |
+
+#### Protected Members (available to subclasses)
+
+| Member | Type | Description |
+| :--- | :--- | :--- |
+| `GetInstance()` | `static TCenter` | Gets the center singleton (lazily created, thread-safe). |
+| `GetFromCache(int id)` | `TClass` | Fetches an object from the cache; if not found, logs an error and returns `default`. |
+| `HasInCache(int id)` | `bool` | Checks whether the given id exists in the cache. |
 
 ---
 
-## Default APIs (Static Interface)
+### Add {#add}
 
-The following methods are static interfaces and can be called directly via the subclass name (e.g., `YourCenter.Add<YourClass>()`).
+```csharp
+public static void Add<UClass>() where UClass : TClass, new()
+public static void Add<UClass>(int id) where UClass : TClass, new()
+public static void Add(int id, TClass @class)
+```
 
-### Register (Add)
+**Parameters**
 
-Instantiates objects and adds them to cache management.
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| id | `int` | Registration id. When omitted, `typeof(UClass).GetHashCode()` is used as the id. |
+| @class | `TClass` | An existing object instance (registered under the given id). |
 
-* **Add\<UClass\>()**
-    * Registers using the Type Hash of `UClass` as the ID.
-* **Add\<UClass\>(int id)**
-    * Registers a `UClass` instance with a specific `id`.
-* **Add(int id, TClass @class)**
-    * Directly adds an existing instance to the cache with a specified `id`.
+**Description**
 
-<Highlight color="#00d679">Reminder</Highlight> When using generic registration, the class must have a parameterless constructor (`new()`).
+Instantiates (`new UClass()`) and registers an object in the cache, or registers an existing instance under the given id.
 
----
+<Highlight color="#0373fc">Attention</Highlight>
 
-### Remove (Unload)
+- The generic overloads require `UClass` to have a parameterless constructor (`new()` constraint).
+- Registering a duplicate id logs a warning and is skipped; the existing object is not overwritten.
 
-Removes objects from the cache pool.
+**Example**
 
-* **Delete\<UClass\>()**
-    * Removes the corresponding instance based on type.
-* **Delete(int id)**
-    * Removes the instance based on the specified `id`.
-* **DeleteAll()**
-    * Clears all objects in the cache pool.
+```csharp
+// Register with the type hash as the id
+EventCenterExample.Add<EventMsgTest>();
 
----
-
-### Get (Find/Retrieve)
-
-Retrieves objects from the cache pool and automatically casts them.
-
-* **Find\<UClass\>()**
-    * Finds an object based on type.
-* **Find\<UClass\>(int id)**
-    * Finds an object based on the specified `id` and casts it to the `UClass` type.
+// Register an existing instance under a custom id
+EventCenterExample.Add(0x01, new EventMsgTest());
+```
 
 ---
 
-## Internal Implementation Details
+### Delete {#delete}
 
-### Thread-Safe Singleton
-Built-in Double-Checked Locking ensures the uniqueness and safety of `GetInstance()` in multi-threaded environments.
+```csharp
+public static void Delete<UClass>() where UClass : TClass
+public static void Delete(int id)
+```
 
-### Cache System
-The underlying storage uses `Dictionary<int, TClass>`:
-* **Key**: Unique identifier of the object (ID or Type Hash).
-* **Value**: Instantiated object.
+**Parameters**
 
-<Highlight color="#ff2f00">Important</Highlight> `CenterBase` is only responsible for the storage lifecycle of objects. If the managed objects involve Unity resources (such as Prefabs), please ensure proper destruction in conjunction with `AssetLoaders`.
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| id | `int` | Registration id. When omitted, `typeof(UClass).GetHashCode()` is used for the lookup. |
+
+**Description**
+
+Removes a registered object from the cache; does nothing if not found.
+
+---
+
+### DeleteAll {#deleteall}
+
+```csharp
+public static void DeleteAll()
+```
+
+**Description**
+
+Clears **all** registered objects in the cache.
+
+---
+
+### Find\<UClass\> {#find}
+
+```csharp
+public static UClass Find<UClass>() where UClass : TClass
+public static UClass Find<UClass>(int id) where UClass : TClass
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| id | `int` | Registration id. When omitted, `typeof(UClass).GetHashCode()` is used for the lookup. |
+
+**Returns**
+
+`UClass` — the matching object in the cache (cast to `UClass`); if not found, an error is logged and `default` is returned (`null` for reference types).
+
+**Description**
+
+Looks up a registered object in the cache and casts it automatically. The parameterless overload looks up by type hash, so it only works for objects registered **without an explicit id**; for objects registered with a custom id, use `Find<UClass>(int id)`.
+
+**Example**
+
+```csharp
+var evt = EventCenterExample.Find<EventMsgTest>();
+evt?.Emit("Hello OxGFrame");
+```
+
+---
+
+### Get\<UClass\> {#get}
+
+```csharp
+public UClass Get<UClass>() where UClass : TClass
+public UClass Get<UClass>(int eventId) where UClass : TClass
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| eventId | `int` | Registration id. When omitted, `typeof(UClass).GetHashCode()` is used for the lookup. |
+
+**Returns**
+
+`UClass` — the matching object in the cache (cast to `UClass`); if not found, an error is logged and `default` is returned.
+
+**Description**
+
+Instance version of [Find\<UClass\>](#find), for use inside the subclass.
+
+---
+
+### Has\<UClass\> {#has}
+
+```csharp
+public bool Has<UClass>() where UClass : TClass
+public bool Has<UClass>(int id) where UClass : TClass
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| id | `int` | Registration id. When omitted, `typeof(UClass).GetHashCode()` is used for the check. |
+
+**Returns**
+
+`bool` — whether the object is registered in the cache.
+
+**Description**
+
+Checks whether an object is registered. Useful before registering or looking up, to avoid the duplicate-registration warning or the not-found error log.
+
+---
+
+### Register {#register}
+
+```csharp
+public void Register<UClass>() where UClass : TClass, new()
+public void Register<UClass>(int id) where UClass : TClass, new()
+public void Register(int id, TClass @class)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| id | `int` | Registration id. When omitted, `typeof(UClass).GetHashCode()` is used as the id. |
+| @class | `TClass` | An existing object instance (registered under the given id). |
+
+**Description**
+
+Instance version of [Add](#add). Use it to register objects in the subclass **constructor** (where static Default APIs must not be called). Registering a duplicate id logs a warning and is skipped.
+
+**Example**
+
+```csharp
+public EventCenterExample()
+{
+    this.Register<EventMsgTest>();
+}
+```
+
+---
+
+### Remove {#remove}
+
+```csharp
+public void Remove<UClass>() where UClass : TClass
+public void Remove(int id)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| id | `int` | Registration id. When omitted, `typeof(UClass).GetHashCode()` is used for the lookup. |
+
+**Description**
+
+Instance version of [Delete](#delete); does nothing if not found.
+
+---
+
+### RemoveAll {#removeall}
+
+```csharp
+public void RemoveAll()
+```
+
+**Description**
+
+Instance version of [DeleteAll](#deleteall) — clears all registered objects in the cache.
 
 ---

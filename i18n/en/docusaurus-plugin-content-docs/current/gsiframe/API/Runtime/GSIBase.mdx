@@ -1,5 +1,6 @@
 ---
 sidebar_position: 2
+description: GSIBase is the abstract base class for game stages in GSIFrame, defining the complete OnCreate, OnEnter, OnUpdate, and OnExit stage lifecycle.
 ---
 
 # GSIBase
@@ -22,71 +23,242 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
+`GSIBase` is the abstract base class for game stages in **GSIFrame** (Game Stage Integration). Each game stage (such as startup, logo, hotfix, login, or lobby) is implemented as a subclass of `GSIBase`, following the complete **OnCreate → OnEnter → OnUpdate → OnExit** stage lifecycle. Stages are registered, switched, and driven by a [GSIManagerBase](./GSIManagerBase.mdx) subclass.
+
+|  |  |
+| :--- | :--- |
+| **Namespace** | `OxGFrame.GSIFrame` |
+| **Type** | `public abstract class` |
+| **Source** | [GSIBase.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/GSIFrame/Scripts/Runtime/GSIBase.cs) |
+
+```csharp
 using OxGFrame.GSIFrame;
+```
 
-## Core Design Concept
+## Declaration {#declaration}
 
-`GSIBase` defines a complete lifecycle for a game stage. Through the automated process of `BeginInit`, it ensures that stages execute in the order of "Stop Updating -> Perform Initialization -> Start Updating" when entered, supporting asynchronous processing (UniTask).
+```csharp
+public abstract class GSIBase
+```
+
+After inheriting from `GSIBase`, you must implement the four lifecycle methods [OnCreate](#oncreate), [OnEnter](#onenter), [OnUpdate](#onupdate), and [OnExit](#onexit) (all `abstract`).
+
+## Lifecycle & Call Sequence {#lifecycle}
+
+All lifecycle methods are invoked automatically by the manager (a [GSIManagerBase](./GSIManagerBase.mdx) subclass) during stage switching and update driving — you never call them yourself. When the manager switches to this stage, the internal initialization flow runs in the following order:
+
+1. **First-time check**: if the stage has never been initialized, `await` [OnCreate](#oncreate) first (executed only once in the stage's lifetime).
+2. **Step 1**: call [StopUpdate](#stopupdate) to pause `OnUpdate` refreshing.
+3. **Step 2**: `await` [OnEnter](#onenter) to run the stage's entering logic.
+4. **Step 3**: call [RunUpdate](#runupdate) to start `OnUpdate` refreshing.
+
+After that, on every driven update (`DriveUpdate`), the manager calls [OnUpdate](#onupdate) as long as this stage is the current stage and [runUpdate](#prop-runupdate) is `true`. When switching away, the manager calls this stage's [OnExit](#onexit) before running the next stage's initialization flow.
+
+<Highlight color="#00d679">Reminder</Highlight> Both `OnCreate` and `OnEnter` are `UniTask` async methods, so you can conveniently `await` asset loading and other async operations inside them; the initialization flow waits for `OnEnter` to finish before enabling `OnUpdate` refreshing.
+
+<Highlight color="#0373fc">Attention</Highlight> The initialization flow is started in fire-and-forget fashion (`Forget()`), so it never blocks the manager's driven update.
+
+## Inheritance Example {#inheritance-example}
+
+```csharp
+using Cysharp.Threading.Tasks;
+using OxGFrame.GSIFrame;
+using UnityEngine;
+
+// Custom game stage: inherit GSIBase and override the four lifecycle methods
+public class StartupStageExample : GSIBase
+{
+    public async override UniTask OnCreate()
+    {
+        // Executed once, the first time this stage is switched to (one-time initialization)
+        Debug.Log($"StartupStage OnCreate, Id: {this.id}");
+    }
+
+    public async override UniTask OnEnter()
+    {
+        // Executed every time this stage is switched to
+        // You can await async operations such as preloading; OnUpdate starts only after this completes
+        Debug.Log("StartupStage OnEnter");
+    }
+
+    public override void OnUpdate(float dt = 0.0f)
+    {
+        // Executed every frame while the stage is active (driven by the manager)
+    }
+
+    public override void OnExit()
+    {
+        // Executed when switching away; clean up the data produced by this stage
+        Debug.Log("StartupStage OnExit");
+    }
+}
+```
+
+Stage subclasses are registered and switched through a [GSIManagerBase](./GSIManagerBase.mdx) subclass:
+
+```csharp
+// Switch to this stage from anywhere via the manager (see GSIManagerBase)
+GSIManagerExample.ChangeStage<StartupStageExample>();
+```
+
+<Highlight color="#00d679">Reminder</Highlight> You can quickly create a stage subclass from the template via the Project window context menu: **Create → OxGFrame → GSI Frame → Template Scripts → Template GSI.cs (Game Stage)**.
+
+## Member Overview {#overview}
+
+#### Properties
+
+| Property | Description |
+| :--- | :--- |
+| [id](#prop-id) | Stage identifier (assigned automatically by the manager on registration). |
+| [runUpdate](#prop-runupdate) | Switch that controls whether `OnUpdate` refreshing runs. |
+
+#### Lifecycle Methods (abstract, must be implemented)
+
+| Method | Description |
+| :--- | :--- |
+| [OnCreate](#oncreate) | Executed once the first time the stage is entered (async). |
+| [OnEnter](#onenter) | Executed every time the stage is entered (async). |
+| [OnUpdate](#onupdate) | Executed every frame while the stage is active. |
+| [OnExit](#onexit) | Executed when switching away from the stage. |
+
+#### General Methods
+
+| Method | Description |
+| :--- | :--- |
+| [SetId](#setid) | Sets the stage identifier (called automatically by the manager on registration). |
+| [RunUpdate](#runupdate) | Starts `OnUpdate` refreshing. |
+| [StopUpdate](#stopupdate) | Stops `OnUpdate` refreshing. |
 
 ---
 
-## Properties and States
+### id {#prop-id}
 
-* **id**
-    * Type: `int`
-    * Description: Unique identifier for the stage, automatically assigned when registered by `GSIManager`.
-* **runUpdate**
-    * Type: `bool`
-    * Description: Switch that controls whether `OnUpdate` for this stage is executed.
+```csharp
+public int id { get; private set; }
+```
 
----
+**Description**
 
-## Built-in Flow Control
-
-### Execution Order Description
-
-1. **First Check**: If not yet initialized, execute `OnCreate` (initialized only once).
-2. **Step 1**: Call `StopUpdate()` to pause refreshing.
-3. **Step 2**: Call `OnEnter()` for asynchronous initialization logic of this stage.
-4. **Step 3**: Call `RunUpdate()` to start `OnUpdate` refreshing.
+The unique identifier of the stage. It is assigned automatically when the stage is registered on the manager: when registering via the generic overloads without an id, it is the type's `GetHashCode()`; otherwise it is the id you passed in. The property is read-only from outside and can only be changed through [SetId](#setid).
 
 ---
 
-## Must Implement Methods (Implementation)
+### runUpdate {#prop-runupdate}
 
-After inheriting from `GSIBase`, the following lifecycle methods must be implemented:
+```csharp
+public bool runUpdate { get; private set; }
+```
 
-### OnCreate()
-* **Return Value**: `UniTask`
-* **Trigger Timing**: When the stage instance is switched to for the "first" time.
-* **Purpose**: Suitable for one-time resource preloading or object initialization.
+**Description**
 
-### OnEnter()
-* **Return Value**: `UniTask`
-* **Trigger Timing**: Every time the stage is switched to.
-* **Purpose**: Handle logic when entering the stage, such as opening UI windows or playing transition animations.
-
-### OnUpdate(float dt)
-* **Return Value**: `void`
-* **Trigger Timing**: When `runUpdate` is true and the stage is active, refreshes with the game frame rate.
-* **Purpose**: Handle cyclic logic within the stage (such as timers, character control, etc.).
-
-### OnExit()
-* **Return Value**: `void`
-* **Trigger Timing**: Before switching to the next stage.
-* **Purpose**: Clean up temporary data generated in this stage, close related UI, or stop sound effects.
+Switch that controls whether `OnUpdate` refreshing runs. Only while it is `true` does the manager's driven update call this stage's [OnUpdate](#onupdate). The property is read-only from outside and can only be changed through [RunUpdate](#runupdate) / [StopUpdate](#stopupdate).
 
 ---
 
-## Stage State Operation
+### OnCreate {#oncreate}
 
-Developers can manually control update behavior within the stage using the following methods:
+```csharp
+public abstract UniTask OnCreate()
+```
 
-* **RunUpdate()**: Manually start `OnUpdate` execution.
-* **StopUpdate()**: Manually pause `OnUpdate` execution.
+**Returns**
+
+`UniTask` — an awaitable async operation; the initialization flow awaits its completion before running `OnEnter`.
+
+**Description**
+
+Executed the **first** time the stage is switched to, and only once in the stage's lifetime. Suitable for one-time initialization or asset preloading.
+
+<Highlight color="#0373fc">Attention</Highlight> `OnCreate` runs on the first switch into the stage, not at registration time (`AddStage`).
 
 ---
 
-<Highlight color="#00d679">Reminder</Highlight> Since `OnCreate` and `OnEnter` support `UniTask`, you can conveniently use `await` in these methods to wait for resource loading to complete. The system will automatically start `OnUpdate` after the loading is finished.
+### OnEnter {#onenter}
+
+```csharp
+public abstract UniTask OnEnter()
+```
+
+**Returns**
+
+`UniTask` — an awaitable async operation; the initialization flow awaits its completion before enabling `OnUpdate` refreshing.
+
+**Description**
+
+Executed **every** time the stage is switched to. Handles the stage's entering logic (such as opening UI, playing transition animations, or preloading assets). Before it runs, the initialization flow calls [StopUpdate](#stopupdate) to pause refreshing; once it completes, [RunUpdate](#runupdate) is called automatically to resume refreshing.
+
+---
+
+### OnUpdate {#onupdate}
+
+```csharp
+public abstract void OnUpdate(float dt = 0.0f)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| dt | `float` | Delta time passed in by the manager's driven update (usually `Time.deltaTime`).<br/>**Default**: `0.0f` |
+
+**Description**
+
+Per-frame update while the stage is active. Called every frame by the manager's driven update (`DriveUpdate`) as long as this stage is the current stage and [runUpdate](#prop-runupdate) is `true`. Handles the stage's recurring logic (such as timers or flow checks).
+
+---
+
+### OnExit {#onexit}
+
+```csharp
+public abstract void OnExit()
+```
+
+**Description**
+
+Called by the manager when switching to another stage, before the next stage's initialization flow runs. Use it to clean up the data produced by this stage, close related UI, or stop sounds.
+
+---
+
+### SetId {#setid}
+
+```csharp
+public void SetId(int id)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| id | `int` | Stage identifier. |
+
+**Description**
+
+Sets the stage identifier [id](#prop-id).
+
+<Highlight color="#00d679">Reminder</Highlight> Called automatically by the manager when the stage is registered (`AddStage` / `AddGameStage`); you normally never need to call it yourself.
+
+---
+
+### RunUpdate {#runupdate}
+
+```csharp
+public void RunUpdate()
+```
+
+**Description**
+
+Sets [runUpdate](#prop-runupdate) to `true` to start `OnUpdate` refreshing. The initialization flow calls it automatically after `OnEnter` completes; you can also call it manually inside the stage to resume refreshing after a pause.
+
+---
+
+### StopUpdate {#stopupdate}
+
+```csharp
+public void StopUpdate()
+```
+
+**Description**
+
+Sets [runUpdate](#prop-runupdate) to `false` to pause `OnUpdate` refreshing. You can call it manually inside the stage (for example, to suspend stage updates during a cutscene) and resume later with [RunUpdate](#runupdate).
 
 ---

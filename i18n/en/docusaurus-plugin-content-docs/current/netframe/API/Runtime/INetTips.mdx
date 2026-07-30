@@ -1,19 +1,20 @@
 ---
 sidebar_position: 4
+description: INetTips is the connection status notification interface of NetFrame, invoked automatically on state changes such as connecting, disconnection, errors, and reconnecting.
 ---
 
 # INetTips
 
 export const Highlight = ({ children, color }) => (
-  <span
-    style={{
-      backgroundColor: color,
-      borderRadius: '5px',
-      color: '#fff',
-      padding: '2.5px'
-    }}>
-    {children}
-  </span>
+    <span
+        style={{
+            backgroundColor: color,
+            borderRadius: '5px',
+            color: '#fff',
+            padding: '2.5px'
+        }}>
+        {children}
+    </span>
 );
 
 <Highlight color="#ff2f00">Important</Highlight> <Highlight color="#0373fc">Attention</Highlight> <Highlight color="#00d679">Reminder</Highlight>
@@ -22,78 +23,183 @@ export const Highlight = ({ children, color }) => (
 
 ---
 
-using OxGFrame.NetFrame;
+`INetTips` is the connection status notification interface of **NetFrame**. Whenever a node's connection state changes (connecting, connected, error, disconnected, reconnecting), the `NetNode` automatically invokes the corresponding interface method — ideal for implementing connection loading masks, error dialogs, and reconnection prompts.
 
-## Core Design Concept
-
-`INetTips` is a connection state monitoring interface. During the network communication process, when the connection state changes (e.g., starting connection, success, failure, or disconnection), `NetFrame` will automatically trigger the corresponding methods in the implementer. This is very important for implementing **Loading masks** or **disconnection reconnection prompts**.
-
----
-
-## Interface Methods
-
-### OnConnecting()
-* **Trigger Timing**: When the connection method (e.g., `Connect()`) is called and the connection procedure begins.
-* **Purpose**: Usually used to open the "connecting" UI mask here to prevent duplicate operations by users.
-
-### OnConnected(object payload)
-* **Trigger Timing**: When a network connection is successfully established.
-* **Params**: `payload`: Contains information related to a successful connection.
-* **Purpose**: Close the connection mask and begin subsequent logic such as "login" or "data synchronization".
-
-### OnConnectionError(object payload)
-* **Trigger Timing**: When a connection attempt fails.
-* **Params**: `payload`: Reason for the error or anomaly message.
-* **Purpose**: Pop up an error message window to prompt the user to check the network environment.
-
-### OnDisconnected(object payload)
-* **Trigger Timing**: When an established connection is disconnected (either manually or accidentally).
-* **Params**: `payload`: Connection disconnection status code or reason.
-* **Purpose**: Perform data cleanup or jump back to the login screen.
-
-### OnReconnecting()
-* **Trigger Timing**: When the connection is disconnected and `NetOption` activates the automatic reconnection mechanism.
-* **Purpose**: Display a prompt UI such as "Network unstable, attempting to reconnect...".
-
----
-
-## Implementation Example
-
-You can define a class and implement `INetTips`, then pass it into the connection manager.
+|  |  |
+| :--- | :--- |
+| **Namespace** | `OxGFrame.NetFrame` |
+| **Type** | `public interface` |
+| **Source** | [INetTips.cs](https://github.com/michael811125/OxGFrame/blob/master/Assets/OxGFrame/NetFrame/Scripts/Runtime/Core/Interface/NetTip/INetTips.cs) |
 
 ```csharp
+using OxGFrame.NetFrame;
+```
+
+**Declaration**
+
+```csharp
+public interface INetTips
+```
+
+### Status & Trigger Timing {#status-mapping}
+
+`NetNode` manages the connection state internally with the `NetStatus` enum; each state transition triggers the corresponding `INetTips` method:
+
+| NetStatus | Method | Trigger Timing |
+| :--- | :--- | :--- |
+| `CONNECTING` | [OnConnecting](#onconnecting) | When `Connect` starts the connection procedure. |
+| `CONNECTED` | [OnConnected](#onconnected) | When the connection is successfully established. |
+| `CONNECTION_ERROR` | [OnConnectionError](#onconnectionerror) | When a communication error occurs. |
+| `DISCONNECTED` | [OnDisconnected](#ondisconnected) | When the connection is closed or lost. |
+| `RECONNECTING` | [OnReconnecting](#onreconnecting) | When the node enters the auto-reconnection procedure after a disconnection. |
+
+<Highlight color="#00d679">Reminder</Highlight> Pass an implementation instance when creating the `NetNode` (`new NetNode(provider, netTips)`), or assign it later via `NetNode.SetNetTips`.
+
+### Member Overview {#overview}
+
+| Method | Description |
+| :--- | :--- |
+| [OnConnecting](#onconnecting) | Triggered when the connection procedure starts. |
+| [OnConnected](#onconnected) | Triggered when the connection is successfully established. |
+| [OnConnectionError](#onconnectionerror) | Triggered when a communication error occurs. |
+| [OnDisconnected](#ondisconnected) | Triggered when the connection is closed or lost. |
+| [OnReconnecting](#onreconnecting) | Triggered when the auto-reconnection procedure starts. |
+
+---
+
+### OnConnecting {#onconnecting}
+
+```csharp
+void OnConnecting()
+```
+
+**Description**
+
+Triggered when `NetFrames.Connect` (or `NetNode.Connect`) starts the connection procedure. Typically used to open a "connecting" UI mask to prevent duplicate operations.
+
+---
+
+### OnConnected {#onconnected}
+
+```csharp
+void OnConnected(object payload)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| payload | `object` | Information about the established connection. The content depends on the provider (built-in `TcpNetProvider` / `KcpNetProvider` pass `0`; `WebSocketNetProvider` passes the open event args). |
+
+**Description**
+
+Triggered when the connection is successfully established. Typically used to close the connecting mask and continue with follow-up logic such as login or data synchronization.
+
+---
+
+### OnConnectionError {#onconnectionerror}
+
+```csharp
+void OnConnectionError(object payload)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| payload | `object` | Error information (all built-in implementations pass an error message string). |
+
+**Description**
+
+Triggered when a communication error occurs. Typically used to show an error dialog prompting the user to check the network environment.
+
+---
+
+### OnDisconnected {#ondisconnected}
+
+```csharp
+void OnDisconnected(object payload)
+```
+
+**Parameters**
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| payload | `object` | Disconnection information (built-in `TcpNetProvider` / `KcpNetProvider` pass `-1`; `WebSocketNetProvider` passes the close code; `null` when transitioning to disconnected after auto-reconnection ends). |
+
+**Description**
+
+Triggered when the connection is closed or lost (whether manually or unexpectedly). Typically used for data cleanup or returning to the login screen.
+
+---
+
+### OnReconnecting {#onreconnecting}
+
+```csharp
+void OnReconnecting()
+```
+
+**Description**
+
+Triggered when the connection is lost **without a manual close** and the node enters the auto-reconnection procedure. Typically used to show a "network unstable, reconnecting..." prompt.
+
+<Highlight color="#0373fc">Attention</Highlight>
+
+- Auto-reconnection is controlled by [NetOption.autoReconnectCount](./NetOption.mdx#properties); once the attempts are exhausted, the state transitions to [OnDisconnected](#ondisconnected).
+- Closing the connection manually via `NetFrames.Close` (or `NetNode.Close`) never triggers auto-reconnection.
+
+---
+
+### Implementation Example {#implementation-example}
+
+Define a class implementing `INetTips` and attach it to a `NetNode`:
+
+```csharp
+using OxGFrame.NetFrame;
+using UnityEngine;
+
 public class NetTipsExample : INetTips
 {
     public void OnConnecting()
     {
-        // Open Loading mask
+        // Open the "connecting" mask to prevent duplicate operations
         Debug.Log("Connecting...");
     }
 
     public void OnConnected(object payload)
     {
-        // Close Loading mask, enter game
-        Debug.Log($"Connection successful: {payload}");
+        // Close the mask and continue with login or data synchronization
+        Debug.Log($"Connected: {payload}");
     }
 
     public void OnConnectionError(object payload)
     {
-        // Show connection error prompt
-        Debug.LogError($"Connection failed: {payload}");
+        // Show a connection error prompt
+        Debug.LogError($"Connection error: {payload}");
     }
 
     public void OnDisconnected(object payload)
     {
-        // Handle disconnection logic
-        Debug.LogWarning($"Connection disconnected: {payload}");
+        // Clean up data or return to the login screen
+        Debug.LogWarning($"Disconnected: {payload}");
     }
 
     public void OnReconnecting()
     {
-        // Show reconnecting UI
+        // Show the "reconnecting" prompt UI
         Debug.Log("Attempting to reconnect...");
     }
 }
 ```
 
-<Highlight color="#0373fc">Attention</Highlight> The specific content of the payload depends on the underlying transmission protocol you use (TCP/UDP/WebSocket); it is recommended to perform a Type Check before use.
+```csharp
+// Pass it in when creating the node
+var netNode = new NetNode(new TcpNetProvider(), new NetTipsExample());
+
+// Or assign it on an existing node
+netNode.SetNetTips(new NetTipsExample());
+```
+
+<Highlight color="#0373fc">Attention</Highlight> The actual content of `payload` depends on the underlying provider — perform a type check before using it.
+
+---
