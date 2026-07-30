@@ -181,6 +181,31 @@ https://github.com/michael811125/OxGFrame.git?path=Assets/OxGFrame/NetFrame
 
 ---
 
+## AI-Assisted Development (AI Agent Skills) {#ai-agent-skills}
+
+OxGFrame supports development assisted by **AI coding agents** (Claude Code, OpenAI Codex CLI, Cursor, Copilot, etc.). The framework ships an **AI Agent Skills** sample — an Agent Skill (a `SKILL.md` entry plus 9 source-verified `references/` documents) that teaches AI agents how to use every OxGFrame module correctly (AssetLoader patch & loading, CoreFrame UI/SR/US/CP, MediaFrame audio/video, GSIFrame, NetFrame, CenterFrame, Hotfixer), along with coding-style and production-architecture guidance, and briefly covers the OxGKit APIs used internally by the framework.
+
+**Import & install:**
+
+1. Import it via **Package Manager → OxGFrame → Samples → AI Agent Skills**. The files are copied to `Assets/Samples/OxGFrame/<version>/AI Agent Skills/`.
+2. Copy (or symlink) the `oxgframe-unity-skill` folder to wherever your agent discovers skills:
+
+| Agent | Location |
+| :--- | :--- |
+| Claude Code | `<project>/.claude/skills/oxgframe-unity-skill/` (or `~/.claude/skills/` for all projects) |
+| OpenAI Codex CLI | `<project>/.agents/skills/oxgframe-unity-skill/` (or `~/.codex/skills/`) |
+| Other agents (Cursor, Copilot, etc.) | Reference the folder from your agent context file (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, ...), e.g. "Read `oxgframe-unity-skill/SKILL.md` before working with OxGFrame APIs." |
+
+<Highlight color="#0373fc">Attention</Highlight> A skill is **auto-discovered and auto-triggered only when it is placed in the agent's skills directory** (references load on demand; no per-conversation reminder needed). If it stays under `Assets/Samples/`, the agent will not know it exists, and that path contains the version number, so it changes after upgrades.
+
+<Highlight color="#00d679">Reminder</Highlight> Committing the skills directory to version control makes it work for the whole team automatically.
+
+3. Optionally delete the imported copy under `Assets/Samples/` afterwards — the skill files are plain Markdown and do not need to live inside the Unity project once copied (keeping them is harmless; they import as TextAssets).
+
+<Highlight color="#00d679">Reminder</Highlight> The skill is written in English (readable by agents in any locale; the agent replies in your language). API signatures are verified against v3.7.0+, and the skill instructs the agent to re-verify against the installed package source when in doubt.
+
+---
+
 ## Built-in Third-Party Dependencies
 
 - Using [UniFramework](https://github.com/gmhevinci/UniFramework) (UniEvent, UniMachine, UniReference).
