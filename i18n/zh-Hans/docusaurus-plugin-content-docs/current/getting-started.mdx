@@ -181,6 +181,27 @@ https://github.com/michael811125/OxGFrame.git?path=Assets/OxGFrame/NetFrame
 
 ---
 
+## AI 辅助开发 (AI Agent Skills) {#ai-agent-skills}
+
+OxGFrame 支持使用 **AI 编码代理**（Claude Code、OpenAI Codex CLI、Cursor、Copilot 等）辅助开发。框架内置「**AI Agent Skills**」示例——一份 Agent Skill（`SKILL.md` 入口 ＋ 9 份经源码核实的 `references/` 使用文档），教导 AI 代理正确使用 OxGFrame 各模块 API（AssetLoader 补丁与加载、CoreFrame UI/SR/US/CP、MediaFrame 影音、GSIFrame、NetFrame、CenterFrame、Hotfixer 热更），以及编码风格与生产架构建议，并简要涵盖框架内部使用的 OxGKit API。
+
+**导入与安装：**
+
+1. 通过 **Package Manager → OxGFrame → Samples → AI Agent Skills** 导入，文件会复制到 `Assets/Samples/OxGFrame/<version>/AI Agent Skills/`。
+2. 将 `oxgframe-unity-skill` 文件夹复制（或建立符号链接）到你的 AI 代理读取技能的位置：
+
+| 代理 | 位置 |
+| :--- | :--- |
+| Claude Code | `<project>/.claude/skills/oxgframe-unity-skill/`（或 `~/.claude/skills/` 供所有项目共用） |
+| OpenAI Codex CLI | `<project>/.agents/skills/oxgframe-unity-skill/`（或 `~/.codex/skills/`） |
+| 其他代理（Cursor、Copilot 等） | 在代理的上下文文件（`AGENTS.md`、`CLAUDE.md`、`.cursorrules` 等）引用该文件夹，例如：「使用 OxGFrame API 前先阅读 `oxgframe-unity-skill/SKILL.md`」。 |
+
+3. 复制完成后，`Assets/Samples/` 下导入的副本可自行删除（技能文件为纯 Markdown，不需要留在 Unity 项目内；保留也无妨，会以 TextAsset 导入）。
+
+<Highlight color="#00d679">提醒</Highlight> 技能内容以英文撰写（任何语系的代理皆可读取，回复会依你的语言）；API 签名依 v3.7.0+ 核实，技能也会指示代理在有疑虑时，直接以安装的包源码再次核对。
+
+---
+
 ## 内置第三方依赖库
 
 - 使用 [UniFramework](https://github.com/gmhevinci/UniFramework) (UniEvent, UniMachine, UniReference)。
