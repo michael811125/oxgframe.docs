@@ -4,8 +4,8 @@
     {
       "name": "oxgframe-doc-serve",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "serve", "--", "--port", "3300"],
-      "port": 3300
+      "runtimeArgs": ["run", "serve", "--", "--port", "3100"],
+      "port": 3100
     }
   ]
 }
